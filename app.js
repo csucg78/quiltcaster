@@ -1156,29 +1156,26 @@
         doc.rect(imgX - 0.03, imgY - 0.03, drawW + 0.06, drawH + 0.06);
         doc.addImage(mockup.dataUrl, "PNG", imgX, imgY, drawW, drawH);
 
-        // Print-scale test square: 1" square and 2 cm bar so quilters can verify 100% scaling
+        // Print-scale test square matching the design's unit system (1" for imperial, 2 cm for metric)
         const tsY = pageH - 1.55;
+        const tsSize = unit === "in" ? 1 : 2 / 2.54;
+        const tsLabel = unit === "in" ? '1" test square' : "2 cm test square";
         doc.setDrawColor(34, 31, 26);
         doc.setLineWidth(0.012);
-        doc.rect(margin, tsY, 1, 1, "S");
+        doc.rect(margin, tsY, tsSize, tsSize, "S");
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(8);
+        doc.setFontSize(unit === "in" ? 8 : 6.5);
         doc.setTextColor(34, 31, 26);
-        doc.text('1" test square', margin + 0.5, tsY + 0.54, { align: "center" });
-
-        const cmLen = 2 / 2.54;
-        doc.rect(margin + 1.25, tsY, cmLen, cmLen, "S");
-        doc.setFontSize(7);
-        doc.text("2 cm", margin + 1.25 + cmLen / 2, tsY + cmLen / 2 + 0.04, { align: "center" });
+        doc.text(tsLabel, margin + tsSize / 2, tsY + tsSize / 2 + 0.04, { align: "center", maxWidth: tsSize - 0.06 });
 
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8.5);
         doc.setTextColor(70, 65, 58);
         const scaleNote = doc.splitTextToSize(
-          `Print at 100% / "Actual size" (turn OFF "Fit to page"). Measure the test squares before cutting. Paper: ${isA4 ? "A4" : "US Letter"}. Fabric amounts include +10% extra for squaring up and mistakes; pre-wash fabric before cutting if you normally do.`,
-          contentW - 2.25
+          `Print at 100% / "Actual size" (turn OFF "Fit to page"). The test square should measure exactly ${unit === "in" ? '1"' : "2 cm"} before you cut. Paper: ${isA4 ? "A4" : "US Letter"}. Fabric amounts include +10% extra for squaring up and mistakes; pre-wash fabric before cutting if you normally do.`,
+          contentW - 1.3
         );
-        doc.text(scaleNote, margin + 2.25, tsY + 0.15);
+        doc.text(scaleNote, margin + 1.3, tsY + 0.15);
 
         // ================= PAGE 2: COLOR KEY & WOF CUTTING CHART =================
         doc.addPage();
