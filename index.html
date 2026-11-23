@@ -3,14 +3,214 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Quiltcaster</title>
+  <title>Miriam's Quiltcaster</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <main class="container">
-    <h1>Quiltcaster</h1>
-    <p>Ready to build.</p>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <span></span><span></span><span></span><span></span>
+      </span>
+      <div>
+        <h1>Miriam's Quiltcaster</h1>
+        <p class="tagline">Turn any image into a square-grid quilt palette</p>
+      </div>
+    </div>
+    <div class="topbar-actions" id="topbar-actions" hidden>
+      <button type="button" class="btn btn-secondary" id="open-pattern-btn-top">
+        Open Pattern
+      </button>
+      <button type="button" class="btn btn-secondary" id="save-pattern-btn">
+        Save Pattern
+      </button>
+      <button type="button" class="btn btn-secondary" id="new-image-btn">
+        Choose New Image
+      </button>
+    </div>
+  </header>
+
+  <main class="app-shell">
+    <!-- Initial Drop Zone -->
+    <section class="drop-stage" id="drop-stage">
+      <div
+        class="drop-zone"
+        id="drop-zone"
+        role="button"
+        tabindex="0"
+        aria-label="Drop an image here or click to browse"
+      >
+        <div class="drop-icon" aria-hidden="true">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+            <rect x="6" y="6" width="16" height="16" rx="2.5" fill="#c85a32" opacity="0.9"/>
+            <rect x="26" y="6" width="16" height="16" rx="2.5" fill="#3a6b7c" opacity="0.9"/>
+            <rect x="6" y="26" width="16" height="16" rx="2.5" fill="#d9a441" opacity="0.9"/>
+            <rect x="26" y="26" width="16" height="16" rx="2.5" fill="#4f7758" opacity="0.9"/>
+          </svg>
+        </div>
+        <h2>Drop an image to cast your quilt</h2>
+        <p>Drag &amp; drop a PNG, JPG, WebP, or GIF here — or click to browse your files.</p>
+        <span class="drop-hint">Processed 100% locally in your browser</span>
+      </div>
+      <p class="error-banner" id="error-banner" role="alert" hidden></p>
+      <button type="button" class="btn btn-secondary" id="open-pattern-btn">
+        Open a Saved Pattern (.quilt)
+      </button>
+    </section>
+
+    <input type="file" id="pattern-input" accept=".quilt,.json,application/json" hidden />
+
+    <input type="file" id="file-input" accept="image/*,.quilt,.json" hidden />
+
+    <!-- Workspace (revealed once an image is loaded) -->
+    <section class="workspace" id="workspace" hidden>
+      <aside class="controls-panel" aria-label="Quilt controls">
+        <div class="control-card">
+          <div class="control-header">
+            <label for="squares-slider">Quilt Squares</label>
+            <span class="control-value" id="squares-value">24 × 18</span>
+          </div>
+          <input
+            type="range"
+            id="squares-slider"
+            min="6"
+            max="80"
+            value="24"
+            step="1"
+          />
+          <div class="control-meta">
+            <span>Chunky</span>
+            <span id="total-squares-label">432 squares</span>
+            <span>Fine</span>
+          </div>
+          <label class="checkbox-row">
+            <input type="checkbox" id="seam-lines-toggle" checked />
+            <span>Show quilt seam lines</span>
+          </label>
+        </div>
+
+        <div class="control-card">
+          <div class="control-header">
+            <label>Dimensions &amp; Seam Allowance</label>
+            <div class="unit-toggle" role="group" aria-label="Measurement units">
+              <button type="button" class="unit-btn is-active" data-unit="in">in</button>
+              <button type="button" class="unit-btn" data-unit="cm">cm</button>
+            </div>
+          </div>
+
+          <div class="sizing-inputs">
+            <label class="field">
+              <span>Finished square</span>
+              <div class="input-with-unit">
+                <input
+                  type="number"
+                  id="finished-size-input"
+                  min="0.5"
+                  max="24"
+                  step="0.25"
+                  value="2.5"
+                />
+                <span class="unit-suffix" data-unit-label>in</span>
+              </div>
+            </label>
+
+            <label class="field">
+              <span>Seam allowance</span>
+              <div class="input-with-unit">
+                <input
+                  type="number"
+                  id="seam-allowance-input"
+                  min="0"
+                  max="4"
+                  step="0.125"
+                  value="0.25"
+                />
+                <span class="unit-suffix" data-unit-label>in</span>
+              </div>
+            </label>
+          </div>
+
+          <div class="dimensions-summary">
+            <div class="dim-stat">
+              <span class="dim-label">Cut square size</span>
+              <strong class="dim-value" id="cut-square-value">3" × 3"</strong>
+            </div>
+            <div class="dim-stat">
+              <span class="dim-label">Finished quilt</span>
+              <strong class="dim-value" id="finished-quilt-value">60" × 45"</strong>
+            </div>
+          </div>
+          <p class="wof-note" id="wof-note">Fabric estimates based on 42" usable WOF</p>
+        </div>
+
+        <div class="control-card">
+          <div class="control-header">
+            <label for="palette-size-slider">Palette Colors</label>
+            <span class="control-value" id="palette-size-value">8 colors</span>
+          </div>
+          <input
+            type="range"
+            id="palette-size-slider"
+            min="2"
+            max="16"
+            value="8"
+            step="1"
+          />
+          <div class="control-meta">
+            <span>2</span>
+            <span>Click a swatch to edit · × to remove</span>
+            <span>16</span>
+          </div>
+
+          <div class="palette-grid" id="palette-grid" aria-live="polite"></div>
+
+          <div class="palette-actions">
+            <button type="button" class="btn btn-subtle" id="add-color-btn">+ Add Color</button>
+            <button type="button" class="btn btn-subtle" id="reset-palette-btn">Re-extract</button>
+          </div>
+        </div>
+      </aside>
+
+      <section class="preview-panel" aria-label="Live quilt preview">
+        <div class="preview-toolbar">
+          <div class="preview-title">
+            <span class="file-name" id="file-name">Quilt Preview</span>
+            <span class="preview-dimensions" id="preview-dimensions"></span>
+          </div>
+          <div class="preview-controls">
+            <button
+              type="button"
+              class="btn btn-subtle"
+              id="compare-btn"
+              title="Hold to view original image"
+            >
+              Hold for Original
+            </button>
+            <select id="page-size-select" class="select-control" aria-label="PDF paper size">
+              <option value="letter">US Letter</option>
+              <option value="a4">A4</option>
+            </select>
+            <button
+              type="button"
+              class="btn btn-primary"
+              id="export-pdf-btn"
+              title="Download printable multi-page quilt pattern PDF"
+            >
+              Export PDF Pattern
+            </button>
+          </div>
+        </div>
+        <div class="canvas-frame" id="canvas-frame">
+          <canvas id="quilt-canvas"></canvas>
+          <div class="drop-overlay" id="drop-overlay" hidden>
+            <span>Drop to replace image</span>
+          </div>
+        </div>
+      </section>
+    </section>
   </main>
-  <script src="app.js"></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+  <script src="app.js" defer></script>
 </body>
 </html>
