@@ -1136,10 +1136,22 @@
           doc.text(val, x, y + 0.19);
         });
 
-        // Quilt mockup centered in remaining space (leave room for print-scale test square)
+        // Test square = actual cut square size (doubles as print-scale check and cutting template).
+        // Falls back to a 1" / 2 cm square if the cut size is too big to fit on the cover.
+        const cutSizeIn = unit === "in" ? cutSize : cutSize / 2.54;
+        const finishedIn = unit === "in" ? finished : finished / 2.54;
+        const maxTestSquare = 4;
+        const useCutSquare = cutSizeIn <= maxTestSquare;
+        const fallbackSize = unit === "in" ? 1 : 2 / 2.54;
+        const tsSize = useCutSquare ? cutSizeIn : fallbackSize;
+        const tsExpected = useCutSquare
+          ? `${formatMeasure(cutSize, unit)} x ${formatMeasure(cutSize, unit)}`
+          : unit === "in" ? '1" x 1"' : "2 cm x 2 cm";
+
+        // Quilt mockup centered in remaining space (leave room for the test square)
         const mockup = buildMockupDataUrl();
         const availTop = boxY + boxH + 0.3;
-        const availH = pageH - availTop - 1.75;
+        const availH = pageH - availTop - (tsSize + 0.95);
         const availW = contentW;
         const imgAspect = mockup.width / mockup.height;
         let drawW = availW;
@@ -1156,26 +1168,38 @@
         doc.rect(imgX - 0.03, imgY - 0.03, drawW + 0.06, drawH + 0.06);
         doc.addImage(mockup.dataUrl, "PNG", imgX, imgY, drawW, drawH);
 
-        // Print-scale test square matching the design's unit system (1" for imperial, 2 cm for metric)
-        const tsY = pageH - 1.55;
-        const tsSize = unit === "in" ? 1 : 2 / 2.54;
-        const tsLabel = unit === "in" ? '1" test square' : "2 cm test square";
+        const tsY = pageH - 0.6 - tsSize;
         doc.setDrawColor(34, 31, 26);
         doc.setLineWidth(0.012);
         doc.rect(margin, tsY, tsSize, tsSize, "S");
+
+        // Dashed inner line shows the finished size (seam allowance outside it)
+        if (useCutSquare && seam > 0) {
+          const inset = (cutSizeIn - finishedIn) / 2;
+          doc.setDrawColor(150, 140, 128);
+          doc.setLineDashPattern([0.05, 0.04], 0);
+          doc.rect(margin + inset, tsY + inset, finishedIn, finishedIn, "S");
+          doc.setLineDashPattern([], 0);
+        }
+
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(unit === "in" ? 8 : 6.5);
+        doc.setFontSize(Math.min(9, Math.max(6, tsSize * 7)));
         doc.setTextColor(34, 31, 26);
-        doc.text(tsLabel, margin + tsSize / 2, tsY + tsSize / 2 + 0.04, { align: "center", maxWidth: tsSize - 0.06 });
+        doc.text(useCutSquare ? "Cut square" : "Test square", margin + tsSize / 2, tsY + tsSize / 2 - 0.02, { align: "center" });
+        doc.setFont("helvetica", "normal");
+        doc.text(tsExpected, margin + tsSize / 2, tsY + tsSize / 2 + 0.14, { align: "center" });
 
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8.5);
         doc.setTextColor(70, 65, 58);
         const scaleNote = doc.splitTextToSize(
-          `Print at 100% / "Actual size" (turn OFF "Fit to page"). The test square should measure exactly ${unit === "in" ? '1"' : "2 cm"} before you cut. Paper: ${isA4 ? "A4" : "US Letter"}. Fabric amounts include +10% extra for squaring up and mistakes; pre-wash fabric before cutting if you normally do.`,
-          contentW - 1.3
+          (useCutSquare
+            ? `This square is your actual cut size: it should measure exactly ${tsExpected}. The dashed line shows the finished ${formatMeasure(finished, unit)} square; the gap is the ${formatMeasure(seam, unit)} seam allowance. `
+            : `This test square should measure exactly ${tsExpected}. `) +
+            `Print at 100% / "Actual size" (turn OFF "Fit to page") and measure before cutting. Paper: ${isA4 ? "A4" : "US Letter"}. Fabric amounts include +10% extra for squaring up and mistakes; pre-wash fabric before cutting if you normally do.`,
+          contentW - tsSize - 0.3
         );
-        doc.text(scaleNote, margin + 1.3, tsY + 0.15);
+        doc.text(scaleNote, margin + tsSize + 0.3, tsY + 0.15);
 
         // ================= PAGE 2: COLOR KEY & WOF CUTTING CHART =================
         doc.addPage();
