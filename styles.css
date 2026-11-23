@@ -614,11 +614,9 @@ input[type="range"] {
 }
 
 .swatch-hex {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.73rem;
+  font-size: 0.76rem;
   font-weight: 600;
   color: var(--text);
-  text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -803,6 +801,11 @@ input[type="range"] {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* Show the live quilt preview at the top on tablet portrait & iPhone */
+  .preview-panel {
+    order: -1;
+  }
+
   .palette-grid {
     grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
   }
@@ -817,7 +820,99 @@ input[type="range"] {
   }
 
   .canvas-frame {
-    min-height: 320px;
+    min-height: 300px;
     padding: 1rem;
+  }
+}
+
+/* iPhone & narrow mobile screens */
+@media (max-width: 600px) {
+  .app-shell {
+    padding: 0.75rem;
+  }
+
+  .topbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+    padding: 0.75rem 0.85rem;
+  }
+
+  .topbar-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.45rem;
+  }
+
+  .project-chip {
+    max-width: 100%;
+    justify-content: center;
+  }
+
+  .action-group {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.4rem;
+  }
+
+  .action-group .btn {
+    padding: 0.45rem 0.4rem;
+    font-size: 0.78rem;
+  }
+
+  .drop-stage {
+    min-height: 54vh;
+  }
+
+  .drop-zone {
+    padding: 2rem 1.15rem;
+  }
+
+  .drop-zone h2 {
+    font-size: 1.18rem;
+  }
+
+  .preview-toolbar {
+    padding: 0.7rem 0.85rem;
+    flex-wrap: wrap;
+  }
+
+  .canvas-frame {
+    min-height: 240px;
+    padding: 0.75rem;
+  }
+
+  #quilt-canvas {
+    max-height: 52vh;
+  }
+
+  .export-bar {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0.85rem;
+    gap: 0.75rem;
+  }
+
+  .export-actions {
+    width: 100%;
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .export-actions #export-pdf-btn {
+    flex: 1;
+  }
+
+  .control-card {
+    padding: 1rem;
+  }
+
+  /* Prevent iOS Safari auto-zoom on number input focus */
+  .input-with-unit input[type="number"] {
+    font-size: 16px;
+  }
+
+  .palette-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

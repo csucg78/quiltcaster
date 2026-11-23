@@ -118,6 +118,94 @@
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
   }
 
+  // Curated quilting fabric color names for human-friendly swatch labels
+  const NAMED_FABRIC_COLORS = [
+    ["White", 250, 250, 248],
+    ["Ivory", 245, 240, 226],
+    ["Cream", 240, 232, 212],
+    ["Linen", 228, 217, 197],
+    ["Sand", 212, 196, 168],
+    ["Tan", 194, 168, 134],
+    ["Camel", 176, 139, 98],
+    ["Warm Brown", 135, 94, 62],
+    ["Cocoa", 105, 72, 52],
+    ["Espresso", 66, 46, 36],
+    ["Silver Gray", 210, 212, 214],
+    ["Light Gray", 180, 182, 184],
+    ["Warm Gray", 150, 145, 138],
+    ["Slate Gray", 112, 120, 128],
+    ["Charcoal", 64, 66, 70],
+    ["Black", 28, 28, 30],
+    ["Pale Yellow", 248, 238, 178],
+    ["Lemon", 244, 218, 92],
+    ["Gold", 224, 176, 54],
+    ["Mustard", 198, 146, 38],
+    ["Ochre", 176, 120, 36],
+    ["Peach", 244, 194, 164],
+    ["Apricot", 236, 162, 114],
+    ["Coral", 232, 118, 96],
+    ["Tangerine", 228, 122, 48],
+    ["Burnt Orange", 194, 88, 38],
+    ["Terracotta", 184, 88, 56],
+    ["Rust", 154, 64, 38],
+    ["Blush Pink", 242, 204, 206],
+    ["Light Pink", 236, 172, 184],
+    ["Dusty Rose", 196, 128, 138],
+    ["Rose", 204, 92, 116],
+    ["Berry", 168, 56, 92],
+    ["Magenta", 186, 44, 114],
+    ["Bright Red", 208, 46, 46],
+    ["Crimson", 168, 34, 42],
+    ["Brick Red", 142, 48, 42],
+    ["Burgundy", 108, 28, 42],
+    ["Maroon", 82, 24, 32],
+    ["Lavender", 204, 192, 226],
+    ["Lilac", 178, 152, 206],
+    ["Mauve", 156, 118, 154],
+    ["Violet", 126, 86, 168],
+    ["Plum", 108, 52, 114],
+    ["Eggplant", 72, 36, 82],
+    ["Ice Blue", 218, 234, 244],
+    ["Light Blue", 168, 204, 228],
+    ["Sky Blue", 118, 176, 218],
+    ["Cornflower", 92, 138, 198],
+    ["Cobalt Blue", 46, 98, 178],
+    ["Slate Blue", 88, 120, 148],
+    ["Denim", 64, 96, 134],
+    ["Royal Blue", 38, 68, 142],
+    ["Navy", 28, 44, 84],
+    ["Midnight", 20, 28, 52],
+    ["Mint", 188, 228, 208],
+    ["Aqua", 116, 196, 196],
+    ["Turquoise", 64, 168, 176],
+    ["Teal", 38, 118, 128],
+    ["Deep Teal", 24, 78, 88],
+    ["Pistachio", 188, 214, 156],
+    ["Sage", 148, 172, 142],
+    ["Seafoam", 142, 194, 168],
+    ["Lime Green", 136, 188, 72],
+    ["Kelly Green", 58, 148, 74],
+    ["Emerald", 38, 124, 82],
+    ["Moss Green", 106, 126, 72],
+    ["Olive", 112, 114, 54],
+    ["Forest Green", 42, 86, 54],
+    ["Pine Green", 28, 58, 42],
+  ];
+
+  function getColorName(r, g, b) {
+    let bestName = "Custom";
+    let bestDist = Infinity;
+    for (let i = 0; i < NAMED_FABRIC_COLORS.length; i++) {
+      const entry = NAMED_FABRIC_COLORS[i];
+      const d = colorDistanceSq(r, g, b, entry[1], entry[2], entry[3]);
+      if (d < bestDist) {
+        bestDist = d;
+        bestName = entry[0];
+      }
+    }
+    return bestName;
+  }
+
   // Deterministic k-means++ color quantization on sampled pixels
   function extractPalette(pixels, count) {
     // Subsample pixels to at most ~4000 opaque samples for instant extraction
@@ -507,6 +595,7 @@
 
     state.palette.forEach((color, idx) => {
       const hex = rgbToHex(color.r, color.g, color.b);
+      const colorName = getColorName(color.r, color.g, color.b);
       const code = getFabricCode(idx);
 
       const item = document.createElement("div");
@@ -515,12 +604,12 @@
 
       const colorWrap = document.createElement("label");
       colorWrap.className = "swatch-color-wrap";
-      colorWrap.title = `Change Fabric ${code} (${hex.toUpperCase()})`;
+      colorWrap.title = `Change Fabric ${code}: ${colorName} (${hex.toUpperCase()})`;
 
       const picker = document.createElement("input");
       picker.type = "color";
       picker.value = hex;
-      picker.setAttribute("aria-label", `Edit Fabric ${code} (${hex.toUpperCase()})`);
+      picker.setAttribute("aria-label", `Edit Fabric ${code}: ${colorName}`);
 
       const info = document.createElement("div");
       info.className = "swatch-info";
@@ -532,12 +621,12 @@
       codeBadge.className = "swatch-code";
       codeBadge.textContent = code;
 
-      const hexSpan = document.createElement("span");
-      hexSpan.className = "swatch-hex";
-      hexSpan.textContent = hex;
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "swatch-hex";
+      nameSpan.textContent = colorName;
 
       headerRow.appendChild(codeBadge);
-      headerRow.appendChild(hexSpan);
+      headerRow.appendChild(nameSpan);
 
       const statsRow = document.createElement("div");
       statsRow.className = "swatch-header-row";
@@ -557,8 +646,8 @@
       removeBtn.type = "button";
       removeBtn.className = "swatch-remove";
       removeBtn.innerHTML = "&times;";
-      removeBtn.title = canDelete ? `Remove Fabric ${code} from palette` : "At least 1 color required";
-      removeBtn.setAttribute("aria-label", `Remove Fabric ${code} (${hex.toUpperCase()})`);
+      removeBtn.title = canDelete ? `Remove Fabric ${code} (${colorName}) from palette` : "At least 1 color required";
+      removeBtn.setAttribute("aria-label", `Remove Fabric ${code} (${colorName})`);
       removeBtn.disabled = !canDelete;
 
       picker.addEventListener("input", (e) => {
@@ -567,8 +656,9 @@
         color.r = r;
         color.g = g;
         color.b = b;
-        hexSpan.textContent = newHex;
-        colorWrap.title = `Change Fabric ${code} (${newHex.toUpperCase()})`;
+        const updatedName = getColorName(r, g, b);
+        nameSpan.textContent = updatedName;
+        colorWrap.title = `Change Fabric ${code}: ${updatedName} (${newHex.toUpperCase()})`;
         renderQuilt();
       });
 
@@ -1090,6 +1180,7 @@
           .map((color, idx) => ({
             index: idx,
             code: getFabricCode(idx),
+            name: getColorName(color.r, color.g, color.b),
             hex: rgbToHex(color.r, color.g, color.b).toUpperCase(),
             r: color.r,
             g: color.g,
@@ -1243,9 +1334,9 @@
           doc.text("Code", margin + 0.1, curY + 0.2);
           doc.text("Swatch", margin + 0.65, curY + 0.2);
           doc.text("Tape Fabric", margin + 1.35, curY + 0.2);
-          doc.text("Hex", margin + 2.55, curY + 0.2);
-          doc.text("Squares", margin + 3.55, curY + 0.2);
-          doc.text(`WOF Strips (${formatMeasure(cutSize, unit)})`, margin + 4.45, curY + 0.2);
+          doc.text("Color", margin + 2.5, curY + 0.2);
+          doc.text("Squares", margin + 3.7, curY + 0.2);
+          doc.text(`WOF Strips (${formatMeasure(cutSize, unit)})`, margin + 4.5, curY + 0.2);
           doc.text("Est. Fabric", margin + 6.45, curY + 0.2);
           curY += 0.34;
         };
@@ -1278,21 +1369,21 @@
           doc.rect(margin + 1.35, curY + 0.05, 0.95, 0.32, "S");
           doc.setLineDashPattern([], 0);
 
-          // Hex
-          doc.setFont("courier", "normal");
-          doc.setFontSize(9);
-          doc.setTextColor(70, 65, 58);
-          doc.text(c.hex, margin + 2.55, curY + 0.26);
+          // Human-readable Color Name
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(9.5);
+          doc.setTextColor(34, 31, 26);
+          doc.text(c.name, margin + 2.5, curY + 0.26);
 
           // Squares
           doc.setFont("helvetica", "normal");
           doc.setFontSize(9.5);
           doc.setTextColor(34, 31, 26);
-          doc.text(String(c.count), margin + 3.55, curY + 0.26);
+          doc.text(String(c.count), margin + 3.7, curY + 0.26);
 
           // WOF Strips
           const stripLabel = `${c.fabric.strips} strip${c.fabric.strips === 1 ? "" : "s"} (${c.fabric.squaresPerStrip}/strip)`;
-          doc.text(stripLabel, margin + 4.45, curY + 0.26);
+          doc.text(stripLabel, margin + 4.5, curY + 0.26);
 
           // Estimated Fabric
           doc.setFont("helvetica", "bold");
