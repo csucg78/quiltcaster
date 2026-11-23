@@ -34,10 +34,22 @@
   const compareBtn = document.getElementById("compare-btn");
   const exportPdfBtn = document.getElementById("export-pdf-btn");
   const pageSizeSelect = document.getElementById("page-size-select");
+  const pageSizeBtns = document.querySelectorAll(".segmented-btn[data-page-size]");
   const savePatternBtn = document.getElementById("save-pattern-btn");
+  const browseImageBtn = document.getElementById("browse-image-btn");
   const openPatternBtn = document.getElementById("open-pattern-btn");
   const openPatternBtnTop = document.getElementById("open-pattern-btn-top");
   const patternInput = document.getElementById("pattern-input");
+
+  function setPageSize(size) {
+    const valid = size === "a4" ? "a4" : "letter";
+    pageSizeSelect.value = valid;
+    pageSizeBtns.forEach((btn) => {
+      const active = btn.dataset.pageSize === valid;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-checked", active ? "true" : "false");
+    });
+  }
   const canvasFrame = document.getElementById("canvas-frame");
   const dropOverlay = document.getElementById("drop-overlay");
   const quiltCanvas = document.getElementById("quilt-canvas");
@@ -703,7 +715,7 @@
     seamLinesToggle.checked = state.showSeamLines;
 
     if (s.pageSize === "a4" || s.pageSize === "letter") {
-      pageSizeSelect.value = s.pageSize;
+      setPageSize(s.pageSize);
     }
 
     // Units & sizing
@@ -1047,7 +1059,7 @@
     }
 
     exportPdfBtn.disabled = true;
-    const originalBtnText = exportPdfBtn.textContent;
+    const originalBtnHtml = exportPdfBtn.innerHTML;
     exportPdfBtn.textContent = "Generating PDF...";
 
     // Yield briefly so button state paints
@@ -1538,7 +1550,7 @@
         doc.save(`${safeFile}-quilt-pattern.pdf`);
       } finally {
         exportPdfBtn.disabled = false;
-        exportPdfBtn.textContent = originalBtnText;
+        exportPdfBtn.innerHTML = originalBtnHtml;
       }
     }, 20);
   }
@@ -1547,11 +1559,23 @@
 
   // Default paper size: Letter for US/Canada, A4 elsewhere
   const lang = (navigator.language || "en-US").toUpperCase();
-  pageSizeSelect.value = /-(US|CA|MX|PH)$/.test(lang) || lang === "EN" ? "letter" : "a4";
+  setPageSize(/-(US|CA|MX|PH)$/.test(lang) || lang === "EN" ? "letter" : "a4");
+  pageSizeBtns.forEach((btn) => {
+    btn.addEventListener("click", () => setPageSize(btn.dataset.pageSize));
+  });
 
   // Save / open patterns
   savePatternBtn.addEventListener("click", savePattern);
-  const openPatternPicker = () => patternInput.click();
+  if (browseImageBtn) {
+    browseImageBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      fileInput.click();
+    });
+  }
+  const openPatternPicker = (e) => {
+    if (e) e.stopPropagation();
+    patternInput.click();
+  };
   openPatternBtn.addEventListener("click", openPatternPicker);
   openPatternBtnTop.addEventListener("click", openPatternPicker);
   patternInput.addEventListener("change", (e) => {
