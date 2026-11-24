@@ -50,6 +50,19 @@
       btn.setAttribute("aria-checked", active ? "true" : "false");
     });
   }
+  const previewToolbar = document.getElementById("preview-toolbar");
+  const exportBar = document.getElementById("export-bar");
+  const cropBtn = document.getElementById("crop-btn");
+  const cropBtnLabel = document.getElementById("crop-btn-label");
+  const cropStage = document.getElementById("crop-stage");
+  const cropCanvas = document.getElementById("crop-canvas");
+  const cropCtx = cropCanvas.getContext("2d");
+  const cropAspectBtns = document.querySelectorAll(".crop-aspect-btn");
+  const cropResetBtn = document.getElementById("crop-reset-btn");
+  const cropReextractToggle = document.getElementById("crop-reextract-toggle");
+  const cropCancelBtn = document.getElementById("crop-cancel-btn");
+  const cropApplyBtn = document.getElementById("crop-apply-btn");
+
   const canvasFrame = document.getElementById("canvas-frame");
   const dropOverlay = document.getElementById("drop-overlay");
   const quiltCanvas = document.getElementById("quilt-canvas");
@@ -60,6 +73,8 @@
     image: null,
     objectUrl: null,
     fileName: "",
+    // Normalized non-destructive crop box (0..1 relative to naturalWidth / naturalHeight)
+    crop: { x: 0, y: 0, w: 1, h: 1 },
     // Cached downsampled pixel buffer for fast square averaging & palette extraction
     sampleWidth: 0,
     sampleHeight: 0,
@@ -513,7 +528,12 @@
     }
 
     if (state.showingOriginal) {
-      quiltCtx.drawImage(state.image, 0, 0, canvasW, canvasH);
+      const img = state.image;
+      const sx = Math.round(state.crop.x * img.naturalWidth);
+      const sy = Math.round(state.crop.y * img.naturalHeight);
+      const sw = Math.max(1, Math.round(state.crop.w * img.naturalWidth));
+      const sh = Math.max(1, Math.round(state.crop.h * img.naturalHeight));
+      quiltCtx.drawImage(img, sx, sy, sw, sh, 0, 0, canvasW, canvasH);
       return;
     }
 
@@ -730,6 +750,48 @@
     });
   }
 
+  function getCroppedSourceRect() {
+    const img = state.image;
+    const sx = Math.round(state.crop.x * img.naturalWidth);
+    const sy = Math.round(state.crop.y * img.naturalHeight);
+    const sw = Math.max(1, Math.round(state.crop.w * img.naturalWidth));
+    const sh = Math.max(1, Math.round(state.crop.h * img.naturalHeight));
+    return { sx, sy, sw, sh };
+  }
+
+  function updateCropButtonBadge() {
+    const isCropped =
+      state.crop.x > 0.002 ||
+      state.crop.y > 0.002 ||
+      state.crop.w < 0.996 ||
+      state.crop.h < 0.996;
+    cropBtn.classList.toggle("is-cropped", isCropped);
+    cropBtnLabel.textContent = isCropped ? "Cropped" : "Crop";
+  }
+
+  function rebuildSampleBuffer() {
+    const img = state.image;
+    if (!img) return;
+    const { sx, sy, sw, sh } = getCroppedSourceRect();
+
+    // Build cached downsampled buffer of the cropped region (max 400px on longest side)
+    const maxSample = 400;
+    const scale = Math.min(1, maxSample / Math.max(sw, sh));
+    const sampleW = Math.max(1, Math.round(sw * scale));
+    const sampleH = Math.max(1, Math.round(sh * scale));
+
+    const offscreen = document.createElement("canvas");
+    offscreen.width = sampleW;
+    offscreen.height = sampleH;
+    const offCtx = offscreen.getContext("2d", { willReadFrequently: true });
+    offCtx.drawImage(img, sx, sy, sw, sh, 0, 0, sampleW, sampleH);
+
+    state.sampleWidth = sampleW;
+    state.sampleHeight = sampleH;
+    state.samplePixels = offCtx.getImageData(0, 0, sampleW, sampleH).data;
+    updateCropButtonBadge();
+  }
+
   // Loads an image from a URL/data URL. If `restore` is provided, applies saved
   // settings and palette instead of extracting a fresh palette.
   function loadImageFromSrc(src, name, { objectUrl = null, restore = null, onError } = {}) {
@@ -740,22 +802,19 @@
       state.objectUrl = objectUrl;
       state.fileName = name;
       fileNameLabel.textContent = name;
+      state.crop = { x: 0, y: 0, w: 1, h: 1 };
 
-      // Build cached downsampled buffer (max 400px on longest side)
-      const maxSample = 400;
-      const scale = Math.min(1, maxSample / Math.max(img.naturalWidth, img.naturalHeight));
-      const sw = Math.max(1, Math.round(img.naturalWidth * scale));
-      const sh = Math.max(1, Math.round(img.naturalHeight * scale));
+      if (restore && restore.settings && restore.settings.crop) {
+        const rc = restore.settings.crop;
+        const cx = clampNumber(rc.x, 0, 0.95, 0);
+        const cy = clampNumber(rc.y, 0, 0.95, 0);
+        const cw = clampNumber(rc.w, 0.05, 1 - cx, 1 - cx);
+        const ch = clampNumber(rc.h, 0.05, 1 - cy, 1 - cy);
+        state.crop = { x: cx, y: cy, w: cw, h: ch };
+      }
 
-      const offscreen = document.createElement("canvas");
-      offscreen.width = sw;
-      offscreen.height = sh;
-      const offCtx = offscreen.getContext("2d", { willReadFrequently: true });
-      offCtx.drawImage(img, 0, 0, sw, sh);
-
-      state.sampleWidth = sw;
-      state.sampleHeight = sh;
-      state.samplePixels = offCtx.getImageData(0, 0, sw, sh).data;
+      closeCropStage();
+      rebuildSampleBuffer();
 
       if (restore) {
         applyRestoredSettings(restore);
@@ -876,6 +935,7 @@
         finishedSquareSize: state.finishedSquareSize,
         seamAllowance: state.seamAllowance,
         pageSize: pageSizeSelect.value,
+        crop: state.crop,
       },
       palette: state.palette.map((c) => rgbToHex(c.r, c.g, c.b)),
       image: getImageDataUrlForSave(),
@@ -1681,6 +1741,285 @@
       e.preventDefault();
       savePattern();
     }
+  });
+
+  // --- Interactive Non-Destructive Image Cropping ---
+
+  let draftCrop = { x: 0, y: 0, w: 1, h: 1 };
+  let cropAspect = null; // null for free, or desired (pixelW / pixelH) ratio
+  let cropDrag = null;
+
+  function setCropAspectButton(aspectStr) {
+    cropAspectBtns.forEach((btn) => {
+      btn.classList.toggle("is-active", btn.dataset.aspect === aspectStr);
+    });
+    if (aspectStr === "free") {
+      cropAspect = null;
+      return;
+    }
+    const ratio = parseFloat(aspectStr);
+    if (!Number.isFinite(ratio) || !state.image) {
+      cropAspect = null;
+      return;
+    }
+    cropAspect = ratio;
+    fitDraftCropToAspect(ratio);
+    renderCropCanvas();
+  }
+
+  function fitDraftCropToAspect(pixelRatio) {
+    if (!state.image) return;
+    const imgAspect = state.image.naturalWidth / state.image.naturalHeight;
+    // Normalized w / h ratio so that (w * natW) / (h * natH) === pixelRatio
+    const normRatio = pixelRatio / imgAspect;
+
+    const cx = draftCrop.x + draftCrop.w / 2;
+    const cy = draftCrop.y + draftCrop.h / 2;
+
+    let w = draftCrop.w;
+    let h = w / normRatio;
+    if (h > 1) {
+      h = 1;
+      w = h * normRatio;
+    }
+    if (w > 1) {
+      w = 1;
+      h = w / normRatio;
+    }
+
+    let x = Math.max(0, Math.min(1 - w, cx - w / 2));
+    let y = Math.max(0, Math.min(1 - h, cy - h / 2));
+    draftCrop = { x, y, w, h };
+  }
+
+  function openCropStage() {
+    if (!state.image) return;
+    draftCrop = { ...state.crop };
+    cropAspect = null;
+    cropAspectBtns.forEach((btn) => {
+      btn.classList.toggle("is-active", btn.dataset.aspect === "free");
+    });
+
+    const img = state.image;
+    const maxDim = 820;
+    const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+    cropCanvas.width = Math.max(120, Math.round(img.naturalWidth * scale));
+    cropCanvas.height = Math.max(120, Math.round(img.naturalHeight * scale));
+
+    previewToolbar.hidden = true;
+    canvasFrame.hidden = true;
+    exportBar.hidden = true;
+    cropStage.hidden = false;
+
+    renderCropCanvas();
+  }
+
+  function closeCropStage() {
+    cropStage.hidden = true;
+    previewToolbar.hidden = false;
+    canvasFrame.hidden = false;
+    exportBar.hidden = false;
+    cropDrag = null;
+  }
+
+  function applyCrop() {
+    if (!state.image) return;
+    state.crop = { ...draftCrop };
+    closeCropStage();
+    rebuildSampleBuffer();
+
+    if (cropReextractToggle.checked) {
+      const targetColors = Number(paletteSizeSlider.value);
+      state.palette = extractPalette(state.samplePixels, targetColors);
+    }
+
+    computeSquareAverages();
+    renderPaletteSwatches();
+    renderQuilt();
+  }
+
+  function getCropHandles(bx, by, bw, bh) {
+    const mx = bx + bw / 2;
+    const my = by + bh / 2;
+    const rx = bx + bw;
+    const by2 = by + bh;
+    return [
+      { id: "nw", x: bx, y: by },
+      { id: "ne", x: rx, y: by },
+      { id: "se", x: rx, y: by2 },
+      { id: "sw", x: bx, y: by2 },
+      { id: "n", x: mx, y: by },
+      { id: "e", x: rx, y: my },
+      { id: "s", x: mx, y: by2 },
+      { id: "w", x: bx, y: my },
+    ];
+  }
+
+  function renderCropCanvas() {
+    if (!state.image || cropStage.hidden) return;
+    const cw = cropCanvas.width;
+    const ch = cropCanvas.height;
+
+    cropCtx.clearRect(0, 0, cw, ch);
+    cropCtx.drawImage(state.image, 0, 0, cw, ch);
+
+    // Dim outside area
+    cropCtx.fillStyle = "rgba(22, 19, 16, 0.58)";
+    cropCtx.fillRect(0, 0, cw, ch);
+
+    const bx = draftCrop.x * cw;
+    const by = draftCrop.y * ch;
+    const bw = draftCrop.w * cw;
+    const bh = draftCrop.h * ch;
+
+    // Bright cropped area
+    cropCtx.save();
+    cropCtx.beginPath();
+    cropCtx.rect(bx, by, bw, bh);
+    cropCtx.clip();
+    cropCtx.drawImage(state.image, 0, 0, cw, ch);
+
+    // Rule of thirds lines
+    cropCtx.strokeStyle = "rgba(255, 255, 255, 0.42)";
+    cropCtx.lineWidth = 1;
+    cropCtx.beginPath();
+    for (let i = 1; i <= 2; i++) {
+      const gx = bx + (bw * i) / 3;
+      const gy = by + (bh * i) / 3;
+      cropCtx.moveTo(gx, by);
+      cropCtx.lineTo(gx, by + bh);
+      cropCtx.moveTo(bx, gy);
+      cropCtx.lineTo(bx + bw, gy);
+    }
+    cropCtx.stroke();
+    cropCtx.restore();
+
+    // Crisp crop border
+    cropCtx.strokeStyle = "#ffffff";
+    cropCtx.lineWidth = 2;
+    cropCtx.strokeRect(bx, by, bw, bh);
+
+    // Corner and mid-edge handles
+    const handles = getCropHandles(bx, by, bw, bh);
+    handles.forEach((h) => {
+      const r = h.id.length === 2 ? 7 : 5.5;
+      cropCtx.beginPath();
+      cropCtx.arc(h.x, h.y, r, 0, Math.PI * 2);
+      cropCtx.fillStyle = "#ffffff";
+      cropCtx.fill();
+      cropCtx.lineWidth = 2;
+      cropCtx.strokeStyle = "#b84d2c";
+      cropCtx.stroke();
+    });
+  }
+
+  function pointerToCropNorm(e) {
+    const rect = cropCanvas.getBoundingClientRect();
+    const nx = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const ny = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+    return { nx, ny, rect };
+  }
+
+  cropCanvas.addEventListener("pointerdown", (e) => {
+    if (!state.image) return;
+    e.preventDefault();
+    cropCanvas.setPointerCapture(e.pointerId);
+
+    const { nx, ny, rect } = pointerToCropNorm(e);
+    const bx = draftCrop.x * rect.width;
+    const by = draftCrop.y * rect.height;
+    const bw = draftCrop.w * rect.width;
+    const bh = draftCrop.h * rect.height;
+    const px = nx * rect.width;
+    const py = ny * rect.height;
+
+    // Check 8 handles first (generous 22px hit radius for touch screens)
+    const handles = getCropHandles(bx, by, bw, bh);
+    let hitHandle = null;
+    let bestDist = 22 * 22;
+    for (const h of handles) {
+      const dx = px - h.x;
+      const dy = py - h.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 <= bestDist) {
+        bestDist = d2;
+        hitHandle = h.id;
+      }
+    }
+
+    if (hitHandle) {
+      cropDrag = { mode: hitHandle, startNx: nx, startNy: ny, startCrop: { ...draftCrop } };
+      return;
+    }
+
+    // Inside crop box -> pan/move
+    if (nx >= draftCrop.x && nx <= draftCrop.x + draftCrop.w && ny >= draftCrop.y && ny <= draftCrop.y + draftCrop.h) {
+      cropDrag = { mode: "move", startNx: nx, startNy: ny, startCrop: { ...draftCrop } };
+      return;
+    }
+
+    // Outside -> draw new box
+    cropDrag = { mode: "new", startNx: nx, startNy: ny, startCrop: { ...draftCrop } };
+  });
+
+  cropCanvas.addEventListener("pointermove", (e) => {
+    if (!cropDrag || !state.image) return;
+    e.preventDefault();
+    const { nx, ny } = pointerToCropNorm(e);
+    const dx = nx - cropDrag.startNx;
+    const dy = ny - cropDrag.startNy;
+    const s = cropDrag.startCrop;
+    const minSize = 0.06;
+
+    if (cropDrag.mode === "move") {
+      draftCrop.x = Math.max(0, Math.min(1 - s.w, s.x + dx));
+      draftCrop.y = Math.max(0, Math.min(1 - s.h, s.y + dy));
+      renderCropCanvas();
+      return;
+    }
+
+    let x1 = s.x;
+    let y1 = s.y;
+    let x2 = s.x + s.w;
+    let y2 = s.y + s.h;
+
+    if (cropDrag.mode === "new") {
+      x1 = Math.min(cropDrag.startNx, nx);
+      y1 = Math.min(cropDrag.startNy, ny);
+      x2 = Math.max(cropDrag.startNx, nx);
+      y2 = Math.max(cropDrag.startNy, ny);
+      if (x2 - x1 < minSize) x2 = Math.min(1, x1 + minSize);
+      if (y2 - y1 < minSize) y2 = Math.min(1, y1 + minSize);
+    } else {
+      if (cropDrag.mode.includes("w")) x1 = Math.max(0, Math.min(x2 - minSize, s.x + dx));
+      if (cropDrag.mode.includes("e")) x2 = Math.min(1, Math.max(x1 + minSize, s.x + s.w + dx));
+      if (cropDrag.mode.includes("n")) y1 = Math.max(0, Math.min(y2 - minSize, s.y + dy));
+      if (cropDrag.mode.includes("s")) y2 = Math.min(1, Math.max(y1 + minSize, s.y + s.h + dy));
+    }
+
+    draftCrop = { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+    if (cropAspect) {
+      fitDraftCropToAspect(cropAspect);
+    }
+    renderCropCanvas();
+  });
+
+  const endCropDrag = () => {
+    cropDrag = null;
+  };
+  cropCanvas.addEventListener("pointerup", endCropDrag);
+  cropCanvas.addEventListener("pointercancel", endCropDrag);
+
+  cropBtn.addEventListener("click", openCropStage);
+  cropCancelBtn.addEventListener("click", closeCropStage);
+  cropApplyBtn.addEventListener("click", applyCrop);
+  cropResetBtn.addEventListener("click", () => {
+    draftCrop = { x: 0, y: 0, w: 1, h: 1 };
+    setCropAspectButton("free");
+    renderCropCanvas();
+  });
+  cropAspectBtns.forEach((btn) => {
+    btn.addEventListener("click", () => setCropAspectButton(btn.dataset.aspect));
   });
 
   // Hold to compare original image

@@ -188,20 +188,31 @@
       </aside>
 
       <section class="preview-panel" aria-label="Live quilt preview">
-        <div class="preview-toolbar">
+        <div class="preview-toolbar" id="preview-toolbar">
           <div class="preview-title">
             <span class="preview-heading">Quilt Preview</span>
             <span class="preview-dimensions" id="preview-dimensions"></span>
           </div>
-          <button
-            type="button"
-            class="btn btn-ghost btn-small"
-            id="compare-btn"
-            title="Press and hold to compare with your original picture"
-          >
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            Hold to see original
-          </button>
+          <div class="preview-toolbar-actions">
+            <button
+              type="button"
+              class="btn btn-ghost btn-small"
+              id="crop-btn"
+              title="Crop the uploaded image"
+            >
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg>
+              <span id="crop-btn-label">Crop</span>
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost btn-small"
+              id="compare-btn"
+              title="Press and hold to compare with your original picture"
+            >
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              Hold to see original
+            </button>
+          </div>
         </div>
         <div class="canvas-frame" id="canvas-frame">
           <canvas id="quilt-canvas"></canvas>
@@ -209,7 +220,7 @@
             <span>Drop to replace image</span>
           </div>
         </div>
-        <div class="export-bar">
+        <div class="export-bar" id="export-bar">
           <div class="export-text">
             <strong>Printable pattern</strong>
             <span>Cover, fabric &amp; cutting chart, layout map, and row-by-row checklist</span>
@@ -229,6 +240,39 @@
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M9 15l3 3 3-3"/></svg>
               Export PDF Pattern
             </button>
+          </div>
+        </div>
+
+        <!-- Interactive Crop Stage (shown when Crop is clicked) -->
+        <div class="crop-stage" id="crop-stage" hidden>
+          <div class="preview-toolbar crop-toolbar">
+            <div class="preview-title">
+              <span class="preview-heading">Crop Image</span>
+              <span class="preview-dimensions">Drag handles or inside box to frame your quilt</span>
+            </div>
+            <div class="crop-presets" role="group" aria-label="Crop aspect ratio">
+              <button type="button" class="btn btn-subtle btn-small crop-aspect-btn is-active" data-aspect="free">Free</button>
+              <button type="button" class="btn btn-subtle btn-small crop-aspect-btn" data-aspect="1">1:1 Square</button>
+              <button type="button" class="btn btn-subtle btn-small crop-aspect-btn" data-aspect="0.75">3:4</button>
+              <button type="button" class="btn btn-subtle btn-small crop-aspect-btn" data-aspect="1.3333">4:3</button>
+              <button type="button" class="btn btn-ghost btn-small" id="crop-reset-btn">Reset Full</button>
+            </div>
+          </div>
+          <div class="canvas-frame crop-canvas-frame">
+            <canvas id="crop-canvas"></canvas>
+          </div>
+          <div class="export-bar crop-actions-bar">
+            <label class="checkbox-row crop-reextract-row">
+              <input type="checkbox" id="crop-reextract-toggle" checked />
+              <span>Update palette colors from cropped area</span>
+            </label>
+            <div class="export-actions">
+              <button type="button" class="btn btn-secondary" id="crop-cancel-btn">Cancel</button>
+              <button type="button" class="btn btn-primary" id="crop-apply-btn">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+                Apply Crop
+              </button>
+            </div>
           </div>
         </div>
       </section>

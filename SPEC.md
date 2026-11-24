@@ -5,9 +5,10 @@ Quiltcaster is a client-side web application (HTML, CSS, JavaScript) designed to
 
 ## Features
 
-### 1. Image Input (Drag-and-Drop Zone)
-- Users can supply an image by dragging and dropping an image file onto a dedicated drop zone (with a click-to-browse file picker fallback for accessibility and mobile support).
+### 1. Image Input (Drag-and-Drop Zone) & Non-Destructive Cropping
+- Users can supply an image by dragging and dropping an image file onto a dedicated drop zone (with an exposed **Browse for an Image** button and an equal-sized **Open a Saved Pattern (.quilt)** button on the landing screen).
 - Supported formats: standard browser-decodable image types (`image/png`, `image/jpeg`, `image/webp`, `image/gif`).
+- **Interactive Crop Tool**: Users can click **Crop** in the preview toolbar at any time to frame a sub-region of their uploaded image using corner/edge drag handles or aspect-ratio presets (`Free`, `1:1 Square`, `3:4`, `4:3`, `Reset Full`). Cropping is non-destructive (can be re-opened or reset later, and is preserved in `.quilt` pattern saves) and optionally re-extracts the color palette from the cropped area.
 
 ### 2. Square Decomposition Controls
 - Once an image is dropped, a control panel is revealed.
