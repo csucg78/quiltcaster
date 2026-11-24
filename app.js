@@ -133,92 +133,108 @@
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
   }
 
-  // Curated quilting fabric color names for human-friendly swatch labels
+  // Curated quilting fabric color catalog with closest Robert Kaufman Kona Cotton Solids
+  // SKU & shade name, plus Moda Bella Solids alternative for the PDF Shopping List.
+  // Format: [DisplayName, R, G, B, KonaShade, KonaSKU, BellaShade]
   const NAMED_FABRIC_COLORS = [
-    ["White", 250, 250, 248],
-    ["Ivory", 245, 240, 226],
-    ["Cream", 240, 232, 212],
-    ["Linen", 228, 217, 197],
-    ["Sand", 212, 196, 168],
-    ["Tan", 194, 168, 134],
-    ["Camel", 176, 139, 98],
-    ["Warm Brown", 135, 94, 62],
-    ["Cocoa", 105, 72, 52],
-    ["Espresso", 66, 46, 36],
-    ["Silver Gray", 210, 212, 214],
-    ["Light Gray", 180, 182, 184],
-    ["Warm Gray", 150, 145, 138],
-    ["Slate Gray", 112, 120, 128],
-    ["Charcoal", 64, 66, 70],
-    ["Black", 28, 28, 30],
-    ["Pale Yellow", 248, 238, 178],
-    ["Lemon", 244, 218, 92],
-    ["Gold", 224, 176, 54],
-    ["Mustard", 198, 146, 38],
-    ["Ochre", 176, 120, 36],
-    ["Peach", 244, 194, 164],
-    ["Apricot", 236, 162, 114],
-    ["Coral", 232, 118, 96],
-    ["Tangerine", 228, 122, 48],
-    ["Burnt Orange", 194, 88, 38],
-    ["Terracotta", 184, 88, 56],
-    ["Rust", 154, 64, 38],
-    ["Blush Pink", 242, 204, 206],
-    ["Light Pink", 236, 172, 184],
-    ["Dusty Rose", 196, 128, 138],
-    ["Rose", 204, 92, 116],
-    ["Berry", 168, 56, 92],
-    ["Magenta", 186, 44, 114],
-    ["Bright Red", 208, 46, 46],
-    ["Crimson", 168, 34, 42],
-    ["Brick Red", 142, 48, 42],
-    ["Burgundy", 108, 28, 42],
-    ["Maroon", 82, 24, 32],
-    ["Lavender", 204, 192, 226],
-    ["Lilac", 178, 152, 206],
-    ["Mauve", 156, 118, 154],
-    ["Violet", 126, 86, 168],
-    ["Plum", 108, 52, 114],
-    ["Eggplant", 72, 36, 82],
-    ["Ice Blue", 218, 234, 244],
-    ["Light Blue", 168, 204, 228],
-    ["Sky Blue", 118, 176, 218],
-    ["Cornflower", 92, 138, 198],
-    ["Cobalt Blue", 46, 98, 178],
-    ["Slate Blue", 88, 120, 148],
-    ["Denim", 64, 96, 134],
-    ["Royal Blue", 38, 68, 142],
-    ["Navy", 28, 44, 84],
-    ["Midnight", 20, 28, 52],
-    ["Mint", 188, 228, 208],
-    ["Aqua", 116, 196, 196],
-    ["Turquoise", 64, 168, 176],
-    ["Teal", 38, 118, 128],
-    ["Deep Teal", 24, 78, 88],
-    ["Pistachio", 188, 214, 156],
-    ["Sage", 148, 172, 142],
-    ["Seafoam", 142, 194, 168],
-    ["Lime Green", 136, 188, 72],
-    ["Kelly Green", 58, 148, 74],
-    ["Emerald", 38, 124, 82],
-    ["Moss Green", 106, 126, 72],
-    ["Olive", 112, 114, 54],
-    ["Forest Green", 42, 86, 54],
-    ["Pine Green", 28, 58, 42],
+    ["White", 250, 250, 248, "Kona White", "K001-1387", "Bella White (9900-98)"],
+    ["Ivory", 245, 240, 226, "Kona Snow", "K001-1339", "Bella Snow (9900-11)"],
+    ["Cream", 240, 232, 212, "Kona Bone", "K001-1037", "Bella Ivory (9900-60)"],
+    ["Linen", 228, 217, 197, "Kona Canvas", "K001-1317", "Bella Muslin (9900-97)"],
+    ["Sand", 212, 196, 168, "Kona Sand", "K001-1323", "Bella Sand (9900-122)"],
+    ["Tan", 194, 168, 134, "Kona Tan", "K001-1386", "Bella Tan (9900-32)"],
+    ["Camel", 176, 139, 98, "Kona Suede", "K001-1855", "Bella Camel (9900-69)"],
+    ["Warm Brown", 135, 94, 62, "Kona Chestnut", "K001-1073", "Bella Brown (9900-35)"],
+    ["Cocoa", 105, 72, 52, "Kona Coffee", "K001-1081", "Bella Earth (9900-34)"],
+    ["Espresso", 66, 46, 36, "Kona Espresso", "K001-1136", "Bella Espresso (9900-173)"],
+    ["Silver Gray", 210, 212, 214, "Kona Silver", "K001-1333", "Bella Silver (9900-183)"],
+    ["Light Gray", 180, 182, 184, "Kona Ash", "K001-1007", "Bella Dove (9900-83)"],
+    ["Warm Gray", 150, 145, 138, "Kona Stone", "K001-1347", "Bella Etchings Stone (9900-169)"],
+    ["Slate Gray", 112, 120, 128, "Kona Slate", "K001-1854", "Bella Graphite (9900-202)"],
+    ["Charcoal", 64, 66, 70, "Kona Charcoal", "K001-1071", "Bella Charcoal (9900-284)"],
+    ["Black", 28, 28, 30, "Kona Black", "K001-1019", "Bella Jet Black (9900-99)"],
+    ["Pale Yellow", 248, 238, 178, "Kona Buttercup", "K001-1054", "Bella Buttercup (9900-23)"],
+    ["Lemon", 244, 218, 92, "Kona Lemon", "K001-23", "Bella Canary (9900-24)"],
+    ["Gold", 224, 176, 54, "Kona Gold", "K001-1161", "Bella Goldenrod (9900-112)"],
+    ["Mustard", 198, 146, 38, "Kona Mustard", "K001-1240", "Bella Mustard (9900-217)"],
+    ["Ochre", 176, 120, 36, "Kona Curry", "K001-1096", "Bella Amber (9900-247)"],
+    ["Peach", 244, 194, 164, "Kona Peach", "K001-1269", "Bella Peach (9900-108)"],
+    ["Apricot", 236, 162, 114, "Kona Apricot", "K001-1005", "Bella Cantaloupe (9900-141)"],
+    ["Coral", 232, 118, 96, "Kona Coral", "K001-1084", "Bella Coral (9900-110)"],
+    ["Tangerine", 228, 122, 48, "Kona Tangerine", "K001-1363", "Bella Orange (9900-77)"],
+    ["Burnt Orange", 194, 88, 38, "KonaSpice", "K001-1343", "Bella Autumn (9900-248)"],
+    ["Terracotta", 184, 88, 56, "Kona Terracotta", "K001-1367", "Bella Terracotta (9900-137)"],
+    ["Rust", 154, 64, 38, "Kona Rust", "K001-1315", "Bella Rust (9900-56)"],
+    ["Blush Pink", 242, 204, 206, "Kona Bellini", "K001-1144", "Bella Soft Pink (9900-20)"],
+    ["Light Pink", 236, 172, 184, "Kona Peony", "K001-443", "Bella Baby Pink (9900-22)"],
+    ["Dusty Rose", 196, 128, 138, "Kona Foxglove", "K001-432", "Bella Dusty Rose (9900-133)"],
+    ["Rose", 204, 92, 116, "Kona Bubblegum", "K001-1058", "Bella Rose (9900-114)"],
+    ["Berry", 168, 56, 92, "Kona Berry", "K001-1355", "Bella Berry (9900-115)"],
+    ["Magenta", 186, 44, 114, "Kona Honeysuckle", "K001-1174", "Bella Magenta (9900-251)"],
+    ["Bright Red", 208, 46, 46, "Kona Red", "K001-138", "Bella Scarlet (9900-48)"],
+    ["Crimson", 168, 34, 42, "Kona Crimson", "K001-1091", "Bella Christmas Red (9900-16)"],
+    ["Brick Red", 142, 48, 42, "Kona Brick", "K001-1042", "Bella Barn Red (9900-138)"],
+    ["Burgundy", 108, 28, 42, "Kona Burgundy", "K001-1039", "Bella Burgundy (9900-49)"],
+    ["Maroon", 82, 24, 32, "Kona Wine", "K001-1391", "Bella Wine (9900-50)"],
+    ["Lavender", 204, 192, 226, "Kona Lavender", "K001-1221", "Bella Lavender (9900-28)"],
+    ["Lilac", 178, 152, 206, "Kona Lilac", "K001-1215", "Bella Lilac (9900-147)"],
+    ["Mauve", 156, 118, 154, "Kona Wisteria", "K001-1392", "Bella Mauve (9900-135)"],
+    ["Violet", 126, 86, 168, "Kona Violet", "K001-1381", "Bella Amethyst (9900-149)"],
+    ["Plum", 108, 52, 114, "Kona Plum", "K001-1289", "Bella Plum (9900-150)"],
+    ["Eggplant", 72, 36, 82, "Kona Eggplant", "K001-1126", "Bella Eggplant (9900-151)"],
+    ["Ice Blue", 218, 234, 244, "Kona Ice Frappe", "K001-1179", "Bella Porcelain (9900-180)"],
+    ["Light Blue", 168, 204, 228, "Kona Sky", "K001-1342", "Bella Sky (9900-18)"],
+    ["Sky Blue", 118, 176, 218, "Kona Bluebell", "K001-1028", "Bella Baby Blue (9900-19)"],
+    ["Cornflower", 92, 138, 198, "Kona Cornflower", "K001-27", "Bella Cornflower (9900-128)"],
+    ["Cobalt Blue", 46, 98, 178, "Kona Blue Jay", "K001-196", "Bella Sapphire (9900-129)"],
+    ["Slate Blue", 88, 120, 148, "Kona Copenhagen", "K001-447", "Bella Slate Blue (9900-127)"],
+    ["Denim", 64, 96, 134, "Kona Denim", "K001-1109", "Bella Denim (9900-74)"],
+    ["Royal Blue", 38, 68, 142, "Kona Royal", "K001-1313", "Bella Royal (9900-37)"],
+    ["Navy", 28, 44, 84, "Kona Navy", "K001-1243", "Bella Navy (9900-40)"],
+    ["Midnight", 20, 28, 52, "Kona Nautical", "K001-1246", "Bella Midnight (9900-209)"],
+    ["Mint", 188, 228, 208, "Kona Mint", "K001-1235", "Bella Mint (9900-163)"],
+    ["Aqua", 116, 196, 196, "Kona Aqua", "K001-1006", "Bella Aqua (9900-72)"],
+    ["Turquoise", 64, 168, 176, "Kona Turquoise", "K001-1376", "Bella Turquoise (9900-164)"],
+    ["Teal", 38, 118, 128, "Kona Teal Blue", "K001-1365", "Bella Teal (9900-166)"],
+    ["Deep Teal", 24, 78, 88, "Kona Peacock", "K001-1270", "Bella Deep Teal (9900-272)"],
+    ["Pistachio", 188, 214, 156, "Kona Celery", "K001-1065", "Bella Pistachio (9900-160)"],
+    ["Sage", 148, 172, 142, "Kona Sage", "K001-1320", "Bella Sage (9900-64)"],
+    ["Seafoam", 142, 194, 168, "Kona Seafoam", "K001-1327", "Bella Seafoam (9900-162)"],
+    ["Lime Green", 136, 188, 72, "Kona Lime", "K001-1219", "Bella Lime (9900-119)"],
+    ["Kelly Green", 58, 148, 74, "Kona Kelly", "K001-1192", "Bella Kelly (9900-75)"],
+    ["Emerald", 38, 124, 82, "Kona Emerald", "K001-1133", "Bella Emerald (9900-264)"],
+    ["Moss Green", 106, 126, 72, "Kona Moss", "K001-1239", "Bella Moss (9900-158)"],
+    ["Olive", 112, 114, 54, "Kona Olive", "K001-1262", "Bella Olive (9900-66)"],
+    ["Forest Green", 42, 86, 54, "Kona Forest", "K001-1150", "Bella Forest (9900-44)"],
+    ["Pine Green", 28, 58, 42, "Kona Spruce", "K001-1346", "Bella Pine (9900-45)"],
   ];
 
-  function getColorName(r, g, b) {
-    let bestName = "Custom";
+  function getFabricCatalogMatch(r, g, b) {
+    let bestEntry = NAMED_FABRIC_COLORS[0];
     let bestDist = Infinity;
     for (let i = 0; i < NAMED_FABRIC_COLORS.length; i++) {
       const entry = NAMED_FABRIC_COLORS[i];
       const d = colorDistanceSq(r, g, b, entry[1], entry[2], entry[3]);
       if (d < bestDist) {
         bestDist = d;
-        bestName = entry[0];
+        bestEntry = entry;
       }
     }
-    return bestName;
+    const shadeClean = bestEntry[4].replace(/^Kona\s+/i, "");
+    const query = encodeURIComponent(`Kona Cotton ${shadeClean}`);
+    return {
+      name: bestEntry[0],
+      konaName: bestEntry[4],
+      konaSku: bestEntry[5],
+      bellaName: bestEntry[6],
+      fqsUrl: `https://www.fatquartershop.com/catalogsearch/result/?q=${query}`,
+      msqcUrl: `https://www.missouriquiltco.com/search?q=${query}`,
+      hancocksUrl: `https://www.hancockspaducah.com/search.php?search_query=${query}`,
+    };
+  }
+
+  function getColorName(r, g, b) {
+    return getFabricCatalogMatch(r, g, b).name;
   }
 
   // Deterministic k-means++ color quantization on sampled pixels
@@ -1237,17 +1253,21 @@
 
         // Build active color list (keeping same A, B, C... codes shown in UI)
         const activeColors = state.palette
-          .map((color, idx) => ({
-            index: idx,
-            code: getFabricCode(idx),
-            name: getColorName(color.r, color.g, color.b),
-            hex: rgbToHex(color.r, color.g, color.b).toUpperCase(),
-            r: color.r,
-            g: color.g,
-            b: color.b,
-            count: state.usageCounts[idx] || 0,
-            fabric: calculateColorFabric(state.usageCounts[idx] || 0),
-          }))
+          .map((color, idx) => {
+            const match = getFabricCatalogMatch(color.r, color.g, color.b);
+            return {
+              index: idx,
+              code: getFabricCode(idx),
+              name: match.name,
+              match,
+              hex: rgbToHex(color.r, color.g, color.b).toUpperCase(),
+              r: color.r,
+              g: color.g,
+              b: color.b,
+              count: state.usageCounts[idx] || 0,
+              fabric: calculateColorFabric(state.usageCounts[idx] || 0),
+            };
+          })
           .filter((c) => c.count > 0);
 
         const codeByPaletteIndex = new Map();
@@ -1488,6 +1508,228 @@
           `Backing: ${extras.backingAmount} (${extras.backingPanels} WOF panel${extras.backingPanels === 1 ? "" : "s"} wide, includes +${unit === "in" ? '8"' : "20 cm"} quilting margin)`,
           margin + 0.16,
           curY + 0.74
+        );
+
+        // ================= FABRIC SHOPPING LIST & WHERE TO BUY =================
+        doc.addPage();
+        let shopY = 0.8;
+
+        const PRICE_FQS = 7.48; // Fat Quarter Shop Kona Cotton $/yd
+        const PRICE_HANCOCKS = 7.98; // Hancock's of Paducah $/yd
+        const PRICE_MSQC = 8.48; // Missouri Star Quilt Co. $/yd
+        const AVG_PRICE_YD = 7.98;
+
+        const getPurchaseYards = (lengthInUnit) => {
+          const rawYards =
+            unit === "in"
+              ? (lengthInUnit * (1 + FABRIC_BUFFER)) / 36
+              : (lengthInUnit * (1 + FABRIC_BUFFER)) / 91.44;
+          // Online shops typically sell in 1/4 yd minimum cuts (or 1/8 yd increments above 1/4 yd)
+          return Math.max(0.25, Math.ceil(rawYards * 8) / 8);
+        };
+
+        const drawShoppingHeader = (isContinuation) => {
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(16);
+          doc.setTextColor(34, 31, 26);
+          doc.text(
+            isContinuation ? "Fabric Shopping List & Where to Buy (cont.)" : "Fabric Shopping List & Where to Buy",
+            margin,
+            shopY
+          );
+          shopY += 0.22;
+
+          if (!isContinuation) {
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(8.8);
+            doc.setTextColor(108, 100, 88);
+            doc.text(
+              "Closest commercial matches in Robert Kaufman Kona Cotton Solids (365+ shades) & Moda Bella Solids, with clickable store links.",
+              margin,
+              shopY
+            );
+            shopY += 0.18;
+
+            // Retailer overview box
+            doc.setFillColor(246, 242, 235);
+            doc.setDrawColor(215, 206, 191);
+            doc.setLineWidth(0.01);
+            doc.roundedRect(margin, shopY, contentW, 0.78, 0.06, 0.06, "FD");
+
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(8.5);
+            doc.setTextColor(34, 31, 26);
+            doc.text("Where to Buy Kona Cotton Solids Online (42\"-44\" 100% Quilting Cotton):", margin + 0.14, shopY + 0.2);
+
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(8.2);
+            doc.setTextColor(184, 77, 44);
+            doc.textWithLink(
+              `1. Fat Quarter Shop (~$${PRICE_FQS.toFixed(2)}/yd) - fatquartershop.com/kona-cotton-yardage`,
+              margin + 0.14,
+              shopY + 0.38,
+              { url: "https://www.fatquartershop.com/kona-cotton-yardage" }
+            );
+            doc.textWithLink(
+              `2. Hancock's of Paducah (~$${PRICE_HANCOCKS.toFixed(2)}/yd) - hancockspaducah.com (search Kona Cotton SKU)`,
+              margin + 0.14,
+              shopY + 0.54,
+              { url: "https://www.hancockspaducah.com/search.php?search_query=Kona+Cotton" }
+            );
+            doc.textWithLink(
+              `3. Missouri Star Quilt Co. (~$${PRICE_MSQC.toFixed(2)}/yd) - missouriquiltco.com/collections/kona-cotton-solids`,
+              margin + 0.14,
+              shopY + 0.70,
+              { url: "https://www.missouriquiltco.com/collections/kona-cotton-solids" }
+            );
+            shopY += 0.92;
+          }
+
+          // Shopping table header
+          doc.setFillColor(239, 233, 223);
+          doc.rect(margin, shopY, contentW, 0.3, "F");
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(8.2);
+          doc.setTextColor(34, 31, 26);
+          doc.text("Code", margin + 0.08, shopY + 0.2);
+          doc.text("Swatch", margin + 0.52, shopY + 0.2);
+          doc.text("Closest Match (Kona Cotton & Moda Bella)", margin + 1.08, shopY + 0.2);
+          doc.text("Need", margin + 3.95, shopY + 0.2);
+          doc.text("Price/yd", margin + 4.65, shopY + 0.2);
+          doc.text("Est. Cost", margin + 5.5, shopY + 0.2);
+          doc.text("Direct Shop Links", margin + 6.22, shopY + 0.2);
+          shopY += 0.34;
+        };
+
+        drawShoppingHeader(false);
+
+        let totalTopCostLow = 0;
+        let totalTopCostHigh = 0;
+        const shopRowH = 0.46;
+
+        activeColors.forEach((c) => {
+          if (shopY + shopRowH > pageH - 1.35) {
+            doc.addPage();
+            shopY = 0.8;
+            drawShoppingHeader(true);
+          }
+
+          const yds = getPurchaseYards(c.fabric.length);
+          const costLow = yds * PRICE_FQS;
+          const costHigh = yds * PRICE_MSQC;
+          const costAvg = yds * AVG_PRICE_YD;
+          totalTopCostLow += costLow;
+          totalTopCostHigh += costHigh;
+
+          // Code
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(10);
+          doc.setTextColor(34, 31, 26);
+          doc.text(c.code, margin + 0.14, shopY + 0.25);
+
+          // Swatch
+          doc.setFillColor(c.r, c.g, c.b);
+          doc.setDrawColor(140, 130, 120);
+          doc.setLineWidth(0.008);
+          doc.rect(margin + 0.52, shopY + 0.08, 0.42, 0.26, "FD");
+
+          // Closest fabric match (Kona primary + Bella subline)
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(8.8);
+          doc.setTextColor(34, 31, 26);
+          doc.text(`${c.match.konaName} (${c.match.konaSku})`, margin + 1.08, shopY + 0.18);
+
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(7.6);
+          doc.setTextColor(108, 100, 88);
+          doc.text(`Alt: ${c.match.bellaName}`, margin + 1.08, shopY + 0.34);
+
+          // Need
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(8.8);
+          doc.setTextColor(34, 31, 26);
+          doc.text(c.fabric.formatted, margin + 3.95, shopY + 0.25);
+
+          // Price/yd
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(8.2);
+          doc.setTextColor(70, 65, 58);
+          doc.text(`$${PRICE_FQS.toFixed(2)}-$${PRICE_MSQC.toFixed(2)}`, margin + 4.65, shopY + 0.25);
+
+          // Est. Cost
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(8.8);
+          doc.setTextColor(184, 77, 44);
+          doc.text(`~$${costAvg.toFixed(2)}`, margin + 5.5, shopY + 0.25);
+
+          // Direct clickable shop search links
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(7.6);
+          doc.setTextColor(58, 107, 124);
+          doc.textWithLink("FQS", margin + 6.22, shopY + 0.25, { url: c.match.fqsUrl });
+          doc.text(" | ", margin + 6.46, shopY + 0.25);
+          doc.textWithLink("MSQC", margin + 6.58, shopY + 0.25, { url: c.match.msqcUrl });
+          doc.text(" | ", margin + 6.94, shopY + 0.25);
+          doc.textWithLink("Hancock", margin + 7.04, shopY + 0.25, { url: c.match.hancocksUrl });
+
+          // Divider
+          doc.setDrawColor(232, 226, 216);
+          doc.setLineWidth(0.006);
+          doc.line(margin, shopY + shopRowH, margin + contentW, shopY + shopRowH);
+          shopY += shopRowH;
+        });
+
+        // Total Estimated Fabric Budget Summary
+        if (shopY + 0.95 > pageH - 0.65) {
+          doc.addPage();
+          shopY = 0.8;
+        } else {
+          shopY += 0.22;
+        }
+
+        const bindingLenIn =
+          unit === "in"
+            ? extras.bindingStrips * extras.bindingStripW
+            : (extras.bindingStrips * extras.bindingStripW) / 2.54;
+        const backingLenIn =
+          unit === "in"
+            ? extras.backingPanels * (quiltH + 8)
+            : (extras.backingPanels * (quiltH + 20)) / 2.54;
+        const bindingYds = Math.max(0.25, Math.ceil((bindingLenIn / 36) * 8) / 8);
+        const backingYds = Math.max(0.5, Math.ceil((backingLenIn / 36) * 8) / 8);
+        const topAvg = (totalTopCostLow + totalTopCostHigh) / 2;
+        const bindCost = bindingYds * AVG_PRICE_YD;
+        const backCost = backingYds * AVG_PRICE_YD;
+        const grandTotal = topAvg + bindCost + backCost;
+
+        doc.setFillColor(246, 242, 235);
+        doc.setDrawColor(215, 206, 191);
+        doc.setLineWidth(0.01);
+        doc.roundedRect(margin, shopY, contentW, 0.82, 0.06, 0.06, "FD");
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9.5);
+        doc.setTextColor(34, 31, 26);
+        doc.text(
+          `Estimated Fabric Cost Summary (at ~$${AVG_PRICE_YD.toFixed(2)}/yd avg, 1/4 yd min cut per color):`,
+          margin + 0.16,
+          shopY + 0.25
+        );
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.8);
+        doc.setTextColor(70, 65, 58);
+        doc.text(
+          `Quilt Top (${activeColors.length} fabrics): ~$${topAvg.toFixed(2)} ($${totalTopCostLow.toFixed(2)}-$${totalTopCostHigh.toFixed(2)})   |   Binding: ~$${bindCost.toFixed(2)}   |   Backing: ~$${backCost.toFixed(2)}`,
+          margin + 0.16,
+          shopY + 0.48
+        );
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(184, 77, 44);
+        doc.text(
+          `Estimated Total Fabric Budget (Top + Binding + Backing): ~$${grandTotal.toFixed(2)} USD`,
+          margin + 0.16,
+          shopY + 0.70
         );
 
         // ================= PAGE 3+: ANNOTATED LAYOUT GRID MAP =================
@@ -1794,7 +2036,15 @@
 
   function openCropStage() {
     if (!state.image) return;
-    draftCrop = { ...state.crop };
+    const isFullUnmodified =
+      state.crop.x < 0.002 &&
+      state.crop.y < 0.002 &&
+      state.crop.w > 0.996 &&
+      state.crop.h > 0.996;
+    // Start slightly inset on first open so handles and darkened border are immediately obvious and movable on mobile
+    draftCrop = isFullUnmodified
+      ? { x: 0.06, y: 0.06, w: 0.88, h: 0.88 }
+      : { ...state.crop };
     cropAspect = null;
     cropAspectBtns.forEach((btn) => {
       btn.classList.toggle("is-active", btn.dataset.aspect === "free");
@@ -1803,8 +2053,11 @@
     const img = state.image;
     const maxDim = 820;
     const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
-    cropCanvas.width = Math.max(120, Math.round(img.naturalWidth * scale));
-    cropCanvas.height = Math.max(120, Math.round(img.naturalHeight * scale));
+    const imgW = Math.max(120, Math.round(img.naturalWidth * scale));
+    const imgH = Math.max(120, Math.round(img.naturalHeight * scale));
+    // Add padding around the image so corner handles are never clipped at the canvas edge
+    cropCanvas.width = imgW + CROP_PAD * 2;
+    cropCanvas.height = imgH + CROP_PAD * 2;
 
     previewToolbar.hidden = true;
     canvasFrame.hidden = true;
@@ -1813,6 +2066,8 @@
 
     renderCropCanvas();
   }
+
+  const CROP_PAD = 16;
 
   function closeCropStage() {
     cropStage.hidden = true;
@@ -1859,28 +2114,32 @@
     if (!state.image || cropStage.hidden) return;
     const cw = cropCanvas.width;
     const ch = cropCanvas.height;
+    const iw = cw - CROP_PAD * 2;
+    const ih = ch - CROP_PAD * 2;
 
     cropCtx.clearRect(0, 0, cw, ch);
-    cropCtx.drawImage(state.image, 0, 0, cw, ch);
+    cropCtx.fillStyle = "#221f1a";
+    cropCtx.fillRect(0, 0, cw, ch);
+    cropCtx.drawImage(state.image, CROP_PAD, CROP_PAD, iw, ih);
 
     // Dim outside area
     cropCtx.fillStyle = "rgba(22, 19, 16, 0.58)";
     cropCtx.fillRect(0, 0, cw, ch);
 
-    const bx = draftCrop.x * cw;
-    const by = draftCrop.y * ch;
-    const bw = draftCrop.w * cw;
-    const bh = draftCrop.h * ch;
+    const bx = CROP_PAD + draftCrop.x * iw;
+    const by = CROP_PAD + draftCrop.y * ih;
+    const bw = draftCrop.w * iw;
+    const bh = draftCrop.h * ih;
 
     // Bright cropped area
     cropCtx.save();
     cropCtx.beginPath();
     cropCtx.rect(bx, by, bw, bh);
     cropCtx.clip();
-    cropCtx.drawImage(state.image, 0, 0, cw, ch);
+    cropCtx.drawImage(state.image, CROP_PAD, CROP_PAD, iw, ih);
 
     // Rule of thirds lines
-    cropCtx.strokeStyle = "rgba(255, 255, 255, 0.42)";
+    cropCtx.strokeStyle = "rgba(255, 255, 255, 0.45)";
     cropCtx.lineWidth = 1;
     cropCtx.beginPath();
     for (let i = 1; i <= 2; i++) {
@@ -1896,47 +2155,59 @@
 
     // Crisp crop border
     cropCtx.strokeStyle = "#ffffff";
-    cropCtx.lineWidth = 2;
+    cropCtx.lineWidth = 2.5;
     cropCtx.strokeRect(bx, by, bw, bh);
 
-    // Corner and mid-edge handles
+    // Corner and mid-edge handles (sized clearly for touch & desktop)
     const handles = getCropHandles(bx, by, bw, bh);
     handles.forEach((h) => {
-      const r = h.id.length === 2 ? 7 : 5.5;
+      const r = h.id.length === 2 ? 10 : 7.5;
       cropCtx.beginPath();
       cropCtx.arc(h.x, h.y, r, 0, Math.PI * 2);
       cropCtx.fillStyle = "#ffffff";
       cropCtx.fill();
-      cropCtx.lineWidth = 2;
+      cropCtx.lineWidth = 2.5;
       cropCtx.strokeStyle = "#b84d2c";
       cropCtx.stroke();
     });
   }
 
-  function pointerToCropNorm(e) {
+  function clientToCropNorm(clientX, clientY) {
     const rect = cropCanvas.getBoundingClientRect();
-    const nx = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const ny = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
-    return { nx, ny, rect };
+    const scaleX = cropCanvas.width / Math.max(1, rect.width);
+    const scaleY = cropCanvas.height / Math.max(1, rect.height);
+    const padCssX = CROP_PAD / scaleX;
+    const padCssY = CROP_PAD / scaleY;
+    const imgCssW = Math.max(1, rect.width - padCssX * 2);
+    const imgCssH = Math.max(1, rect.height - padCssY * 2);
+
+    const nx = Math.max(0, Math.min(1, (clientX - rect.left - padCssX) / imgCssW));
+    const ny = Math.max(0, Math.min(1, (clientY - rect.top - padCssY) / imgCssH));
+    return {
+      nx,
+      ny,
+      px: clientX - rect.left,
+      py: clientY - rect.top,
+      padCssX,
+      padCssY,
+      imgCssW,
+      imgCssH,
+    };
   }
 
-  cropCanvas.addEventListener("pointerdown", (e) => {
+  function startCropInteraction(clientX, clientY, isTouch) {
     if (!state.image) return;
-    e.preventDefault();
-    cropCanvas.setPointerCapture(e.pointerId);
+    const { nx, ny, px, py, padCssX, padCssY, imgCssW, imgCssH } = clientToCropNorm(clientX, clientY);
+    const bx = padCssX + draftCrop.x * imgCssW;
+    const by = padCssY + draftCrop.y * imgCssH;
+    const bw = draftCrop.w * imgCssW;
+    const bh = draftCrop.h * imgCssH;
 
-    const { nx, ny, rect } = pointerToCropNorm(e);
-    const bx = draftCrop.x * rect.width;
-    const by = draftCrop.y * rect.height;
-    const bw = draftCrop.w * rect.width;
-    const bh = draftCrop.h * rect.height;
-    const px = nx * rect.width;
-    const py = ny * rect.height;
-
-    // Check 8 handles first (generous 22px hit radius for touch screens)
+    // Check 8 handles first (generous 36px touch hit radius on mobile, 24px on desktop)
     const handles = getCropHandles(bx, by, bw, bh);
     let hitHandle = null;
-    let bestDist = 22 * 22;
+    const hitRadius = isTouch ? 36 : 24;
+    let bestDist = hitRadius * hitRadius;
     for (const h of handles) {
       const dx = px - h.x;
       const dy = py - h.y;
@@ -1952,24 +2223,36 @@
       return;
     }
 
-    // Inside crop box -> pan/move
-    if (nx >= draftCrop.x && nx <= draftCrop.x + draftCrop.w && ny >= draftCrop.y && ny <= draftCrop.y + draftCrop.h) {
+    // If box is full-bleed (100%x100%), dragging inside has no room to pan—grab nearest corner instead
+    const isFullBox = draftCrop.w > 0.98 && draftCrop.h > 0.98;
+    if (
+      !isFullBox &&
+      nx >= draftCrop.x &&
+      nx <= draftCrop.x + draftCrop.w &&
+      ny >= draftCrop.y &&
+      ny <= draftCrop.y + draftCrop.h
+    ) {
       cropDrag = { mode: "move", startNx: nx, startNy: ny, startCrop: { ...draftCrop } };
+      return;
+    }
+
+    if (isFullBox) {
+      const corner = (ny < 0.5 ? "n" : "s") + (nx < 0.5 ? "w" : "e");
+      cropDrag = { mode: corner, startNx: nx, startNy: ny, startCrop: { ...draftCrop } };
       return;
     }
 
     // Outside -> draw new box
     cropDrag = { mode: "new", startNx: nx, startNy: ny, startCrop: { ...draftCrop } };
-  });
+  }
 
-  cropCanvas.addEventListener("pointermove", (e) => {
+  function moveCropInteraction(clientX, clientY) {
     if (!cropDrag || !state.image) return;
-    e.preventDefault();
-    const { nx, ny } = pointerToCropNorm(e);
+    const { nx, ny } = clientToCropNorm(clientX, clientY);
     const dx = nx - cropDrag.startNx;
     const dy = ny - cropDrag.startNy;
     const s = cropDrag.startCrop;
-    const minSize = 0.06;
+    const minSize = 0.08;
 
     if (cropDrag.mode === "move") {
       draftCrop.x = Math.max(0, Math.min(1 - s.w, s.x + dx));
@@ -2002,13 +2285,51 @@
       fitDraftCropToAspect(cropAspect);
     }
     renderCropCanvas();
-  });
+  }
 
   const endCropDrag = () => {
     cropDrag = null;
   };
-  cropCanvas.addEventListener("pointerup", endCropDrag);
-  cropCanvas.addEventListener("pointercancel", endCropDrag);
+
+  // Explicit non-passive touch listeners for iOS Safari / Android mobile web
+  cropCanvas.addEventListener(
+    "touchstart",
+    (e) => {
+      if (!state.image || e.touches.length === 0) return;
+      e.preventDefault();
+      const t = e.touches[0];
+      startCropInteraction(t.clientX, t.clientY, true);
+    },
+    { passive: false }
+  );
+
+  cropCanvas.addEventListener(
+    "touchmove",
+    (e) => {
+      if (!cropDrag || e.touches.length === 0) return;
+      e.preventDefault();
+      const t = e.touches[0];
+      moveCropInteraction(t.clientX, t.clientY);
+    },
+    { passive: false }
+  );
+
+  cropCanvas.addEventListener("touchend", endCropDrag);
+  cropCanvas.addEventListener("touchcancel", endCropDrag);
+
+  // Desktop mouse listeners
+  cropCanvas.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    startCropInteraction(e.clientX, e.clientY, false);
+  });
+
+  window.addEventListener("mousemove", (e) => {
+    if (!cropDrag) return;
+    moveCropInteraction(e.clientX, e.clientY);
+  });
+
+  window.addEventListener("mouseup", endCropDrag);
 
   cropBtn.addEventListener("click", openCropStage);
   cropCancelBtn.addEventListener("click", closeCropStage);
