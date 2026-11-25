@@ -47,6 +47,8 @@
   const cutSquareValue = document.getElementById("cut-square-value");
   const wofNote = document.getElementById("wof-note");
   const previewDimensions = document.getElementById("preview-dimensions");
+  const previewRulerWidth = document.getElementById("preview-ruler-width");
+  const previewRulerHeight = document.getElementById("preview-ruler-height");
 
   const paletteSizeSlider = document.getElementById("palette-size-slider");
   const paletteSizeValue = document.getElementById("palette-size-value");
@@ -599,6 +601,8 @@
         : `Fabric estimates: 106 cm usable WOF, +10% extra for squaring up & mistakes`;
 
     previewDimensions.textContent = `Finished: ${quiltText} · Cut squares: ${cutText}`;
+    if (previewRulerWidth) previewRulerWidth.textContent = formatMeasure(quiltW, unit);
+    if (previewRulerHeight) previewRulerHeight.textContent = formatMeasure(quiltH, unit);
     updateSwatchCounts(state.usageCounts);
   }
 
@@ -1181,25 +1185,47 @@
     }
   });
 
-  // Standard quilt size presets (Mini through King) — fits current grid orientation cleanly inside preset bounds
+  // Standard quilt size presets (Mini through King):
+  // Reshapes the preview via a non-destructive center crop to match the preset's exact proportions,
+  // recalculates the square grid & finished square size, and updates the live preview + rulers.
   if (quiltPresetSelect) {
     quiltPresetSelect.addEventListener("change", () => {
       const opt = quiltPresetSelect.selectedOptions[0];
-      if (!opt || opt.value === "custom") return;
+      if (!opt || opt.value === "custom" || !state.image) return;
       const wIn = parseFloat(opt.dataset.w);
       const hIn = parseFloat(opt.dataset.h);
-      if (!Number.isFinite(wIn) || !Number.isFinite(hIn) || state.cols <= 0 || state.rows <= 0) return;
+      if (!Number.isFinite(wIn) || !Number.isFinite(hIn) || state.cols <= 0) return;
 
       const scale = state.unit === "cm" ? 2.54 : 1;
       const shortSide = Math.min(wIn, hIn) * scale;
       const longSide = Math.max(wIn, hIn) * scale;
-      // Match preset orientation (landscape vs. portrait) to the current quilt grid
-      const targetW = state.cols >= state.rows ? longSide : shortSide;
-      const targetH = state.cols >= state.rows ? shortSide : longSide;
 
-      const fittedSquare = Math.min(targetW / state.cols, targetH / state.rows);
-      state.finishedSquareSize = Math.max(0.25, Math.round(fittedSquare * 100) / 100);
-      updateQuiltDimensions();
+      // Match preset orientation (landscape vs. portrait) to the uploaded photo's natural orientation
+      const imgAspect = state.image.naturalWidth / Math.max(1, state.image.naturalHeight);
+      const targetW = imgAspect >= 1 ? longSide : shortSide;
+      const targetH = imgAspect >= 1 ? shortSide : longSide;
+      const targetAspect = targetW / targetH;
+
+      // Center-crop the image non-destructively to the target quilt aspect ratio
+      const normRatio = targetAspect / imgAspect;
+      let cropW = 1;
+      let cropH = 1;
+      if (normRatio <= 1) {
+        cropW = Math.max(0.1, normRatio);
+      } else {
+        cropH = Math.max(0.1, 1 / normRatio);
+      }
+      state.crop = {
+        x: (1 - cropW) / 2,
+        y: (1 - cropH) / 2,
+        w: cropW,
+        h: cropH,
+      };
+
+      rebuildSampleBuffer();
+      state.finishedSquareSize = Math.max(0.25, Math.round((targetW / state.cols) * 100) / 100);
+      computeSquareAverages();
+      renderQuilt();
     });
   }
 

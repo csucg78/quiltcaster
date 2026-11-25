@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="64x64" href="favicon-v2.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-v2.png" />
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon-v2.png" />
-  <link rel="manifest" href="site.webmanifest?v=14" />
-  <link rel="stylesheet" href="styles.css?v=14" />
+  <link rel="manifest" href="site.webmanifest?v=15" />
+  <link rel="stylesheet" href="styles.css?v=15" />
 </head>
 <body>
   <header class="topbar">
@@ -268,7 +268,20 @@
           </div>
         </div>
         <div class="canvas-frame" id="canvas-frame">
-          <canvas id="quilt-canvas"></canvas>
+          <div class="quilt-measure-wrap">
+            <div class="ruler-top" aria-hidden="true">
+              <span class="ruler-line"></span>
+              <span class="ruler-badge" id="preview-ruler-width">60"</span>
+              <span class="ruler-line"></span>
+            </div>
+            <div class="ruler-corner" aria-hidden="true"></div>
+            <canvas id="quilt-canvas"></canvas>
+            <div class="ruler-side" aria-hidden="true">
+              <span class="ruler-line-v"></span>
+              <span class="ruler-badge" id="preview-ruler-height">45"</span>
+              <span class="ruler-line-v"></span>
+            </div>
+          </div>
           <div class="drop-overlay" id="drop-overlay" hidden>
             <span>Drop to replace image</span>
           </div>
@@ -344,6 +357,6 @@
   </main>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-  <script src="app.js?v=14" defer></script>
+  <script src="app.js?v=15" defer></script>
 </body>
 </html>
