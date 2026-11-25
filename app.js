@@ -64,6 +64,25 @@
     });
   }
 
+  function syncProjectTitle(title, sourceEl = null) {
+    const val = title || "";
+    if (fileNameLabel && sourceEl !== fileNameLabel) {
+      fileNameLabel.value = val;
+    }
+    if (patternTitleInput && sourceEl !== patternTitleInput) {
+      patternTitleInput.value = val;
+    }
+    const clean = val.trim();
+    document.title = clean ? `${clean} · Miriam's Quiltcaster` : "Miriam's Quiltcaster";
+  }
+
+  if (fileNameLabel) {
+    fileNameLabel.addEventListener("input", () => syncProjectTitle(fileNameLabel.value, fileNameLabel));
+  }
+  if (patternTitleInput) {
+    patternTitleInput.addEventListener("input", () => syncProjectTitle(patternTitleInput.value, patternTitleInput));
+  }
+
   function derivePatternTitle(filename) {
     const base = (filename || "Custom Quilt")
       .replace(/\.[^.]+$/, "")
@@ -839,13 +858,11 @@
       state.image = img;
       state.objectUrl = objectUrl;
       state.fileName = name;
-      fileNameLabel.textContent = name;
-      if (patternTitleInput) {
-        patternTitleInput.value =
-          restore && typeof restore.patternTitle === "string" && restore.patternTitle.trim()
-            ? restore.patternTitle.trim()
-            : derivePatternTitle(name);
-      }
+      const initialTitle =
+        restore && typeof restore.patternTitle === "string" && restore.patternTitle.trim()
+          ? restore.patternTitle.trim()
+          : derivePatternTitle(name);
+      syncProjectTitle(initialTitle);
       state.crop = { x: 0, y: 0, w: 1, h: 1 };
 
       if (restore && restore.settings && restore.settings.crop) {
@@ -970,12 +987,17 @@
   function savePattern() {
     if (!state.image) return;
 
+    const currentTitle =
+      (fileNameLabel && fileNameLabel.value.trim()) ||
+      (patternTitleInput && patternTitleInput.value.trim()) ||
+      derivePatternTitle(state.fileName);
+
     const pattern = {
       format: PATTERN_FORMAT,
       version: PATTERN_VERSION,
       savedAt: new Date().toISOString(),
       name: state.fileName || "quilt",
-      patternTitle: patternTitleInput ? patternTitleInput.value.trim() : "",
+      patternTitle: currentTitle,
       settings: {
         cols: state.cols,
         showSeamLines: state.showSeamLines,
@@ -992,8 +1014,7 @@
 
     const blob = new Blob([JSON.stringify(pattern)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
-    const baseName = (state.fileName || "quilt").replace(/\.[^.]+$/, "");
-    const safeName = baseName.replace(/[^a-z0-9-_]+/gi, "-").replace(/^-+|-+$/g, "") || "quilt";
+    const safeName = currentTitle.replace(/[^a-z0-9-_]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "quilt";
 
     const a = document.createElement("a");
     a.href = url;

@@ -212,21 +212,51 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  padding: 0.38rem 0.75rem;
+  padding: 0.34rem 0.7rem;
+  min-height: 38px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 999px;
   color: var(--text-muted);
-  max-width: 240px;
+  max-width: 280px;
+  cursor: text;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.project-chip .file-name {
-  font-size: 0.82rem;
+.project-chip:hover {
+  border-color: var(--border-strong);
+  background: var(--surface);
+}
+
+.project-chip:focus-within {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px rgba(184, 77, 44, 0.12);
+}
+
+.project-name-input {
+  font: inherit;
+  font-size: 0.85rem;
   font-weight: 600;
   color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  background: transparent;
+  border: none;
+  outline: none;
+  min-width: 90px;
+  width: 155px;
+}
+
+.project-chip .icon-edit {
+  width: 13px;
+  height: 13px;
+  opacity: 0.55;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.project-chip:hover .icon-edit,
+.project-chip:focus-within .icon-edit {
+  opacity: 1;
+  color: var(--accent);
 }
 
 .action-group {
@@ -1049,8 +1079,14 @@ input[type="range"] {
 
   /* Prevent iOS Safari auto-zoom on input focus */
   .input-with-unit input[type="number"],
-  .pattern-title-input {
+  .pattern-title-input,
+  .project-name-input {
     font-size: 16px;
+  }
+
+  .project-name-input {
+    width: 100%;
+    flex: 1;
   }
 
   .palette-grid {
