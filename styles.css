@@ -1,3 +1,14 @@
+/* ==========================================================================
+   Miriam's Quiltcaster — Stylesheet
+   Typography synced with the exported PDF booklet:
+     - Display Serif: DM Serif Display (titles & section headings)
+     - UI Sans:       Plus Jakarta Sans (body, buttons, controls)
+     - Monospace:     JetBrains Mono (fabric codes, dimensions, yardage)
+   Breakpoints:
+     - <= 960px: iPad portrait / single-column stack (preview promoted to top)
+     - <= 600px: iPhone / narrow mobile (touch-sized targets, 16px inputs)
+   ========================================================================== */
+
 @font-face {
   font-family: "DM Serif Display";
   src: url("fonts/DMSerifDisplay-Regular.ttf") format("truetype");
@@ -823,12 +834,6 @@ input[type="range"] {
   border-top: none;
 }
 
-.file-name {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text);
-}
-
 .canvas-frame {
   position: relative;
   padding: 1.5rem;
@@ -874,22 +879,6 @@ input[type="range"] {
   border-top: 1px solid var(--border);
   background: #fcfaf7;
   flex-wrap: wrap;
-}
-
-.export-text {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-}
-
-.export-text strong {
-  font-size: 0.9rem;
-  color: var(--text);
-}
-
-.export-text span {
-  font-size: 0.78rem;
-  color: var(--text-muted);
 }
 
 .export-title-field {

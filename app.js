@@ -1,3 +1,24 @@
+/**
+ * Miriam's Quiltcaster — Client-side pixel-quilt designer & PDF booklet generator.
+ *
+ * Data pipeline:
+ *   Uploaded Image (or .quilt JSON)
+ *     -> Non-destructive normalized crop box (state.crop, 0..1)
+ *     -> Cached 400px downsampled pixel buffer (rebuildSampleBuffer)
+ *     -> Deterministic k-means++ palette extraction (extractPalette)
+ *     -> Exact box-averaged square grid (computeSquareAverages)
+ *     -> Real-time <canvas> preview (renderQuilt) + boutique jsPDF booklet (exportPdfPattern)
+ *
+ * Sections in this file:
+ *   1. DOM References & Application State
+ *   2. Color Math, Kona/Bella Fabric Catalog & K-Means++ Extraction
+ *   3. Square Decomposition, Quilting Dimensions & Yardage Math
+ *   4. Live Canvas Rendering & Interactive Palette Swatches
+ *   5. Image Ingestion, Non-Destructive Cropping Buffer & .quilt Save/Load
+ *   6. UI Event Wiring (Drag/Drop, Sliders, Units, Palette)
+ *   7. Boutique PDF Pattern Booklet Generator (jsPDF + Embedded Fonts)
+ *   8. Interactive Crop Canvas Controller (Touch + Mouse)
+ */
 (() => {
   "use strict";
 
@@ -203,7 +224,7 @@
     ["Apricot", 236, 162, 114, "Kona Apricot", "K001-1005", "Bella Cantaloupe (9900-141)"],
     ["Coral", 232, 118, 96, "Kona Coral", "K001-1084", "Bella Coral (9900-110)"],
     ["Tangerine", 228, 122, 48, "Kona Tangerine", "K001-1363", "Bella Orange (9900-77)"],
-    ["Burnt Orange", 194, 88, 38, "KonaSpice", "K001-1343", "Bella Autumn (9900-248)"],
+    ["Burnt Orange", 194, 88, 38, "Kona Spice", "K001-1343", "Bella Autumn (9900-248)"],
     ["Terracotta", 184, 88, 56, "Kona Terracotta", "K001-1367", "Bella Terracotta (9900-137)"],
     ["Rust", 154, 64, 38, "Kona Rust", "K001-1315", "Bella Rust (9900-56)"],
     ["Blush Pink", 242, 204, 206, "Kona Bellini", "K001-1144", "Bella Soft Pink (9900-20)"],
@@ -585,12 +606,8 @@
     }
 
     if (state.showingOriginal) {
-      const img = state.image;
-      const sx = Math.round(state.crop.x * img.naturalWidth);
-      const sy = Math.round(state.crop.y * img.naturalHeight);
-      const sw = Math.max(1, Math.round(state.crop.w * img.naturalWidth));
-      const sh = Math.max(1, Math.round(state.crop.h * img.naturalHeight));
-      quiltCtx.drawImage(img, sx, sy, sw, sh, 0, 0, canvasW, canvasH);
+      const { sx, sy, sw, sh } = getCroppedSourceRect();
+      quiltCtx.drawImage(state.image, sx, sy, sw, sh, 0, 0, canvasW, canvasH);
       return;
     }
 
@@ -1653,11 +1670,10 @@
       const quiltH = rows * finished;
       const wof = getUsableWof(unit);
 
-      const baseName = (state.fileName || "quiltcaster-pattern").replace(/\.[^.]+$/, "");
       const customTitle = patternTitleInput ? patternTitleInput.value.trim() : "";
       const title = customTitle || derivePatternTitle(state.fileName) || "Custom Pixel Quilt";
 
-      // Build active color list with Kona/Bella matches & Fat Quarter fit
+      // Build active color list (skipping any palette colors with 0 assigned squares)
       const activeColors = state.palette
         .map((color, idx) => {
           const count = state.usageCounts[idx] || 0;
@@ -1679,12 +1695,10 @@
         })
         .filter((c) => c.count > 0);
 
-      const paletteByCode = new Map();
+      // Map palette index -> stable fabric letter (A, B, C...) matching the UI swatches
       const codeByPaletteIndex = new Map();
-      state.palette.forEach((col, idx) => {
-        const code = getFabricCode(idx);
-        codeByPaletteIndex.set(idx, code);
-        paletteByCode.set(code, col);
+      state.palette.forEach((_, idx) => {
+        codeByPaletteIndex.set(idx, getFabricCode(idx));
       });
 
       const drawRunningHeader = (sectionNumStr, sectionLabel) => {
@@ -3037,6 +3051,8 @@
 
   // --- Interactive Non-Destructive Image Cropping ---
 
+  // Inner canvas padding (px) around the photo so edge/corner handles are never clipped
+  const CROP_PAD = 16;
   let draftCrop = { x: 0, y: 0, w: 1, h: 1 };
   let cropAspect = null; // null for free, or desired (pixelW / pixelH) ratio
   let cropDrag = null;
@@ -3144,8 +3160,6 @@
 
     renderCropCanvas();
   }
-
-  const CROP_PAD = 16;
 
   function closeCropStage() {
     cropStage.hidden = true;
