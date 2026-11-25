@@ -1223,6 +1223,40 @@
     }
   }
 
+  let cachedBrandIconDataUrl = null;
+
+  function loadPdfBrandIcon() {
+    if (cachedBrandIconDataUrl) return Promise.resolve(cachedBrandIconDataUrl);
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const size = 192;
+        const r = 36;
+        const c = document.createElement("canvas");
+        c.width = size;
+        c.height = size;
+        const ctx = c.getContext("2d");
+        ctx.beginPath();
+        ctx.moveTo(r, 0);
+        ctx.lineTo(size - r, 0);
+        ctx.quadraticCurveTo(size, 0, size, r);
+        ctx.lineTo(size, size - r);
+        ctx.quadraticCurveTo(size, size, size - r, size);
+        ctx.lineTo(r, size);
+        ctx.quadraticCurveTo(0, size, 0, size - r);
+        ctx.lineTo(0, r);
+        ctx.quadraticCurveTo(0, 0, r, 0);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(img, 0, 0, size, size);
+        cachedBrandIconDataUrl = c.toDataURL("image/png");
+        resolve(cachedBrandIconDataUrl);
+      };
+      img.onerror = () => resolve(null);
+      img.src = "icon-192-v2.png";
+    });
+  }
+
   function registerPdfFonts(doc, fontList) {
     if (!fontList) {
       return { serif: "times", sans: "helvetica", mono: "courier" };
@@ -1518,7 +1552,7 @@
     exportPdfBtn.textContent = "Preparing Booklet...";
 
     try {
-      const fontData = await loadPdfFonts();
+      const [fontData, brandIconDataUrl] = await Promise.all([loadPdfFonts(), loadPdfBrandIcon()]);
       const { jsPDF } = window.jspdf;
       const isA4 = pageSizeSelect.value === "a4";
       const assemblyMode = assemblyModeSelect ? assemblyModeSelect.value : "rows";
@@ -1615,24 +1649,19 @@
       doc.setLineWidth(0.01);
       doc.line(0, 1.95, pageW, 1.95);
 
-      // Mini 4-patch Quiltcaster emblem
+      // Patchwork quilt-star brand icon on cover
       const embX = margin;
-      const embY = 0.52;
-      const embColors = [
-        [200, 90, 50],
-        [58, 107, 124],
-        [217, 164, 65],
-        [79, 119, 88],
-      ];
-      embColors.forEach((rgb, i) => {
-        doc.setFillColor(rgb[0], rgb[1], rgb[2]);
-        doc.roundedRect(embX + (i % 2) * 0.14, embY + Math.floor(i / 2) * 0.14, 0.12, 0.12, 0.02, 0.02, "F");
-      });
+      const embY = 0.44;
+      const embSize = 0.44;
+      if (brandIconDataUrl) {
+        doc.addImage(brandIconDataUrl, "PNG", embX, embY, embSize, embSize);
+      }
 
+      const eyebrowX = brandIconDataUrl ? embX + embSize + 0.14 : embX;
       doc.setFont(fonts.sans, "bold");
       doc.setFontSize(8);
       doc.setTextColor(184, 77, 44);
-      doc.text("MIRIAM'S QUILTCASTER  \u00b7  CUSTOM PIXEL QUILT PATTERN", embX + 0.36, 0.68);
+      doc.text("MIRIAM'S QUILTCASTER  \u00b7  CUSTOM PIXEL QUILT PATTERN", eyebrowX, 0.7);
 
       // Editorial Serif Title
       doc.setFont(fonts.serif, "normal");
@@ -2747,10 +2776,17 @@
         doc.setLineWidth(0.006);
         doc.line(margin, pageH - 0.44, pageW - margin, pageH - 0.44);
 
+        if (brandIconDataUrl) {
+          doc.addImage(brandIconDataUrl, "PNG", margin, pageH - 0.38, 0.15, 0.15);
+        }
         doc.setFont(fonts.sans, "normal");
         doc.setFontSize(7.5);
         doc.setTextColor(135, 127, 115);
-        doc.text("Miriam's Quiltcaster  \u00b7  Custom Pixel Quilt Pattern", margin, pageH - 0.27);
+        doc.text(
+          "Miriam's Quiltcaster  \u00b7  Custom Pixel Quilt Pattern",
+          brandIconDataUrl ? margin + 0.21 : margin,
+          pageH - 0.27
+        );
         doc.setFont(fonts.mono, "bold");
         doc.text(`Page ${p} of ${totalPages}`, pageW - margin, pageH - 0.27, { align: "right" });
       }
