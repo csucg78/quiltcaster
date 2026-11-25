@@ -1990,6 +1990,7 @@
   let draftCrop = { x: 0, y: 0, w: 1, h: 1 };
   let cropAspect = null; // null for free, or desired (pixelW / pixelH) ratio
   let cropDrag = null;
+  let cropHoverMode = null; // Currently hovered handle or 'move'
 
   function setCropAspectButton(aspectStr) {
     cropAspectBtns.forEach((btn) => {
@@ -2186,14 +2187,16 @@
     cropCtx.strokeRect(bx, by, bw, bh);
 
     // Center 4-way move handle badge (visual indicator that dragging inside repositions the box)
+    const activeMode = cropDrag ? cropDrag.mode : cropHoverMode;
+    const isMoveActive = activeMode === "move";
     const cx = bx + bw / 2;
     const cy = by + bh / 2;
     cropCtx.save();
     cropCtx.beginPath();
-    cropCtx.arc(cx, cy, 15, 0, Math.PI * 2);
-    cropCtx.fillStyle = "rgba(34, 31, 26, 0.72)";
+    cropCtx.arc(cx, cy, isMoveActive ? 17 : 15, 0, Math.PI * 2);
+    cropCtx.fillStyle = isMoveActive ? "rgba(184, 77, 44, 0.92)" : "rgba(34, 31, 26, 0.72)";
     cropCtx.fill();
-    cropCtx.lineWidth = 1.75;
+    cropCtx.lineWidth = 2;
     cropCtx.strokeStyle = "#ffffff";
     cropCtx.stroke();
 
@@ -2222,16 +2225,18 @@
     cropCtx.stroke();
     cropCtx.restore();
 
-    // Corner and mid-edge handles (sized clearly for touch & desktop)
+    // Corner and mid-edge handles (sized clearly for touch & desktop, with hover/active highlight)
     const handles = getCropHandles(bx, by, bw, bh);
     handles.forEach((h) => {
-      const r = h.id.length === 2 ? 10 : 7.5;
+      const isHovered = activeMode === h.id;
+      const baseR = h.id.length === 2 ? 10 : 7.5;
+      const r = isHovered ? baseR + 2.5 : baseR;
       cropCtx.beginPath();
       cropCtx.arc(h.x, h.y, r, 0, Math.PI * 2);
-      cropCtx.fillStyle = "#ffffff";
+      cropCtx.fillStyle = isHovered ? "#b84d2c" : "#ffffff";
       cropCtx.fill();
       cropCtx.lineWidth = 2.5;
-      cropCtx.strokeStyle = "#b84d2c";
+      cropCtx.strokeStyle = isHovered ? "#ffffff" : "#b84d2c";
       cropCtx.stroke();
     });
   }
@@ -2326,9 +2331,10 @@
   function updateCropCursor(clientX, clientY) {
     if (!state.image || cropStage.hidden) return;
     const hit = hitTestCropTarget(clientX, clientY, false);
+    const mode = cropDrag ? cropDrag.mode : hit.mode;
     const cursorMap = {
-      move: "grab",
-      "recenter-move": "grab",
+      move: "move",
+      "recenter-move": "pointer",
       nw: "nwse-resize",
       se: "nwse-resize",
       ne: "nesw-resize",
@@ -2338,7 +2344,11 @@
       e: "ew-resize",
       w: "ew-resize",
     };
-    cropCanvas.style.cursor = cropDrag && cropDrag.mode === "move" ? "grabbing" : cursorMap[hit.mode] || "grab";
+    cropCanvas.style.cursor = cursorMap[mode] || "default";
+    if (cropHoverMode !== mode) {
+      cropHoverMode = mode;
+      renderCropCanvas();
+    }
   }
 
   function moveCropInteraction(clientX, clientY) {
@@ -2374,8 +2384,14 @@
     renderCropCanvas();
   }
 
-  const endCropDrag = () => {
+  const endCropDrag = (e) => {
+    if (!cropDrag) return;
     cropDrag = null;
+    if (e && typeof e.clientX === "number") {
+      updateCropCursor(e.clientX, e.clientY);
+    } else {
+      renderCropCanvas();
+    }
   };
 
   // Explicit non-passive touch listeners for iOS Safari / Android mobile web
