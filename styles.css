@@ -241,6 +241,16 @@ body {
 
 .drop-icon {
   margin-bottom: 1rem;
+  display: flex;
+  justify-content: center;
+}
+
+.drop-hero-icon {
+  width: 76px;
+  height: 76px;
+  border-radius: 18px;
+  box-shadow: 0 6px 18px rgba(34, 31, 26, 0.16);
+  display: block;
 }
 
 .drop-zone h2 {
