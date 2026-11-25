@@ -574,6 +574,29 @@ input[type="range"] {
   margin-top: 0.7rem;
 }
 
+.quilt-preset-select {
+  width: 100%;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.6rem;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.quilt-preset-select:hover {
+  border-color: var(--border-strong);
+}
+
+.quilt-preset-select:focus {
+  border-color: var(--accent);
+}
+
 .field-label {
   font-size: 0.78rem;
   color: var(--text-muted);
@@ -1108,7 +1131,8 @@ input[type="range"] {
   /* Prevent iOS Safari auto-zoom on input focus */
   .input-with-unit input[type="number"],
   .pattern-title-input,
-  .project-name-input {
+  .project-name-input,
+  .quilt-preset-select {
     font-size: 16px;
   }
 

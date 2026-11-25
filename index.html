@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="64x64" href="favicon-v2.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-v2.png" />
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon-v2.png" />
-  <link rel="manifest" href="site.webmanifest?v=13" />
-  <link rel="stylesheet" href="styles.css?v=13" />
+  <link rel="manifest" href="site.webmanifest?v=14" />
+  <link rel="stylesheet" href="styles.css?v=14" />
 </head>
 <body>
   <header class="topbar">
@@ -154,6 +154,22 @@
                 <span class="unit-suffix" data-unit-label>in</span>
               </div>
             </label>
+          </div>
+
+          <div class="quilt-size-row">
+            <label class="field-label" for="quilt-preset-select">Standard quilt size</label>
+            <select id="quilt-preset-select" class="quilt-preset-select">
+              <option value="custom">Custom size</option>
+              <option value="mini" data-w="16" data-h="16">Mini (12×12 to 20×20")</option>
+              <option value="wall" data-w="30" data-h="30">Wall Hanging (20×20 to 40×40")</option>
+              <option value="crib" data-w="36" data-h="52">Crib (36×52")</option>
+              <option value="lap" data-w="40" data-h="50">Lap (40×50")</option>
+              <option value="throw" data-w="50" data-h="65">Throw (50×65")</option>
+              <option value="twin" data-w="68" data-h="86">Twin (68×86 to 70×90")</option>
+              <option value="double" data-w="80" data-h="90">Double (80×90 to 85×95")</option>
+              <option value="queen" data-w="90" data-h="100">Queen (90×95 to 90×108")</option>
+              <option value="king" data-w="108" data-h="100">King (108×95 to 110×108")</option>
+            </select>
           </div>
 
           <div class="quilt-size-row">
@@ -328,6 +344,6 @@
   </main>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-  <script src="app.js?v=13" defer></script>
+  <script src="app.js?v=14" defer></script>
 </body>
 </html>

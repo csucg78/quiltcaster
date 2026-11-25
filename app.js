@@ -41,6 +41,7 @@
   const unitLabels = document.querySelectorAll("[data-unit-label]");
   const finishedSizeInput = document.getElementById("finished-size-input");
   const seamAllowanceInput = document.getElementById("seam-allowance-input");
+  const quiltPresetSelect = document.getElementById("quilt-preset-select");
   const quiltWidthInput = document.getElementById("quilt-width-input");
   const quiltHeightInput = document.getElementById("quilt-height-input");
   const cutSquareValue = document.getElementById("cut-square-value");
@@ -1175,9 +1176,32 @@
     const val = parseFloat(finishedSizeInput.value);
     if (!Number.isNaN(val) && val > 0) {
       state.finishedSquareSize = val;
+      if (quiltPresetSelect) quiltPresetSelect.value = "custom";
       updateQuiltDimensions(finishedSizeInput);
     }
   });
+
+  // Standard quilt size presets (Mini through King) — fits current grid orientation cleanly inside preset bounds
+  if (quiltPresetSelect) {
+    quiltPresetSelect.addEventListener("change", () => {
+      const opt = quiltPresetSelect.selectedOptions[0];
+      if (!opt || opt.value === "custom") return;
+      const wIn = parseFloat(opt.dataset.w);
+      const hIn = parseFloat(opt.dataset.h);
+      if (!Number.isFinite(wIn) || !Number.isFinite(hIn) || state.cols <= 0 || state.rows <= 0) return;
+
+      const scale = state.unit === "cm" ? 2.54 : 1;
+      const shortSide = Math.min(wIn, hIn) * scale;
+      const longSide = Math.max(wIn, hIn) * scale;
+      // Match preset orientation (landscape vs. portrait) to the current quilt grid
+      const targetW = state.cols >= state.rows ? longSide : shortSide;
+      const targetH = state.cols >= state.rows ? shortSide : longSide;
+
+      const fittedSquare = Math.min(targetW / state.cols, targetH / state.rows);
+      state.finishedSquareSize = Math.max(0.25, Math.round(fittedSquare * 100) / 100);
+      updateQuiltDimensions();
+    });
+  }
 
   // Direct finished quilt width/height editing recalculates finished square size, cut size, and all yardages
   if (quiltWidthInput) {
@@ -1185,6 +1209,7 @@
       const val = parseFloat(quiltWidthInput.value);
       if (!Number.isNaN(val) && val > 0 && state.cols > 0) {
         state.finishedSquareSize = Math.max(0.1, val / state.cols);
+        if (quiltPresetSelect) quiltPresetSelect.value = "custom";
         updateQuiltDimensions(quiltWidthInput);
       }
     });
@@ -1196,6 +1221,7 @@
       const val = parseFloat(quiltHeightInput.value);
       if (!Number.isNaN(val) && val > 0 && state.rows > 0) {
         state.finishedSquareSize = Math.max(0.1, val / state.rows);
+        if (quiltPresetSelect) quiltPresetSelect.value = "custom";
         updateQuiltDimensions(quiltHeightInput);
       }
     });
