@@ -35,27 +35,20 @@ Quiltcaster is a client-side web application (HTML, CSS, JavaScript) designed to
   - **Cut square size**: `finishedSquareSize + 2 × seamAllowance` (accounting for seam allowance on opposite edges).
   - **Finished quilt dimensions**: `(columns × finishedSquareSize)` × `(rows × finishedSquareSize)`, updated live as the grid slider or square size changes.
 
-### 6. Printable PDF Quilt Pattern Export
-Generates a multi-page, printer-friendly PDF following standard pixel-quilt pattern conventions:
-1. **Page 1 — Pattern Cover & Summary**
-   - Quilt title (derived from image filename or editable), finished quilt dimensions, grid size (`cols × rows`), total square count, finished square size, cut square size, and seam allowance.
-   - Clean mockup image of the finished quilt.
-2. **Page 2 — Color Key, Fabric Yardage & WOF Cutting Chart**
-   - Letter-coded fabric key (`A`, `B`, `C`, …) with printed color swatch, hex value, and an empty box to tape a physical fabric swatch.
-   - Exact square count per color.
-   - **Width of Fabric (WOF) Cutting Chart** assuming standard 42" usable WOF (106 cm in metric):
-     - Squares yielded per WOF strip (`floor(WOF / cutSize)`).
-     - Number of WOF strips to cut (`ceil(squares / squaresPerStrip)`) at `cutSize` width.
-     - Estimated yardage rounded up to the nearest `1/8 yd` (or `0.1 m` in metric).
-   - **Backing & Binding Estimates**: binding strip count/yardage (`(perimeter + 10") / 40"` WOF at `2.5"` strips) and backing yardage estimate (with `+8"` quilting margin).
-3. **Page 3+ — Annotated Quilt Layout Grid Map**
-   - Coordinate-labeled grid (numbered columns across top, numbered rows down left) with thicker guide lines every 5 squares for easy counting.
-   - Every square is filled with its color **and** labeled with its high-contrast fabric letter (`A`, `B`, …) so the pattern remains legible even when printed in black & white or with similar shades.
-   - Alternating row pressing arrows (`←` on odd rows, `→` on even rows) so seams nest neatly during row-by-row assembly.
-   - Automatically tiles large grids across multiple pages (e.g., max ~24×30 squares per page) with section headers (`Section 1 of 4`, row/col ranges) so every cell stays large enough to read.
-4. **Final Page — Row-by-Row Assembly & Pressing Guide**
-   - Brief, standard pixel-quilt assembly notes (layout, chain piecing, nesting seams, pressing alternating rows).
-   - Compact **row-by-row run-length checklist** (e.g., `Row 1 (→): 4A, 2B, 3A, …`) with checkboxes so quilters can cross off rows as they sew.
+### 6. Boutique Printable PDF Quilt Pattern Booklet Export
+Generates a multi-page indie-style PDF booklet (US Letter or A4) featuring embedded editorial typography (**DM Serif Display**, **Plus Jakarta Sans**, **JetBrains Mono**):
+1. **Cover Page — Editorial Summary, Value Check & Interactive TOC**
+   - Editable **Pattern Title**, Quiltcaster emblem, 6-stat specification ribbon, gallery-framed full-color quilt mockup, **Grayscale Value-Check Preview** card, and a clickable **Table of Contents** that jumps to each section.
+2. **Section `01` — Materials, WOF Cutting Chart & 1:1 Cut Template**
+   - Zebra-striped cutting table with colored `[ A ]` code badges, printed swatches, dashed **Tape Swatch** boxes, human-readable fabric names, square counts, WOF strip counts, **Fat Quarter (`18"×21"`) & Pre-Cut compatibility callouts** (`2½"` Jelly Roll / `5"` Charm Pack / `10"` Layer Cake), Backing & Binding card, **Illustrated WOF Strip-Cutting Diagram**, and **1:1 Cut-Size Test Square**.
+3. **Section `02` — Fabric Shopping List & Smart Budget**
+   - Closest commercial solid matches in **Robert Kaufman Kona Cotton Solids** (`K001-XXXX` SKUs) and **Moda Bella Solids**, clickable online shop links (**Fat Quarter Shop**, **Hancock's of Paducah**, **Missouri Star Quilt Co.**), automatic **Fat Quarter vs. Yardage** optimization, and total project budget.
+4. **Section `03` — Annotated Quilt Layout Map**
+   - Coordinate-labeled grid with high-contrast letters in every cell, alternating row pressing arrows, **Mini Key-Map Locator Thumbnail** + tape-join edge hints when tiled across pages, and either `5×5` counting guides (`Rows` mode) or `8×8` terracotta block boundaries (`8×8 Blocks` mode).
+5. **Section `04` — Step-by-Step Assembly & Visual Color-Chip Checklist**
+   - **Illustrated Nesting-Seams Diagram** beside tailored instructions for either **Row-by-Row** or **`8×8` Sub-Block** assembly, followed by checkable sequences of **colored run-length chips** (`[ 4×A ] [ 2×B ]`).
+6. **Section `05` — Cut-Apart Fabric & Row/Block Pin Tags**
+   - Scissor-cut dashed grid of **Fabric Stack Tags** and **Row / Sub-Block Pin Tags** to clip and pin onto cut fabric stacks and pieced rows.
 
 ### 7. Paper Size
 - PDF export offers **US Letter** or **A4**, defaulting to Letter for US/Canada locales and A4 elsewhere.

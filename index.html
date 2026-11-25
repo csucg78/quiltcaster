@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="64x64" href="favicon-v2.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-v2.png" />
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon-v2.png" />
-  <link rel="manifest" href="site.webmanifest?v=5" />
-  <link rel="stylesheet" href="styles.css?v=5" />
+  <link rel="manifest" href="site.webmanifest?v=6" />
+  <link rel="stylesheet" href="styles.css?v=6" />
 </head>
 <body>
   <header class="topbar">
@@ -222,11 +222,22 @@
           </div>
         </div>
         <div class="export-bar" id="export-bar">
-          <div class="export-text">
-            <strong>Printable pattern</strong>
-            <span>Cover, fabric &amp; cutting chart, layout map, and row-by-row checklist</span>
+          <div class="export-title-field">
+            <label for="pattern-title-input">Pattern Title</label>
+            <input
+              type="text"
+              id="pattern-title-input"
+              class="pattern-title-input"
+              placeholder="e.g. Garden Sunburst Quilt"
+              maxlength="60"
+            />
           </div>
           <div class="export-actions">
+            <div class="segmented" role="radiogroup" aria-label="Assembly style" title="Row-by-row strips or 8x8 square blocks">
+              <button type="button" class="segmented-btn is-active" data-assembly="rows" role="radio" aria-checked="true">Rows</button>
+              <button type="button" class="segmented-btn" data-assembly="blocks" role="radio" aria-checked="false">8×8 Blocks</button>
+            </div>
+            <input type="hidden" id="assembly-mode-select" value="rows" />
             <div class="segmented" role="radiogroup" aria-label="Paper size">
               <button type="button" class="segmented-btn" data-page-size="letter" role="radio">Letter</button>
               <button type="button" class="segmented-btn" data-page-size="a4" role="radio">A4</button>
@@ -239,7 +250,7 @@
               title="Download printable multi-page quilt pattern PDF"
             >
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M9 15l3 3 3-3"/></svg>
-              Export PDF Pattern
+              Export PDF Booklet
             </button>
           </div>
         </div>
@@ -281,6 +292,6 @@
   </main>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-  <script src="app.js?v=5" defer></script>
+  <script src="app.js?v=6" defer></script>
 </body>
 </html>
