@@ -733,7 +733,7 @@ input[type="range"] {
   box-shadow: 0 10px 30px rgba(34, 31, 26, 0.16);
   display: block;
   touch-action: none;
-  cursor: crosshair;
+  cursor: grab;
 }
 
 .crop-reextract-row {

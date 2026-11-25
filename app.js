@@ -1997,6 +1997,7 @@
     });
     if (aspectStr === "free") {
       cropAspect = null;
+      renderCropCanvas();
       return;
     }
     const ratio = parseFloat(aspectStr);
@@ -2005,11 +2006,12 @@
       return;
     }
     cropAspect = ratio;
-    fitDraftCropToAspect(ratio);
+    // Cap preset selection to 78% of image so user can immediately reposition it in any direction
+    fitDraftCropToAspect(ratio, 0.78);
     renderCropCanvas();
   }
 
-  function fitDraftCropToAspect(pixelRatio) {
+  function fitDraftCropToAspect(pixelRatio, maxBound = 1, driveAxis = "auto") {
     if (!state.image) return;
     const imgAspect = state.image.naturalWidth / state.image.naturalHeight;
     // Normalized w / h ratio so that (w * natW) / (h * natH) === pixelRatio
@@ -2018,15 +2020,40 @@
     const cx = draftCrop.x + draftCrop.w / 2;
     const cy = draftCrop.y + draftCrop.h / 2;
 
-    let w = draftCrop.w;
-    let h = w / normRatio;
-    if (h > 1) {
-      h = 1;
+    let w = Math.min(maxBound, draftCrop.w);
+    let h = Math.min(maxBound, draftCrop.h);
+
+    if (driveAxis === "h") {
+      w = h * normRatio;
+    } else if (driveAxis === "w") {
+      h = w / normRatio;
+    } else {
+      // Fit within current bounds and maxBound
+      if (w / normRatio <= maxBound) {
+        h = w / normRatio;
+      } else {
+        h = maxBound;
+        w = h * normRatio;
+      }
+    }
+
+    if (h > maxBound) {
+      h = maxBound;
       w = h * normRatio;
     }
-    if (w > 1) {
-      w = 1;
+    if (w > maxBound) {
+      w = maxBound;
       h = w / normRatio;
+    }
+
+    const minSize = 0.08;
+    if (w < minSize) {
+      w = minSize;
+      h = w / normRatio;
+    }
+    if (h < minSize) {
+      h = minSize;
+      w = h * normRatio;
     }
 
     let x = Math.max(0, Math.min(1 - w, cx - w / 2));
@@ -2041,9 +2068,9 @@
       state.crop.y < 0.002 &&
       state.crop.w > 0.996 &&
       state.crop.h > 0.996;
-    // Start slightly inset on first open so handles and darkened border are immediately obvious and movable on mobile
+    // Start at an 80% centered frame on first open so there's immediate room on all 4 sides to reposition
     draftCrop = isFullUnmodified
-      ? { x: 0.06, y: 0.06, w: 0.88, h: 0.88 }
+      ? { x: 0.1, y: 0.1, w: 0.8, h: 0.8 }
       : { ...state.crop };
     cropAspect = null;
     cropAspectBtns.forEach((btn) => {
@@ -2158,6 +2185,43 @@
     cropCtx.lineWidth = 2.5;
     cropCtx.strokeRect(bx, by, bw, bh);
 
+    // Center 4-way move handle badge (visual indicator that dragging inside repositions the box)
+    const cx = bx + bw / 2;
+    const cy = by + bh / 2;
+    cropCtx.save();
+    cropCtx.beginPath();
+    cropCtx.arc(cx, cy, 15, 0, Math.PI * 2);
+    cropCtx.fillStyle = "rgba(34, 31, 26, 0.72)";
+    cropCtx.fill();
+    cropCtx.lineWidth = 1.75;
+    cropCtx.strokeStyle = "#ffffff";
+    cropCtx.stroke();
+
+    // Draw 4-way move arrows inside center badge
+    cropCtx.beginPath();
+    const arm = 7.5;
+    const head = 3;
+    // Horizontal & vertical cross
+    cropCtx.moveTo(cx - arm, cy);
+    cropCtx.lineTo(cx + arm, cy);
+    cropCtx.moveTo(cx, cy - arm);
+    cropCtx.lineTo(cx, cy + arm);
+    // Arrowheads
+    cropCtx.moveTo(cx - arm + head, cy - head);
+    cropCtx.lineTo(cx - arm, cy);
+    cropCtx.lineTo(cx - arm + head, cy + head);
+    cropCtx.moveTo(cx + arm - head, cy - head);
+    cropCtx.lineTo(cx + arm, cy);
+    cropCtx.lineTo(cx + arm - head, cy + head);
+    cropCtx.moveTo(cx - head, cy - arm + head);
+    cropCtx.lineTo(cx, cy - arm);
+    cropCtx.lineTo(cx + head, cy - arm + head);
+    cropCtx.moveTo(cx - head, cy + arm - head);
+    cropCtx.lineTo(cx, cy + arm);
+    cropCtx.lineTo(cx + head, cy + arm - head);
+    cropCtx.stroke();
+    cropCtx.restore();
+
     // Corner and mid-edge handles (sized clearly for touch & desktop)
     const handles = getCropHandles(bx, by, bw, bh);
     handles.forEach((h) => {
@@ -2195,18 +2259,26 @@
     };
   }
 
-  function startCropInteraction(clientX, clientY, isTouch) {
-    if (!state.image) return;
+  function hitTestCropTarget(clientX, clientY, isTouch) {
     const { nx, ny, px, py, padCssX, padCssY, imgCssW, imgCssH } = clientToCropNorm(clientX, clientY);
     const bx = padCssX + draftCrop.x * imgCssW;
     const by = padCssY + draftCrop.y * imgCssH;
     const bw = draftCrop.w * imgCssW;
     const bh = draftCrop.h * imgCssH;
 
-    // Check 8 handles first (generous 36px touch hit radius on mobile, 24px on desktop)
+    // 1. Center move badge ALWAYS repositions the selection, even when the crop box is small
+    const cx = bx + bw / 2;
+    const cy = by + bh / 2;
+    const centerRadius = isTouch ? 26 : 18;
+    if ((px - cx) * (px - cx) + (py - cy) * (py - cy) <= centerRadius * centerRadius) {
+      return { mode: "move", nx, ny };
+    }
+
+    // 2. Check 8 border handles (cap hit radius to 28% of box dimension so interior remains draggable)
+    const maxHandleRad = Math.max(12, Math.min(bw, bh) * 0.28);
+    const hitRadius = Math.min(maxHandleRad, isTouch ? 30 : 20);
     const handles = getCropHandles(bx, by, bw, bh);
     let hitHandle = null;
-    const hitRadius = isTouch ? 36 : 24;
     let bestDist = hitRadius * hitRadius;
     for (const h of handles) {
       const dx = px - h.x;
@@ -2219,31 +2291,54 @@
     }
 
     if (hitHandle) {
-      cropDrag = { mode: hitHandle, startNx: nx, startNy: ny, startCrop: { ...draftCrop } };
-      return;
+      return { mode: hitHandle, nx, ny };
     }
 
-    // If box is full-bleed (100%x100%), dragging inside has no room to pan—grab nearest corner instead
-    const isFullBox = draftCrop.w > 0.98 && draftCrop.h > 0.98;
+    // 3. Inside the crop box -> reposition (move)
     if (
-      !isFullBox &&
       nx >= draftCrop.x &&
       nx <= draftCrop.x + draftCrop.w &&
       ny >= draftCrop.y &&
       ny <= draftCrop.y + draftCrop.h
     ) {
-      cropDrag = { mode: "move", startNx: nx, startNy: ny, startCrop: { ...draftCrop } };
+      return { mode: "move", nx, ny };
+    }
+
+    // 4. Outside the crop box -> recenter the crop box onto the pointer and continue dragging to reposition
+    return { mode: "recenter-move", nx, ny };
+  }
+
+  function startCropInteraction(clientX, clientY, isTouch) {
+    if (!state.image) return;
+    const hit = hitTestCropTarget(clientX, clientY, isTouch);
+
+    if (hit.mode === "recenter-move") {
+      draftCrop.x = Math.max(0, Math.min(1 - draftCrop.w, hit.nx - draftCrop.w / 2));
+      draftCrop.y = Math.max(0, Math.min(1 - draftCrop.h, hit.ny - draftCrop.h / 2));
+      renderCropCanvas();
+      cropDrag = { mode: "move", startNx: hit.nx, startNy: hit.ny, startCrop: { ...draftCrop } };
       return;
     }
 
-    if (isFullBox) {
-      const corner = (ny < 0.5 ? "n" : "s") + (nx < 0.5 ? "w" : "e");
-      cropDrag = { mode: corner, startNx: nx, startNy: ny, startCrop: { ...draftCrop } };
-      return;
-    }
+    cropDrag = { mode: hit.mode, startNx: hit.nx, startNy: hit.ny, startCrop: { ...draftCrop } };
+  }
 
-    // Outside -> draw new box
-    cropDrag = { mode: "new", startNx: nx, startNy: ny, startCrop: { ...draftCrop } };
+  function updateCropCursor(clientX, clientY) {
+    if (!state.image || cropStage.hidden) return;
+    const hit = hitTestCropTarget(clientX, clientY, false);
+    const cursorMap = {
+      move: "grab",
+      "recenter-move": "grab",
+      nw: "nwse-resize",
+      se: "nwse-resize",
+      ne: "nesw-resize",
+      sw: "nesw-resize",
+      n: "ns-resize",
+      s: "ns-resize",
+      e: "ew-resize",
+      w: "ew-resize",
+    };
+    cropCanvas.style.cursor = cropDrag && cropDrag.mode === "move" ? "grabbing" : cursorMap[hit.mode] || "grab";
   }
 
   function moveCropInteraction(clientX, clientY) {
@@ -2266,23 +2361,15 @@
     let x2 = s.x + s.w;
     let y2 = s.y + s.h;
 
-    if (cropDrag.mode === "new") {
-      x1 = Math.min(cropDrag.startNx, nx);
-      y1 = Math.min(cropDrag.startNy, ny);
-      x2 = Math.max(cropDrag.startNx, nx);
-      y2 = Math.max(cropDrag.startNy, ny);
-      if (x2 - x1 < minSize) x2 = Math.min(1, x1 + minSize);
-      if (y2 - y1 < minSize) y2 = Math.min(1, y1 + minSize);
-    } else {
-      if (cropDrag.mode.includes("w")) x1 = Math.max(0, Math.min(x2 - minSize, s.x + dx));
-      if (cropDrag.mode.includes("e")) x2 = Math.min(1, Math.max(x1 + minSize, s.x + s.w + dx));
-      if (cropDrag.mode.includes("n")) y1 = Math.max(0, Math.min(y2 - minSize, s.y + dy));
-      if (cropDrag.mode.includes("s")) y2 = Math.min(1, Math.max(y1 + minSize, s.y + s.h + dy));
-    }
+    if (cropDrag.mode.includes("w")) x1 = Math.max(0, Math.min(x2 - minSize, s.x + dx));
+    if (cropDrag.mode.includes("e")) x2 = Math.min(1, Math.max(x1 + minSize, s.x + s.w + dx));
+    if (cropDrag.mode.includes("n")) y1 = Math.max(0, Math.min(y2 - minSize, s.y + dy));
+    if (cropDrag.mode.includes("s")) y2 = Math.min(1, Math.max(y1 + minSize, s.y + s.h + dy));
 
     draftCrop = { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
     if (cropAspect) {
-      fitDraftCropToAspect(cropAspect);
+      const driveAxis = cropDrag.mode === "n" || cropDrag.mode === "s" ? "h" : "w";
+      fitDraftCropToAspect(cropAspect, 1, driveAxis);
     }
     renderCropCanvas();
   }
@@ -2322,11 +2409,19 @@
     if (e.button !== 0) return;
     e.preventDefault();
     startCropInteraction(e.clientX, e.clientY, false);
+    updateCropCursor(e.clientX, e.clientY);
+  });
+
+  cropCanvas.addEventListener("mousemove", (e) => {
+    if (!cropDrag) {
+      updateCropCursor(e.clientX, e.clientY);
+    }
   });
 
   window.addEventListener("mousemove", (e) => {
     if (!cropDrag) return;
     moveCropInteraction(e.clientX, e.clientY);
+    updateCropCursor(e.clientX, e.clientY);
   });
 
   window.addEventListener("mouseup", endCropDrag);
