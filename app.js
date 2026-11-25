@@ -41,8 +41,9 @@
   const unitLabels = document.querySelectorAll("[data-unit-label]");
   const finishedSizeInput = document.getElementById("finished-size-input");
   const seamAllowanceInput = document.getElementById("seam-allowance-input");
+  const quiltWidthInput = document.getElementById("quilt-width-input");
+  const quiltHeightInput = document.getElementById("quilt-height-input");
   const cutSquareValue = document.getElementById("cut-square-value");
-  const finishedQuiltValue = document.getElementById("finished-quilt-value");
   const wofNote = document.getElementById("wof-note");
   const previewDimensions = document.getElementById("preview-dimensions");
 
@@ -562,7 +563,12 @@
     };
   }
 
-  function updateQuiltDimensions() {
+  function formatNumericInput(val) {
+    const rounded = Math.round(val * 100) / 100;
+    return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(/\.?0+$/, "");
+  }
+
+  function updateQuiltDimensions(skipInputEl = null) {
     const unit = state.unit;
     const finished = Math.max(0.1, state.finishedSquareSize);
     const seam = Math.max(0, state.seamAllowance);
@@ -575,7 +581,16 @@
     const quiltW = state.cols * finished;
     const quiltH = state.rows * finished;
     const quiltText = `${formatMeasure(quiltW, unit)} × ${formatMeasure(quiltH, unit)}`;
-    finishedQuiltValue.textContent = quiltText;
+
+    if (finishedSizeInput && skipInputEl !== finishedSizeInput) {
+      finishedSizeInput.value = formatNumericInput(finished);
+    }
+    if (quiltWidthInput && skipInputEl !== quiltWidthInput) {
+      quiltWidthInput.value = formatNumericInput(quiltW);
+    }
+    if (quiltHeightInput && skipInputEl !== quiltHeightInput) {
+      quiltHeightInput.value = formatNumericInput(quiltH);
+    }
 
     wofNote.textContent =
       unit === "in"
@@ -1160,15 +1175,38 @@
     const val = parseFloat(finishedSizeInput.value);
     if (!Number.isNaN(val) && val > 0) {
       state.finishedSquareSize = val;
-      updateQuiltDimensions();
+      updateQuiltDimensions(finishedSizeInput);
     }
   });
+
+  // Direct finished quilt width/height editing recalculates finished square size, cut size, and all yardages
+  if (quiltWidthInput) {
+    quiltWidthInput.addEventListener("input", () => {
+      const val = parseFloat(quiltWidthInput.value);
+      if (!Number.isNaN(val) && val > 0 && state.cols > 0) {
+        state.finishedSquareSize = Math.max(0.1, val / state.cols);
+        updateQuiltDimensions(quiltWidthInput);
+      }
+    });
+    quiltWidthInput.addEventListener("blur", () => updateQuiltDimensions());
+  }
+
+  if (quiltHeightInput) {
+    quiltHeightInput.addEventListener("input", () => {
+      const val = parseFloat(quiltHeightInput.value);
+      if (!Number.isNaN(val) && val > 0 && state.rows > 0) {
+        state.finishedSquareSize = Math.max(0.1, val / state.rows);
+        updateQuiltDimensions(quiltHeightInput);
+      }
+    });
+    quiltHeightInput.addEventListener("blur", () => updateQuiltDimensions());
+  }
 
   seamAllowanceInput.addEventListener("input", () => {
     const val = parseFloat(seamAllowanceInput.value);
     if (!Number.isNaN(val) && val >= 0) {
       state.seamAllowance = val;
-      updateQuiltDimensions();
+      updateQuiltDimensions(seamAllowanceInput);
     }
   });
 

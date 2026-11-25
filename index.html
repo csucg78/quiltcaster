@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="64x64" href="favicon-v2.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-v2.png" />
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon-v2.png" />
-  <link rel="manifest" href="site.webmanifest?v=12" />
-  <link rel="stylesheet" href="styles.css?v=12" />
+  <link rel="manifest" href="site.webmanifest?v=13" />
+  <link rel="stylesheet" href="styles.css?v=13" />
 </head>
 <body>
   <header class="topbar">
@@ -156,14 +156,41 @@
             </label>
           </div>
 
-          <div class="dimensions-summary">
-            <div class="dim-stat">
+          <div class="quilt-size-row">
+            <span class="field-label">Finished quilt size (W × H)</span>
+            <div class="quilt-size-inputs">
+              <div class="input-with-unit">
+                <input
+                  type="number"
+                  id="quilt-width-input"
+                  min="4"
+                  max="500"
+                  step="1"
+                  value="60"
+                  aria-label="Finished quilt width"
+                />
+                <span class="unit-suffix" data-unit-label>in</span>
+              </div>
+              <span class="size-times" aria-hidden="true">×</span>
+              <div class="input-with-unit">
+                <input
+                  type="number"
+                  id="quilt-height-input"
+                  min="4"
+                  max="500"
+                  step="1"
+                  value="45"
+                  aria-label="Finished quilt height"
+                />
+                <span class="unit-suffix" data-unit-label>in</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="dimensions-summary dimensions-summary-single">
+            <div class="dim-stat dim-stat-inline">
               <span class="dim-label">Cut square size</span>
               <strong class="dim-value" id="cut-square-value">3" × 3"</strong>
-            </div>
-            <div class="dim-stat">
-              <span class="dim-label">Finished quilt</span>
-              <strong class="dim-value" id="finished-quilt-value">60" × 45"</strong>
             </div>
           </div>
           <p class="wof-note" id="wof-note">Fabric estimates based on 42" usable WOF</p>
@@ -301,6 +328,6 @@
   </main>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-  <script src="app.js?v=12" defer></script>
+  <script src="app.js?v=13" defer></script>
 </body>
 </html>
