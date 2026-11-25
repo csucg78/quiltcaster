@@ -1351,41 +1351,57 @@
     doc.text(code, x + w / 2, y + h * 0.68, { align: "center" });
   }
 
-  function drawWofCuttingDiagram(doc, fonts, x, y, w, h, cutMeasureStr, wofMeasureStr, sqPerStrip) {
-    // Card frame
+  function fitSingleLine(doc, text, maxW) {
+    if (doc.getTextWidth(text) <= maxW) return text;
+    let trimmed = text;
+    while (trimmed.length > 1 && doc.getTextWidth(trimmed + "\u2026") > maxW) {
+      trimmed = trimmed.slice(0, -1);
+    }
+    return trimmed + "\u2026";
+  }
+
+  function drawWofCuttingDiagram(doc, fonts, x, y, w, cutMeasureStr, wofMeasureStr, sqPerStrip) {
+    doc.setFont(fonts.sans, "normal");
+    doc.setFontSize(7.8);
+    const stepText = `Step 1: Cut ${cutMeasureStr} strips selvage-to-selvage across the ${wofMeasureStr} usable Width of Fabric.   Step 2: Sub-cut each strip into ${sqPerStrip} squares (${cutMeasureStr} \u00d7 ${cutMeasureStr}).`;
+    const stepLines = doc.splitTextToSize(stepText, w - 0.32);
+    const textBlockH = stepLines.length * 0.145;
+    const sh = 0.44;
+    const h = 0.42 + textBlockH + sh + 0.32;
+
+    // Card frame sized tightly to content (no awkward empty bottom space)
     doc.setFillColor(250, 248, 244);
     doc.setDrawColor(215, 206, 191);
     doc.setLineWidth(0.01);
     doc.roundedRect(x, y, w, h, 0.06, 0.06, "FD");
 
     doc.setFont(fonts.sans, "bold");
-    doc.setFontSize(8.5);
+    doc.setFontSize(8.8);
     doc.setTextColor(34, 31, 26);
-    doc.text("WOF Strip-Cutting Guide", x + 0.14, y + 0.22);
+    doc.text("WOF Strip-Cutting Guide", x + 0.16, y + 0.22);
 
     doc.setFont(fonts.sans, "normal");
-    doc.setFontSize(7.4);
-    doc.setTextColor(108, 100, 88);
-    doc.text(`1. Cut ${cutMeasureStr} strips selvage-to-selvage (${wofMeasureStr}).  2. Sub-cut into ${sqPerStrip} squares.`, x + 0.14, y + 0.38);
+    doc.setFontSize(7.8);
+    doc.setTextColor(90, 82, 72);
+    doc.text(stepLines, x + 0.16, y + 0.38);
 
-    // Visual fabric strip illustration
+    // Full-width proportional fabric strip illustration
     const sx = x + 0.22;
-    const sy = y + 0.54;
+    const sy = y + 0.34 + textBlockH + 0.1;
     const sw = w - 0.44;
-    const sh = Math.min(0.56, h - 0.74);
 
     // Selvage trim left
     doc.setFillColor(226, 218, 206);
     doc.setDrawColor(165, 155, 142);
     doc.setLineWidth(0.008);
-    doc.rect(sx, sy, 0.18, sh, "FD");
+    doc.rect(sx, sy, 0.22, sh, "FD");
 
     // Usable strip body divided into sub-cut squares
-    const usableW = sw - 0.36;
-    const numBoxes = 7;
+    const usableW = sw - 0.44;
+    const numBoxes = Math.min(12, Math.max(6, sqPerStrip));
     const boxW = usableW / numBoxes;
     for (let i = 0; i < numBoxes; i++) {
-      const bx = sx + 0.18 + i * boxW;
+      const bx = sx + 0.22 + i * boxW;
       doc.setFillColor(i === 0 ? 235 : 246, i === 0 ? 204 : 239, i === 0 ? 191 : 228);
       doc.setDrawColor(184, 77, 44);
       doc.setLineWidth(0.008);
@@ -1395,24 +1411,30 @@
     // Selvage trim right
     doc.setFillColor(226, 218, 206);
     doc.setDrawColor(165, 155, 142);
-    doc.rect(sx + sw - 0.18, sy, 0.18, sh, "FD");
+    doc.rect(sx + sw - 0.22, sy, 0.22, sh, "FD");
 
-    // Dashed rotary cut lines
+    // Dashed rotary cut lines around first square
     doc.setDrawColor(184, 77, 44);
     doc.setLineWidth(0.012);
     doc.setLineDashPattern([0.04, 0.03], 0);
-    doc.line(sx + 0.18, sy - 0.05, sx + 0.18, sy + sh + 0.05);
-    doc.line(sx + 0.18 + boxW, sy - 0.05, sx + 0.18 + boxW, sy + sh + 0.05);
+    doc.line(sx + 0.22, sy - 0.05, sx + 0.22, sy + sh + 0.05);
+    doc.line(sx + 0.22 + boxW, sy - 0.05, sx + 0.22 + boxW, sy + sh + 0.05);
     doc.setLineDashPattern([], 0);
 
     // Dimension labels
     doc.setFont(fonts.mono, "bold");
-    doc.setFontSize(6.8);
+    doc.setFontSize(7);
     doc.setTextColor(184, 77, 44);
-    doc.text(cutMeasureStr, sx + 0.18 + boxW / 2, sy + sh / 2 + 0.03, { align: "center" });
+    doc.text(cutMeasureStr, sx + 0.22 + boxW / 2, sy + sh / 2 + 0.03, { align: "center" });
+
     doc.setTextColor(108, 100, 88);
     doc.setFont(fonts.sans, "normal");
-    doc.text(`Usable Width of Fabric (${wofMeasureStr})`, sx + sw / 2, sy + sh + 0.15, { align: "center" });
+    doc.setFontSize(7.2);
+    doc.text(`Selvage`, sx + 0.11, sy + sh + 0.14, { align: "center" });
+    doc.text(`Usable Width of Fabric (${wofMeasureStr}) \u2014 yields ${sqPerStrip} squares per strip`, sx + sw / 2, sy + sh + 0.14, { align: "center" });
+    doc.text(`Selvage`, sx + sw - 0.11, sy + sh + 0.14, { align: "center" });
+
+    return h;
   }
 
   function drawNestingDiagram(doc, fonts, x, y, w, h) {
@@ -1616,7 +1638,7 @@
         doc.setFillColor(246, 242, 235);
         doc.setDrawColor(223, 214, 199);
         doc.setLineWidth(0.008);
-        doc.roundedRect(margin, 0.42, 2.25, 0.24, 0.05, 0.05, "FD");
+        doc.roundedRect(margin, 0.42, 2.32, 0.24, 0.05, 0.05, "FD");
 
         doc.setFont(fonts.mono, "bold");
         doc.setFontSize(7.2);
@@ -1626,7 +1648,7 @@
         doc.setFont(fonts.sans, "bold");
         doc.setFontSize(7.5);
         doc.setTextColor(135, 127, 115);
-        doc.text(title.toUpperCase(), pageW - margin, 0.58, { align: "right" });
+        doc.text(fitSingleLine(doc, title.toUpperCase(), contentW - 2.5), pageW - margin, 0.58, { align: "right" });
 
         doc.setDrawColor(228, 221, 210);
         doc.setLineWidth(0.008);
@@ -1800,45 +1822,47 @@
 
         if (!isCont) {
           doc.setFont(fonts.sans, "normal");
-          doc.setFontSize(8.8);
+          doc.setFontSize(8.6);
           doc.setTextColor(108, 100, 88);
-          doc.text(
+          const cutIntroLines = doc.splitTextToSize(
             `Cut ${formatPdfMeasure(cutSize, unit)} \u00d7 ${formatPdfMeasure(cutSize, unit)} squares (includes ${formatPdfMeasure(seam, unit)} seam allowance). Yardage includes +10% safety buffer on ${formatPdfMeasure(wof, unit)} WOF.`,
-            margin,
-            curY
+            contentW
           );
-          curY += 0.2;
+          doc.text(cutIntroLines, margin, curY);
+          curY += cutIntroLines.length * 0.15 + 0.06;
 
           const precutMsg = detectPrecutNote(cutSize, unit);
           if (precutMsg) {
+            doc.setFont(fonts.sans, "bold");
+            doc.setFontSize(7.8);
+            const precutLines = doc.splitTextToSize(precutMsg, contentW - 0.24);
+            const bannerH = precutLines.length * 0.145 + 0.13;
             doc.setFillColor(251, 243, 238);
             doc.setDrawColor(228, 192, 176);
             doc.setLineWidth(0.008);
-            doc.roundedRect(margin, curY, contentW, 0.28, 0.05, 0.05, "FD");
-            doc.setFont(fonts.sans, "bold");
-            doc.setFontSize(7.8);
+            doc.roundedRect(margin, curY, contentW, bannerH, 0.05, 0.05, "FD");
             doc.setTextColor(184, 77, 44);
-            doc.text(precutMsg, margin + 0.12, curY + 0.18);
-            curY += 0.36;
+            doc.text(precutLines, margin + 0.12, curY + 0.17);
+            curY += bannerH + 0.09;
           } else {
-            curY += 0.08;
+            curY += 0.06;
           }
         } else {
           curY += 0.1;
         }
 
-        // Table header
+        // Table header (responsive to both Letter and A4 widths)
         doc.setFillColor(34, 31, 26);
         doc.roundedRect(margin, curY, contentW, 0.28, 0.04, 0.04, "F");
         doc.setFont(fonts.sans, "bold");
-        doc.setFontSize(7.8);
+        doc.setFontSize(7.6);
         doc.setTextColor(255, 255, 255);
-        doc.text("CODE", margin + 0.1, curY + 0.18);
-        doc.text("SWATCH", margin + 0.62, curY + 0.18);
-        doc.text("TAPE FABRIC", margin + 1.25, curY + 0.18);
-        doc.text("COLOR NAME", margin + 2.32, curY + 0.18);
-        doc.text("SQUARES", margin + 3.88, curY + 0.18, { align: "right" });
-        doc.text(`CUTTING (${formatPdfMeasure(cutSize, unit)} STRIPS / PRE-CUT)`, margin + 4.1, curY + 0.18);
+        doc.text("CODE", margin + 0.08, curY + 0.18);
+        doc.text("SWATCH", margin + 0.58, curY + 0.18);
+        doc.text("TAPE FABRIC", margin + 1.14, curY + 0.18);
+        doc.text("COLOR NAME", margin + 2.12, curY + 0.18);
+        doc.text("SQUARES", margin + 3.75, curY + 0.18, { align: "right" });
+        doc.text(`CUTTING (${formatPdfMeasure(cutSize, unit)} STRIPS)`, margin + 3.92, curY + 0.18);
         doc.text("NEED", margin + contentW - 0.1, curY + 0.18, { align: "right" });
         curY += 0.32;
       };
@@ -1853,54 +1877,47 @@
           drawCuttingPageHeader(true);
         }
 
-        // Zebra stripe
         if (idx % 2 === 1) {
           doc.setFillColor(248, 245, 239);
           doc.rect(margin, curY, contentW, cutRowH, "F");
         }
 
-        // Code pill badge
         drawCodeBadge(doc, fonts, margin + 0.08, curY + 0.09, 0.36, 0.24, c.code, c.r, c.g, c.b);
 
-        // Swatch
         doc.setFillColor(c.r, c.g, c.b);
         doc.setDrawColor(140, 132, 120);
         doc.setLineWidth(0.008);
-        doc.roundedRect(margin + 0.62, curY + 0.08, 0.44, 0.26, 0.03, 0.03, "FD");
+        doc.roundedRect(margin + 0.58, curY + 0.08, 0.42, 0.26, 0.03, 0.03, "FD");
 
-        // Dashed Tape Swatch box
         doc.setDrawColor(180, 172, 160);
         doc.setLineDashPattern([0.04, 0.03], 0);
-        doc.roundedRect(margin + 1.25, curY + 0.06, 0.9, 0.3, 0.03, 0.03, "S");
+        doc.roundedRect(margin + 1.14, curY + 0.06, 0.84, 0.3, 0.03, 0.03, "S");
         doc.setLineDashPattern([], 0);
 
-        // Color Name
         doc.setFont(fonts.sans, "bold");
-        doc.setFontSize(9);
-        doc.setTextColor(34, 31, 26);
-        doc.text(c.name, margin + 2.32, curY + 0.25);
-
-        // Squares (right-aligned)
-        doc.setFont(fonts.mono, "bold");
         doc.setFontSize(8.8);
-        doc.text(String(c.count), margin + 3.88, curY + 0.25, { align: "right" });
+        doc.setTextColor(34, 31, 26);
+        doc.text(fitSingleLine(doc, c.name, 1.12), margin + 2.12, curY + 0.25);
 
-        // Strip / Fat Quarter cutting guidance
+        doc.setFont(fonts.mono, "bold");
+        doc.setFontSize(8.6);
+        doc.text(String(c.count), margin + 3.75, curY + 0.25, { align: "right" });
+
+        const cutColMaxW = contentW - 4.72;
         doc.setFont(fonts.sans, "normal");
-        doc.setFontSize(8.2);
+        doc.setFontSize(8.1);
         doc.setTextColor(70, 65, 58);
         const stripTxt = `${c.fabric.strips} WOF strip${c.fabric.strips === 1 ? "" : "s"} (${c.fabric.squaresPerStrip}/strip)`;
-        doc.text(stripTxt, margin + 4.1, curY + 0.2);
+        doc.text(fitSingleLine(doc, stripTxt, cutColMaxW), margin + 3.92, curY + 0.2);
         if (c.fq.fitsOneFq) {
           doc.setFont(fonts.sans, "bold");
-          doc.setFontSize(7);
+          doc.setFontSize(6.9);
           doc.setTextColor(58, 107, 124);
-          doc.text(`or 1 Fat Quarter (${c.fq.fqLabel}, yields ${c.fq.perFq})`, margin + 4.1, curY + 0.34);
+          doc.text(fitSingleLine(doc, `or 1 Fat Quarter (${c.fq.fqLabel}, yields ${c.fq.perFq})`, cutColMaxW), margin + 3.92, curY + 0.34);
         }
 
-        // Fabric Needed (right-aligned)
         doc.setFont(fonts.sans, "bold");
-        doc.setFontSize(9);
+        doc.setFontSize(8.8);
         doc.setTextColor(184, 77, 44);
         doc.text(formatPdfYardage(c.fabric.formatted), margin + contentW - 0.1, curY + 0.25, { align: "right" });
 
@@ -1910,69 +1927,81 @@
         curY += cutRowH;
       });
 
-      // Backing & Binding + WOF Strip Diagram + 1:1 Cut-Size Test Square
+      // Backing & Binding + Full-Width WOF Strip Diagram + Full-Width 1:1 Cut Template Card
       const extras = calculateBackingAndBinding();
-      const cutSizeIn = unit === "in" ? cutSize : cutSize / 2.54;
-      const finishedIn = unit === "in" ? finished : finished / 2.54;
-      const useCutSquare = cutSizeIn <= 3.0;
-      const fallbackSize = unit === "in" ? 1 : 2 / 2.54;
-      const tsSize = useCutSquare ? cutSizeIn : fallbackSize;
-      const diagBlockH = Math.max(1.45, tsSize + 0.45) + 0.85;
+      const sampleSqPerStrip = Math.max(1, Math.floor(wof / cutSize));
 
-      if (curY + diagBlockH > pageH - 0.65) {
+      // 1) Backing & Binding card (wrapped cleanly)
+      doc.setFont(fonts.sans, "normal");
+      doc.setFontSize(8.3);
+      const finishLines = doc.splitTextToSize(
+        `Binding: ${formatPdfYardage(extras.bindingAmount)} (${extras.bindingStrips} strips at ${formatPdfMeasure(extras.bindingStripW, unit)} wide)    \u00b7    Backing: ${formatPdfYardage(extras.backingAmount)} (${extras.backingPanels} WOF panel${extras.backingPanels === 1 ? "" : "s"}, includes +${unit === "in" ? '8"' : "20 cm"} quilting margin)`,
+        contentW - 0.28
+      );
+      const finishCardH = 0.34 + finishLines.length * 0.15 + 0.1;
+
+      if (curY + finishCardH + 0.2 > pageH - 0.65) {
         doc.addPage();
         drawRunningHeader("01", "MATERIALS & CUTTING");
         curY = 1.0;
       } else {
-        curY += 0.22;
+        curY += 0.18;
       }
 
-      // Backing & Binding card
       doc.setFillColor(246, 242, 235);
       doc.setDrawColor(215, 206, 191);
       doc.setLineWidth(0.01);
-      doc.roundedRect(margin, curY, contentW, 0.68, 0.06, 0.06, "FD");
+      doc.roundedRect(margin, curY, contentW, finishCardH, 0.06, 0.06, "FD");
       doc.setFont(fonts.sans, "bold");
       doc.setFontSize(8.8);
       doc.setTextColor(34, 31, 26);
       doc.text("Finishing Fabrics (Backing & Binding)", margin + 0.14, curY + 0.22);
       doc.setFont(fonts.sans, "normal");
-      doc.setFontSize(8.4);
+      doc.setFontSize(8.3);
       doc.setTextColor(70, 65, 58);
-      doc.text(
-        `Binding: ${formatPdfYardage(extras.bindingAmount)} (${extras.bindingStrips} strips at ${formatPdfMeasure(extras.bindingStripW, unit)} wide)    \u00b7    Backing: ${formatPdfYardage(extras.backingAmount)} (${extras.backingPanels} WOF panel${extras.backingPanels === 1 ? "" : "s"}, +${unit === "in" ? '8"' : "20 cm"} margin)`,
-        margin + 0.14,
-        curY + 0.46
-      );
-      curY += 0.84;
+      doc.text(finishLines, margin + 0.14, curY + 0.42);
+      curY += finishCardH + 0.16;
 
-      // Left: WOF Strip-Cutting Diagram | Right: Print-Scale & Cut-Square Template
-      const testCardW = Math.max(2.75, tsSize + 1.45);
-      const wofCardW = contentW - testCardW - 0.18;
-      const cardsH = Math.max(1.45, tsSize + 0.42);
-      const sampleSqPerStrip = Math.max(1, Math.floor(wof / cutSize));
-
-      drawWofCuttingDiagram(
+      // 2) Full-width WOF Strip-Cutting Diagram (proportional to an actual horizontal fabric strip, zero text clipping!)
+      const estWofH = 1.38;
+      if (curY + estWofH > pageH - 0.65) {
+        doc.addPage();
+        drawRunningHeader("01", "MATERIALS & CUTTING");
+        curY = 1.0;
+      }
+      const actualWofH = drawWofCuttingDiagram(
         doc,
         fonts,
         margin,
         curY,
-        wofCardW,
-        cardsH,
+        contentW,
         formatPdfMeasure(cutSize, unit),
         formatPdfMeasure(wof, unit),
         sampleSqPerStrip
       );
+      curY += actualWofH + 0.16;
 
-      // Right card: Print-scale test square
-      const tx = margin + wofCardW + 0.18;
+      // 3) Full-width 1:1 Cut-Square Template & Printer Scale Check Card
+      const cutSizeIn = unit === "in" ? cutSize : cutSize / 2.54;
+      const finishedIn = unit === "in" ? finished : finished / 2.54;
+      const useCutSquare = cutSizeIn <= 3.5;
+      const fallbackSize = unit === "in" ? 1 : 2 / 2.54;
+      const tsSize = useCutSquare ? cutSizeIn : fallbackSize;
+      const tsCardH = Math.max(1.25, tsSize + 0.36);
+
+      if (curY + tsCardH > pageH - 0.65) {
+        doc.addPage();
+        drawRunningHeader("01", "MATERIALS & CUTTING");
+        curY = 1.0;
+      }
+
       doc.setFillColor(250, 248, 244);
       doc.setDrawColor(215, 206, 191);
       doc.setLineWidth(0.01);
-      doc.roundedRect(tx, curY, testCardW, cardsH, 0.06, 0.06, "FD");
+      doc.roundedRect(margin, curY, contentW, tsCardH, 0.06, 0.06, "FD");
 
-      const sqX = tx + 0.16;
-      const sqY = curY + (cardsH - tsSize) / 2;
+      const sqX = margin + 0.18;
+      const sqY = curY + (tsCardH - tsSize) / 2;
       doc.setDrawColor(34, 31, 26);
       doc.setLineWidth(0.014);
       doc.rect(sqX, sqY, tsSize, tsSize, "S");
@@ -1986,29 +2015,34 @@
       }
 
       const tsExpected = useCutSquare
-        ? `${formatPdfMeasure(cutSize, unit)}`
-        : unit === "in" ? '1"' : "2 cm";
+        ? `${formatPdfMeasure(cutSize, unit)} \u00d7 ${formatPdfMeasure(cutSize, unit)}`
+        : unit === "in" ? '1" \u00d7 1"' : "2 cm \u00d7 2 cm";
       doc.setFont(fonts.mono, "bold");
-      doc.setFontSize(Math.min(8.5, Math.max(6, tsSize * 7)));
+      doc.setFontSize(Math.min(8.5, Math.max(6, tsSize * 6)));
       doc.setTextColor(34, 31, 26);
       doc.text(tsExpected, sqX + tsSize / 2, sqY + tsSize / 2 + 0.03, { align: "center" });
 
-      const noteX = sqX + tsSize + 0.14;
-      const noteW = tx + testCardW - noteX - 0.12;
+      const noteX = sqX + tsSize + 0.24;
+      const noteW = margin + contentW - noteX - 0.18;
       doc.setFont(fonts.sans, "bold");
-      doc.setFontSize(8.2);
+      doc.setFontSize(9.2);
       doc.setTextColor(34, 31, 26);
-      doc.text(useCutSquare ? "1:1 Cut Template" : "Scale Check Square", noteX, curY + 0.24);
+      doc.text(
+        useCutSquare ? "1:1 Actual Cut-Square Template & Printer Scale Check" : "Printer Scale Verification Square",
+        noteX,
+        curY + 0.28
+      );
       doc.setFont(fonts.sans, "normal");
-      doc.setFontSize(7.3);
+      doc.setFontSize(8);
       doc.setTextColor(90, 82, 72);
       const scaleTxt = doc.splitTextToSize(
-        useCutSquare
-          ? `Print at 100% ("Actual size"). Outer box = ${tsExpected} cut square; dashed inner box = ${formatPdfMeasure(finished, unit)} finished.`
-          : `Print at 100% ("Actual size"). Confirm this box measures ${tsExpected} before cutting.`,
+        (useCutSquare
+          ? `Measure this box with your quilting ruler before cutting fabric: the solid outer border must measure ${tsExpected}, and the dashed terracotta inner square shows the ${formatPdfMeasure(finished, unit)} finished size (${formatPdfMeasure(seam, unit)} seam allowance on all 4 sides). `
+          : `Measure this box before cutting: it must measure ${tsExpected}. `) +
+          `Print at 100% / "Actual size" (turn OFF "Fit to page"). Paper: ${isA4 ? "A4" : "US Letter"}.`,
         noteW
       );
-      doc.text(scaleTxt, noteX, curY + 0.42);
+      doc.text(scaleTxt, noteX, curY + 0.48);
 
       // ================= PAGE 3: 02 · FABRIC SHOPPING LIST & BUDGET =================
       doc.addPage();
@@ -2065,14 +2099,14 @@
 
         if (!isContinuation) {
           doc.setFont(fonts.sans, "normal");
-          doc.setFontSize(8.6);
+          doc.setFontSize(8.5);
           doc.setTextColor(108, 100, 88);
-          doc.text(
+          const shopIntro = doc.splitTextToSize(
             "Matched to Robert Kaufman Kona Cotton Solids & Moda Bella Solids, automatically flagging money-saving Fat Quarters.",
-            margin,
-            shopY
+            contentW
           );
-          shopY += 0.18;
+          doc.text(shopIntro, margin, shopY);
+          shopY += shopIntro.length * 0.15 + 0.06;
 
           doc.setFillColor(246, 242, 235);
           doc.setDrawColor(215, 206, 191);
@@ -2110,17 +2144,21 @@
           shopY += 0.1;
         }
 
+        // Responsive column anchors (fits both US Letter 7.40" and A4 7.17")
+        const estColRight = margin + contentW - 1.22;
+        const linksColX = margin + contentW - 1.1;
+
         doc.setFillColor(34, 31, 26);
         doc.roundedRect(margin, shopY, contentW, 0.28, 0.04, 0.04, "F");
         doc.setFont(fonts.sans, "bold");
-        doc.setFontSize(7.6);
+        doc.setFontSize(7.5);
         doc.setTextColor(255, 255, 255);
         doc.text("CODE", margin + 0.08, shopY + 0.18);
-        doc.text("CLOSEST SOLID MATCH (KONA & BELLA)", margin + 0.62, shopY + 0.18);
-        doc.text("SMART BUY QTY", margin + 3.55, shopY + 0.18);
-        doc.text("UNIT PRICE", margin + 4.78, shopY + 0.18);
-        doc.text("EST.", margin + 6.08, shopY + 0.18, { align: "right" });
-        doc.text("SHOP LINKS", margin + 6.22, shopY + 0.18);
+        doc.text("CLOSEST SOLID MATCH (KONA & BELLA)", margin + 0.58, shopY + 0.18);
+        doc.text("BUY QTY", margin + 3.28, shopY + 0.18);
+        doc.text("UNIT PRICE", margin + 4.46, shopY + 0.18);
+        doc.text("EST.", estColRight, shopY + 0.18, { align: "right" });
+        doc.text("SHOP LINKS", linksColX, shopY + 0.18);
         shopY += 0.32;
       };
 
@@ -2130,6 +2168,8 @@
       let totalTopCostHigh = 0;
       let totalTopCostAvg = 0;
       const shopRowH = 0.46;
+      const estColRight = margin + contentW - 1.22;
+      const linksColX = margin + contentW - 1.1;
 
       activeColors.forEach((c, idx) => {
         if (shopY + shopRowH > pageH - 1.35) {
@@ -2151,43 +2191,42 @@
         drawCodeBadge(doc, fonts, margin + 0.08, shopY + 0.11, 0.38, 0.24, c.code, c.r, c.g, c.b);
 
         doc.setFont(fonts.sans, "bold");
-        doc.setFontSize(8.6);
+        doc.setFontSize(8.5);
         doc.setTextColor(34, 31, 26);
-        doc.text(`${c.match.konaName} (${c.match.konaSku})`, margin + 0.62, shopY + 0.19);
+        doc.text(fitSingleLine(doc, `${c.match.konaName} (${c.match.konaSku})`, 2.6), margin + 0.58, shopY + 0.19);
 
         doc.setFont(fonts.sans, "normal");
-        doc.setFontSize(7.3);
+        doc.setFontSize(7.2);
         doc.setTextColor(108, 100, 88);
-        doc.text(`Alt: ${c.match.bellaName}`, margin + 0.62, shopY + 0.35);
+        doc.text(fitSingleLine(doc, `Alt: ${c.match.bellaName}`, 2.6), margin + 0.58, shopY + 0.35);
 
-        // Smart Buy Qty (highlights Fat Quarter savings!)
         doc.setFont(fonts.sans, "bold");
-        doc.setFontSize(8.4);
+        doc.setFontSize(8.3);
         doc.setTextColor(opt.isFq ? 58 : 34, opt.isFq ? 107 : 31, opt.isFq ? 124 : 26);
-        doc.text(opt.buyLabel, margin + 3.55, shopY + 0.19);
+        doc.text(fitSingleLine(doc, opt.buyLabel, 1.12), margin + 3.28, shopY + 0.19);
         doc.setFont(fonts.sans, "normal");
-        doc.setFontSize(7);
+        doc.setFontSize(6.9);
         doc.setTextColor(120, 112, 102);
-        doc.text(opt.subLabel, margin + 3.55, shopY + 0.34);
+        doc.text(fitSingleLine(doc, opt.subLabel, 1.12), margin + 3.28, shopY + 0.34);
 
         doc.setFont(fonts.sans, "normal");
-        doc.setFontSize(7.8);
+        doc.setFontSize(7.6);
         doc.setTextColor(70, 65, 58);
-        doc.text(opt.unitPriceLabel, margin + 4.78, shopY + 0.25);
+        doc.text(opt.unitPriceLabel, margin + 4.46, shopY + 0.25);
 
         doc.setFont(fonts.mono, "bold");
-        doc.setFontSize(8.4);
+        doc.setFontSize(8.3);
         doc.setTextColor(184, 77, 44);
-        doc.text(`~$${opt.costAvg.toFixed(2)}`, margin + 6.08, shopY + 0.25, { align: "right" });
+        doc.text(`~$${opt.costAvg.toFixed(2)}`, estColRight, shopY + 0.25, { align: "right" });
 
         doc.setFont(fonts.sans, "bold");
-        doc.setFontSize(7.4);
+        doc.setFontSize(7.3);
         doc.setTextColor(58, 107, 124);
-        doc.textWithLink("FQS", margin + 6.22, shopY + 0.25, { url: c.match.fqsUrl });
-        doc.text("\u00b7", margin + 6.5, shopY + 0.25);
-        doc.textWithLink("MSQC", margin + 6.58, shopY + 0.25, { url: c.match.msqcUrl });
-        doc.text("\u00b7", margin + 6.96, shopY + 0.25);
-        doc.textWithLink("Hancock", margin + 7.03, shopY + 0.25, { url: c.match.hancocksUrl });
+        doc.textWithLink("FQS", linksColX, shopY + 0.25, { url: c.match.fqsUrl });
+        doc.text("\u00b7", linksColX + 0.26, shopY + 0.25);
+        doc.textWithLink("MSQC", linksColX + 0.33, shopY + 0.25, { url: c.match.msqcUrl });
+        doc.text("\u00b7", linksColX + 0.69, shopY + 0.25);
+        doc.textWithLink("HPC", linksColX + 0.76, shopY + 0.25, { url: c.match.hancocksUrl });
 
         doc.setDrawColor(234, 228, 218);
         doc.setLineWidth(0.006);
@@ -2217,29 +2256,33 @@
       const backCost = backingYds * AVG_PRICE_YD;
       const grandTotal = totalTopCostAvg + bindCost + backCost;
 
+      doc.setFont(fonts.sans, "normal");
+      doc.setFontSize(8.3);
+      const budgetBreakdown = doc.splitTextToSize(
+        `Quilt Top (${activeColors.length} fabrics): ~$${totalTopCostAvg.toFixed(2)} ($${totalTopCostLow.toFixed(2)}\u2013$${totalTopCostHigh.toFixed(2)})   \u00b7   Binding: ~$${bindCost.toFixed(2)}   \u00b7   Backing: ~$${backCost.toFixed(2)}`,
+        contentW - 0.32
+      );
+      const budgetBoxH = 0.58 + budgetBreakdown.length * 0.15;
+
       doc.setFillColor(246, 242, 235);
       doc.setDrawColor(215, 206, 191);
       doc.setLineWidth(0.01);
-      doc.roundedRect(margin, shopY, contentW, 0.8, 0.06, 0.06, "FD");
+      doc.roundedRect(margin, shopY, contentW, budgetBoxH, 0.06, 0.06, "FD");
 
       doc.setFont(fonts.sans, "bold");
       doc.setFontSize(9);
       doc.setTextColor(34, 31, 26);
-      doc.text("Estimated Project Fabric Budget (with Smart Fat Quarter Optimization)", margin + 0.16, shopY + 0.24);
+      doc.text("Estimated Project Fabric Budget (with Smart Fat Quarter Optimization)", margin + 0.16, shopY + 0.23);
       doc.setFont(fonts.sans, "normal");
-      doc.setFontSize(8.4);
+      doc.setFontSize(8.3);
       doc.setTextColor(70, 65, 58);
-      doc.text(
-        `Quilt Top (${activeColors.length} fabrics): ~$${totalTopCostAvg.toFixed(2)} ($${totalTopCostLow.toFixed(2)}\u2013$${totalTopCostHigh.toFixed(2)})   \u00b7   Binding: ~$${bindCost.toFixed(2)}   \u00b7   Backing: ~$${backCost.toFixed(2)}`,
-        margin + 0.16,
-        shopY + 0.46
-      );
+      doc.text(budgetBreakdown, margin + 0.16, shopY + 0.43);
       doc.setFont(fonts.sans, "bold");
       doc.setTextColor(184, 77, 44);
       doc.text(
         `Estimated Grand Total (Top + Binding + Backing): ~$${grandTotal.toFixed(2)} USD`,
         margin + 0.16,
-        shopY + 0.67
+        shopY + 0.43 + budgetBreakdown.length * 0.15 + 0.06
       );
 
       // ================= PAGE 4+: 03 · ANNOTATED QUILT LAYOUT MAP =================
@@ -2265,6 +2308,7 @@
           if (sectionNum === 1) sectionPages.map = doc.getNumberOfPages();
           drawRunningHeader("03", "QUILT LAYOUT MAP");
 
+          const mapHeaderMaxW = totalSections > 1 ? contentW - 1.3 : contentW;
           doc.setFont(fonts.serif, "normal");
           doc.setFontSize(17);
           doc.setTextColor(34, 31, 26);
@@ -2272,15 +2316,16 @@
             totalSections > 1
               ? `Quilt Layout Map \u2014 Section ${sectionNum} of ${totalSections}`
               : "Quilt Layout Grid Map";
-          doc.text(sectionTitle, margin, 1.05);
+          doc.text(fitSingleLine(doc, sectionTitle, mapHeaderMaxW), margin, 1.05);
 
           doc.setFont(fonts.sans, "normal");
-          doc.setFontSize(8.2);
+          doc.setFontSize(8.1);
           doc.setTextColor(108, 100, 88);
           const guideDesc = isBlockMode
             ? `Columns ${cStart + 1}\u2013${cEnd}, Rows ${rStart + 1}\u2013${rEnd}  \u00b7  Terracotta lines mark 8\u00d78 Sub-Blocks  \u00b7  Arrows show pressing`
-            : `Columns ${cStart + 1}\u2013${cEnd}, Rows ${rStart + 1}\u2013${rEnd}  \u00b7  Bold lines every 5 squares  \u00b7  Arrows show alternating row pressing`;
-          doc.text(guideDesc, margin, 1.25);
+            : `Columns ${cStart + 1}\u2013${cEnd}, Rows ${rStart + 1}\u2013${rEnd}  \u00b7  Bold lines every 5 squares  \u00b7  Arrows show alternating pressing`;
+          const guideLines = doc.splitTextToSize(guideDesc, mapHeaderMaxW);
+          doc.text(guideLines, margin, 1.24);
 
           // Mini Key-Map Locator Thumbnail in top-right (B1)
           if (totalSections > 1) {
@@ -2290,14 +2335,15 @@
           const labelLeftW = 0.44;
           const arrowRightW = 0.34;
           const labelTopH = 0.26;
+          const gridTopY = Math.max(1.46, 1.18 + guideLines.length * 0.14 + 0.08);
           const gridAreaW = contentW - labelLeftW - arrowRightW;
-          const gridAreaH = pageH - 1.48 - labelTopH - 0.65;
+          const gridAreaH = pageH - gridTopY - labelTopH - 0.65;
 
           const cellSize = Math.min(0.44, gridAreaW / subCols, gridAreaH / subRows);
           const gridW = subCols * cellSize;
           const gridH = subRows * cellSize;
           const gridX = margin + labelLeftW + (gridAreaW - gridW) / 2;
-          const gridY = 1.46 + labelTopH;
+          const gridY = gridTopY + labelTopH;
 
           // Column numbers
           const headerFont = Math.min(7.8, Math.max(5.5, cellSize * 21));
@@ -2590,14 +2636,14 @@
         );
         ty += 0.22;
         doc.setFont(fonts.sans, "normal");
-        doc.setFontSize(8.5);
+        doc.setFontSize(8.4);
         doc.setTextColor(108, 100, 88);
-        doc.text(
+        const tagIntro = doc.splitTextToSize(
           "Cut along the dashed lines. Clip Fabric Tags onto your cut stacks, and pin Row/Block Tags onto the TOP-LEFT square of each unit.",
-          margin,
-          ty
+          contentW
         );
-        ty += 0.24;
+        doc.text(tagIntro, margin, ty);
+        ty += tagIntro.length * 0.15 + 0.1;
       };
 
       drawTagsPageHeader(false);
@@ -2646,13 +2692,13 @@
         doc.setFont(fonts.sans, "bold");
         doc.setFontSize(8.4);
         doc.setTextColor(34, 31, 26);
-        doc.text(c.name, tx + 0.5, ty + 0.42);
+        doc.text(fitSingleLine(doc, c.name, fTagW - 0.72), tx + 0.5, ty + 0.42);
 
         doc.setFont(fonts.sans, "normal");
         doc.setFontSize(7);
         doc.setTextColor(108, 100, 88);
-        doc.text(`${c.count} sq \u00b7 Cut ${formatPdfMeasure(cutSize, unit)}`, tx + 0.5, ty + 0.58);
-        doc.text(c.match.konaName, tx + 0.5, ty + 0.7);
+        doc.text(fitSingleLine(doc, `${c.count} sq \u00b7 Cut ${formatPdfMeasure(cutSize, unit)}`, fTagW - 0.58), tx + 0.5, ty + 0.58);
+        doc.text(fitSingleLine(doc, c.match.konaName, fTagW - 0.58), tx + 0.5, ty + 0.7);
       });
       ty += fTagH + 0.3;
 
