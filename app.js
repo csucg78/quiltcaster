@@ -1382,80 +1382,112 @@
   }
 
   function drawWofCuttingDiagram(doc, fonts, x, y, w, cutMeasureStr, wofMeasureStr, sqPerStrip) {
-    doc.setFont(fonts.sans, "normal");
-    doc.setFontSize(7.8);
-    const stepText = `Step 1: Cut ${cutMeasureStr} strips selvage-to-selvage across the ${wofMeasureStr} usable Width of Fabric.   Step 2: Sub-cut each strip into ${sqPerStrip} squares (${cutMeasureStr} \u00d7 ${cutMeasureStr}).`;
-    const stepLines = doc.splitTextToSize(stepText, w - 0.32);
-    const textBlockH = stepLines.length * 0.145;
-    const sh = 0.44;
-    const h = 0.42 + textBlockH + sh + 0.32;
-
-    // Card frame sized tightly to content (no awkward empty bottom space)
-    doc.setFillColor(250, 248, 244);
+    // Open editorial section (no heavy outer box — clean hairline top rule + airy whitespace)
     doc.setDrawColor(215, 206, 191);
     doc.setLineWidth(0.01);
-    doc.roundedRect(x, y, w, h, 0.06, 0.06, "FD");
+    doc.line(x, y, x + w, y);
 
-    doc.setFont(fonts.sans, "bold");
-    doc.setFontSize(8.8);
+    doc.setFont(fonts.serif, "normal");
+    doc.setFontSize(12.5);
     doc.setTextColor(34, 31, 26);
-    doc.text("WOF Strip-Cutting Guide", x + 0.16, y + 0.22);
+    doc.text("How to Cut from Yardage", x, y + 0.24);
 
+    // Two clean side-by-side step callouts (never wraps past edge!)
+    const colGap = 0.28;
+    const colW = (w - colGap) / 2;
     doc.setFont(fonts.sans, "normal");
-    doc.setFontSize(7.8);
-    doc.setTextColor(90, 82, 72);
-    doc.text(stepLines, x + 0.16, y + 0.38);
+    doc.setFontSize(8);
+    const s1Lines = doc.splitTextToSize(
+      `Cut ${cutMeasureStr} strips across the full ${wofMeasureStr} Width of Fabric (selvage to selvage).`,
+      colW - 0.26
+    );
+    const s2Lines = doc.splitTextToSize(
+      `Trim selvages, then sub-cut each strip into ${sqPerStrip} precision ${cutMeasureStr} \u00d7 ${cutMeasureStr} squares.`,
+      colW - 0.26
+    );
+    const stepsH = Math.max(s1Lines.length, s2Lines.length) * 0.16;
 
-    // Full-width proportional fabric strip illustration
-    const sx = x + 0.22;
-    const sy = y + 0.34 + textBlockH + 0.1;
-    const sw = w - 0.44;
+    // Step 1
+    doc.setFont(fonts.mono, "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(184, 77, 44);
+    doc.text("01", x, y + 0.44);
+    doc.setFont(fonts.sans, "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(70, 65, 58);
+    doc.text(s1Lines, x + 0.24, y + 0.44);
 
-    // Selvage trim left
-    doc.setFillColor(226, 218, 206);
-    doc.setDrawColor(165, 155, 142);
+    // Step 2
+    const c2X = x + colW + colGap;
+    doc.setFont(fonts.mono, "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(184, 77, 44);
+    doc.text("02", c2X, y + 0.44);
+    doc.setFont(fonts.sans, "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(70, 65, 58);
+    doc.text(s2Lines, c2X + 0.24, y + 0.44);
+
+    // Proportional horizontal fabric strip diagram
+    const sx = x + 0.04;
+    const sy = y + 0.48 + stepsH + 0.06;
+    const sw = w - 0.08;
+    const sh = 0.44;
+    const selvW = 0.24;
+
+    // Left selvage
+    doc.setFillColor(232, 225, 214);
+    doc.setDrawColor(175, 166, 152);
     doc.setLineWidth(0.008);
-    doc.rect(sx, sy, 0.22, sh, "FD");
+    doc.rect(sx, sy, selvW, sh, "FD");
 
-    // Usable strip body divided into sub-cut squares
-    const usableW = sw - 0.44;
+    // Usable strip divided into sub-cut squares
+    const usableW = sw - selvW * 2;
     const numBoxes = Math.min(12, Math.max(6, sqPerStrip));
     const boxW = usableW / numBoxes;
     for (let i = 0; i < numBoxes; i++) {
-      const bx = sx + 0.22 + i * boxW;
-      doc.setFillColor(i === 0 ? 235 : 246, i === 0 ? 204 : 239, i === 0 ? 191 : 228);
+      const bx = sx + selvW + i * boxW;
+      doc.setFillColor(i === 0 ? 243 : 250, i === 0 ? 221 : 247, i === 0 ? 210 : 240);
       doc.setDrawColor(184, 77, 44);
       doc.setLineWidth(0.008);
       doc.rect(bx, sy, boxW, sh, "FD");
     }
 
-    // Selvage trim right
-    doc.setFillColor(226, 218, 206);
-    doc.setDrawColor(165, 155, 142);
-    doc.rect(sx + sw - 0.22, sy, 0.22, sh, "FD");
+    // Right selvage
+    doc.setFillColor(232, 225, 214);
+    doc.setDrawColor(175, 166, 152);
+    doc.rect(sx + sw - selvW, sy, selvW, sh, "FD");
 
-    // Dashed rotary cut lines around first square
+    // Dashed rotary cut marks on first square
     doc.setDrawColor(184, 77, 44);
     doc.setLineWidth(0.012);
     doc.setLineDashPattern([0.04, 0.03], 0);
-    doc.line(sx + 0.22, sy - 0.05, sx + 0.22, sy + sh + 0.05);
-    doc.line(sx + 0.22 + boxW, sy - 0.05, sx + 0.22 + boxW, sy + sh + 0.05);
+    doc.line(sx + selvW, sy - 0.06, sx + selvW, sy + sh + 0.06);
+    doc.line(sx + selvW + boxW, sy - 0.06, sx + selvW + boxW, sy + sh + 0.06);
     doc.setLineDashPattern([], 0);
 
-    // Dimension labels
+    // Crisp dimension labels
     doc.setFont(fonts.mono, "bold");
-    doc.setFontSize(7);
+    doc.setFontSize(7.2);
     doc.setTextColor(184, 77, 44);
-    doc.text(cutMeasureStr, sx + 0.22 + boxW / 2, sy + sh / 2 + 0.03, { align: "center" });
+    doc.text(cutMeasureStr, sx + selvW + boxW / 2, sy + sh / 2 + 0.035, { align: "center" });
 
-    doc.setTextColor(108, 100, 88);
+    // Bracket line beneath usable WOF
+    const brY = sy + sh + 0.1;
+    doc.setDrawColor(150, 142, 130);
+    doc.setLineWidth(0.007);
+    doc.line(sx + selvW, brY, sx + sw - selvW, brY);
+    doc.line(sx + selvW, brY - 0.03, sx + selvW, brY + 0.03);
+    doc.line(sx + sw - selvW, brY - 0.03, sx + sw - selvW, brY + 0.03);
+
     doc.setFont(fonts.sans, "normal");
     doc.setFontSize(7.2);
-    doc.text(`Selvage`, sx + 0.11, sy + sh + 0.14, { align: "center" });
-    doc.text(`Usable Width of Fabric (${wofMeasureStr}) \u2014 yields ${sqPerStrip} squares per strip`, sx + sw / 2, sy + sh + 0.14, { align: "center" });
-    doc.text(`Selvage`, sx + sw - 0.11, sy + sh + 0.14, { align: "center" });
+    doc.setTextColor(108, 100, 88);
+    doc.text("Selvage", sx + selvW / 2, brY + 0.13, { align: "center" });
+    doc.text(`Usable Width of Fabric (${wofMeasureStr}) \u00b7 ${sqPerStrip} squares per strip`, sx + sw / 2, brY + 0.13, { align: "center" });
+    doc.text("Selvage", sx + sw - selvW / 2, brY + 0.13, { align: "center" });
 
-    return h;
+    return brY + 0.24 - y;
   }
 
   function drawNestingDiagram(doc, fonts, x, y, w, h) {
@@ -1603,6 +1635,7 @@
       const BLOCK_SIZE = 8;
 
       const doc = new jsPDF({ orientation: "portrait", unit: "in", format: isA4 ? "a4" : "letter" });
+      doc.setLineHeightFactor(1.42);
       const fonts = registerPdfFonts(doc, fontData);
 
       const pageW = isA4 ? 8.27 : 8.5;
@@ -1872,12 +1905,15 @@
           curY += 0.1;
         }
 
-        // Table header (responsive to both Letter and A4 widths)
-        doc.setFillColor(34, 31, 26);
-        doc.roundedRect(margin, curY, contentW, 0.28, 0.04, 0.04, "F");
+        // Editorial light table header (warm parchment band + crisp bottom rule)
+        doc.setFillColor(239, 233, 223);
+        doc.rect(margin, curY, contentW, 0.28, "F");
+        doc.setDrawColor(34, 31, 26);
+        doc.setLineWidth(0.012);
+        doc.line(margin, curY + 0.28, margin + contentW, curY + 0.28);
         doc.setFont(fonts.sans, "bold");
-        doc.setFontSize(7.6);
-        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(7.2);
+        doc.setTextColor(92, 84, 73);
         doc.text("CODE", margin + 0.08, curY + 0.18);
         doc.text("SWATCH", margin + 0.58, curY + 0.18);
         doc.text("TAPE FABRIC", margin + 1.14, curY + 0.18);
@@ -1885,7 +1921,7 @@
         doc.text("SQUARES", margin + 3.75, curY + 0.18, { align: "right" });
         doc.text(`CUTTING (${formatPdfMeasure(cutSize, unit)} STRIPS)`, margin + 3.92, curY + 0.18);
         doc.text("NEED", margin + contentW - 0.1, curY + 0.18, { align: "right" });
-        curY += 0.32;
+        curY += 0.31;
       };
 
       drawCuttingPageHeader(false);
@@ -1952,16 +1988,9 @@
       const extras = calculateBackingAndBinding();
       const sampleSqPerStrip = Math.max(1, Math.floor(wof / cutSize));
 
-      // 1) Backing & Binding card (wrapped cleanly)
-      doc.setFont(fonts.sans, "normal");
-      doc.setFontSize(8.3);
-      const finishLines = doc.splitTextToSize(
-        `Binding: ${formatPdfYardage(extras.bindingAmount)} (${extras.bindingStrips} strips at ${formatPdfMeasure(extras.bindingStripW, unit)} wide)    \u00b7    Backing: ${formatPdfYardage(extras.backingAmount)} (${extras.backingPanels} WOF panel${extras.backingPanels === 1 ? "" : "s"}, includes +${unit === "in" ? '8"' : "20 cm"} quilting margin)`,
-        contentW - 0.28
-      );
-      const finishCardH = 0.34 + finishLines.length * 0.15 + 0.1;
-
-      if (curY + finishCardH + 0.2 > pageH - 0.65) {
+      // 1) Editorial 2-column Finishing Fabrics strip (open typography, no heavy box)
+      const finishStripH = 0.62;
+      if (curY + finishStripH + 0.16 > pageH - 0.65) {
         doc.addPage();
         drawRunningHeader("01", "MATERIALS & CUTTING");
         curY = 1.0;
@@ -1969,22 +1998,55 @@
         curY += 0.18;
       }
 
-      doc.setFillColor(246, 242, 235);
+      doc.setFillColor(248, 245, 239);
+      doc.rect(margin, curY, contentW, finishStripH, "F");
       doc.setDrawColor(215, 206, 191);
-      doc.setLineWidth(0.01);
-      doc.roundedRect(margin, curY, contentW, finishCardH, 0.06, 0.06, "FD");
-      doc.setFont(fonts.sans, "bold");
-      doc.setFontSize(8.8);
-      doc.setTextColor(34, 31, 26);
-      doc.text("Finishing Fabrics (Backing & Binding)", margin + 0.14, curY + 0.22);
-      doc.setFont(fonts.sans, "normal");
-      doc.setFontSize(8.3);
-      doc.setTextColor(70, 65, 58);
-      doc.text(finishLines, margin + 0.14, curY + 0.42);
-      curY += finishCardH + 0.16;
+      doc.setLineWidth(0.008);
+      doc.line(margin, curY, margin + contentW, curY);
+      doc.line(margin, curY + finishStripH, margin + contentW, curY + finishStripH);
 
-      // 2) Full-width WOF Strip-Cutting Diagram (proportional to an actual horizontal fabric strip, zero text clipping!)
-      const estWofH = 1.38;
+      const halfW = contentW / 2;
+      doc.line(margin + halfW, curY + 0.1, margin + halfW, curY + finishStripH - 0.1);
+
+      // Left column: Binding
+      doc.setFont(fonts.sans, "bold");
+      doc.setFontSize(7.2);
+      doc.setTextColor(135, 127, 115);
+      doc.text("BINDING FABRIC", margin + 0.14, curY + 0.2);
+      doc.setFont(fonts.sans, "bold");
+      doc.setFontSize(9.2);
+      doc.setTextColor(184, 77, 44);
+      doc.text(formatPdfYardage(extras.bindingAmount), margin + 0.14, curY + 0.41);
+      doc.setFont(fonts.sans, "normal");
+      doc.setFontSize(7.8);
+      doc.setTextColor(90, 82, 72);
+      doc.text(
+        `${extras.bindingStrips} strips at ${formatPdfMeasure(extras.bindingStripW, unit)} wide`,
+        margin + 0.92,
+        curY + 0.41
+      );
+
+      // Right column: Backing
+      doc.setFont(fonts.sans, "bold");
+      doc.setFontSize(7.2);
+      doc.setTextColor(135, 127, 115);
+      doc.text("BACKING FABRIC", margin + halfW + 0.16, curY + 0.2);
+      doc.setFont(fonts.sans, "bold");
+      doc.setFontSize(9.2);
+      doc.setTextColor(184, 77, 44);
+      doc.text(formatPdfYardage(extras.backingAmount), margin + halfW + 0.16, curY + 0.41);
+      doc.setFont(fonts.sans, "normal");
+      doc.setFontSize(7.8);
+      doc.setTextColor(90, 82, 72);
+      doc.text(
+        `${extras.backingPanels} WOF panel${extras.backingPanels === 1 ? "" : "s"} (+${unit === "in" ? '8"' : "20 cm"} margin)`,
+        margin + halfW + 0.96,
+        curY + 0.41
+      );
+      curY += finishStripH + 0.24;
+
+      // 2) Open Editorial WOF Strip-Cutting Guide
+      const estWofH = 1.5;
       if (curY + estWofH > pageH - 0.65) {
         doc.addPage();
         drawRunningHeader("01", "MATERIALS & CUTTING");
@@ -2000,70 +2062,134 @@
         formatPdfMeasure(wof, unit),
         sampleSqPerStrip
       );
-      curY += actualWofH + 0.16;
+      curY += actualWofH + 0.2;
 
-      // 3) Full-width 1:1 Cut-Square Template & Printer Scale Check Card
+      // 3) Architectural 1:1 Cut-Square Template & Printer Scale Check (open editorial layout)
       const cutSizeIn = unit === "in" ? cutSize : cutSize / 2.54;
       const finishedIn = unit === "in" ? finished : finished / 2.54;
       const useCutSquare = cutSizeIn <= 3.5;
       const fallbackSize = unit === "in" ? 1 : 2 / 2.54;
       const tsSize = useCutSquare ? cutSizeIn : fallbackSize;
-      const tsCardH = Math.max(1.25, tsSize + 0.36);
+      const tsSectionH = Math.max(1.55, tsSize + 0.45);
 
-      if (curY + tsCardH > pageH - 0.65) {
+      if (curY + tsSectionH > pageH - 0.65) {
         doc.addPage();
         drawRunningHeader("01", "MATERIALS & CUTTING");
         curY = 1.0;
       }
 
-      doc.setFillColor(250, 248, 244);
+      // Clean hairline top divider
       doc.setDrawColor(215, 206, 191);
       doc.setLineWidth(0.01);
-      doc.roundedRect(margin, curY, contentW, tsCardH, 0.06, 0.06, "FD");
+      doc.line(margin, curY, margin + contentW, curY);
 
-      const sqX = margin + 0.18;
-      const sqY = curY + (tsCardH - tsSize) / 2;
+      const sqX = margin + 0.04;
+      const sqY = curY + 0.38;
+
+      // Architectural top dimension bracket above the square
+      const tsExpected = useCutSquare
+        ? `${formatPdfMeasure(cutSize, unit)}`
+        : unit === "in" ? '1"' : "2 cm";
+      const dimY = sqY - 0.1;
+      doc.setDrawColor(140, 132, 120);
+      doc.setLineWidth(0.007);
+      doc.line(sqX, dimY, sqX + tsSize, dimY);
+      doc.line(sqX, dimY - 0.035, sqX, dimY + 0.035);
+      doc.line(sqX + tsSize, dimY - 0.035, sqX + tsSize, dimY + 0.035);
+      doc.setFont(fonts.mono, "bold");
+      doc.setFontSize(7.2);
+      doc.setTextColor(34, 31, 26);
+      doc.text(
+        useCutSquare ? `${tsExpected} cut` : `${tsExpected} scale check`,
+        sqX + tsSize / 2,
+        dimY - 0.05,
+        { align: "center" }
+      );
+
+      // Outer solid cut square (subtle crisp stroke)
+      doc.setFillColor(255, 255, 255);
       doc.setDrawColor(34, 31, 26);
-      doc.setLineWidth(0.014);
-      doc.rect(sqX, sqY, tsSize, tsSize, "S");
+      doc.setLineWidth(0.015);
+      doc.rect(sqX, sqY, tsSize, tsSize, "FD");
 
+      // Inner finished square shaded softly in warm linen with dashed terracotta seam line
       if (useCutSquare && seam > 0) {
         const inset = (cutSizeIn - finishedIn) / 2;
+        doc.setFillColor(246, 242, 235);
         doc.setDrawColor(184, 77, 44);
-        doc.setLineDashPattern([0.04, 0.03], 0);
-        doc.rect(sqX + inset, sqY + inset, finishedIn, finishedIn, "S");
+        doc.setLineWidth(0.01);
+        doc.setLineDashPattern([0.05, 0.035], 0);
+        doc.rect(sqX + inset, sqY + inset, finishedIn, finishedIn, "FD");
         doc.setLineDashPattern([], 0);
       }
 
-      const tsExpected = useCutSquare
-        ? `${formatPdfMeasure(cutSize, unit)} \u00d7 ${formatPdfMeasure(cutSize, unit)}`
-        : unit === "in" ? '1" \u00d7 1"' : "2 cm \u00d7 2 cm";
-      doc.setFont(fonts.mono, "bold");
-      doc.setFontSize(Math.min(8.5, Math.max(6, tsSize * 6)));
-      doc.setTextColor(34, 31, 26);
-      doc.text(tsExpected, sqX + tsSize / 2, sqY + tsSize / 2 + 0.03, { align: "center" });
+      // Clean centered spec inside the square
+      const sqMidX = sqX + tsSize / 2;
+      const sqMidY = sqY + tsSize / 2;
+      if (useCutSquare && tsSize >= 1.6) {
+        doc.setFont(fonts.serif, "normal");
+        doc.setFontSize(12);
+        doc.setTextColor(34, 31, 26);
+        doc.text(`${formatPdfMeasure(finished, unit)} finished`, sqMidX, sqMidY - 0.02, { align: "center" });
+        doc.setFont(fonts.mono, "bold");
+        doc.setFontSize(7.2);
+        doc.setTextColor(184, 77, 44);
+        doc.text(`${formatPdfMeasure(seam, unit)} seam allowance`, sqMidX, sqMidY + 0.16, { align: "center" });
+      } else {
+        doc.setFont(fonts.mono, "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(34, 31, 26);
+        doc.text(tsExpected, sqMidX, sqMidY + 0.03, { align: "center" });
+      }
 
-      const noteX = sqX + tsSize + 0.24;
-      const noteW = margin + contentW - noteX - 0.18;
-      doc.setFont(fonts.sans, "bold");
-      doc.setFontSize(9.2);
+      // Right side: Editorial Serif heading + airy bulleted verification checklist
+      const noteX = sqX + tsSize + 0.36;
+      const noteW = margin + contentW - noteX;
+      let ny = curY + 0.32;
+
+      doc.setFont(fonts.serif, "normal");
+      doc.setFontSize(13.5);
       doc.setTextColor(34, 31, 26);
       doc.text(
-        useCutSquare ? "1:1 Actual Cut-Square Template & Printer Scale Check" : "Printer Scale Verification Square",
+        useCutSquare ? "1:1 Cut Template & Scale Check" : "Printer Scale Verification",
         noteX,
-        curY + 0.28
+        ny
       );
+      ny += 0.22;
+
       doc.setFont(fonts.sans, "normal");
-      doc.setFontSize(8);
+      doc.setFontSize(8.4);
       doc.setTextColor(90, 82, 72);
-      const scaleTxt = doc.splitTextToSize(
-        (useCutSquare
-          ? `Measure this box with your quilting ruler before cutting fabric: the solid outer border must measure ${tsExpected}, and the dashed terracotta inner square shows the ${formatPdfMeasure(finished, unit)} finished size (${formatPdfMeasure(seam, unit)} seam allowance on all 4 sides). `
-          : `Measure this box before cutting: it must measure ${tsExpected}. `) +
-          `Print at 100% / "Actual size" (turn OFF "Fit to page"). Paper: ${isA4 ? "A4" : "US Letter"}.`,
+      const introCopy = doc.splitTextToSize(
+        useCutSquare
+          ? `This diagram is drawn at exact 1:1 scale so you can verify your printer settings with a quilting ruler—or trace it as a quick cutting template.`
+          : `Verify your printer scale with a ruler before cutting fabric so all pattern proportions remain accurate.`,
         noteW
       );
-      doc.text(scaleTxt, noteX, curY + 0.48);
+      doc.text(introCopy, noteX, ny);
+      ny += introCopy.length * 0.175 + 0.14;
+
+      const checks = [
+        `Print at 100% / "Actual Size" (turn OFF "Fit to Page") on ${isA4 ? "A4" : "US Letter"} paper.`,
+        useCutSquare
+          ? `Solid outer border must measure exactly ${tsExpected} \u00d7 ${tsExpected}.`
+          : `Square must measure exactly ${tsExpected} \u00d7 ${tsExpected}.`,
+        useCutSquare
+          ? `Dashed terracotta inner box shows the ${formatPdfMeasure(finished, unit)} finished square (${formatPdfMeasure(seam, unit)} seam margin).`
+          : `Pre-wash and press fabrics before rotary cutting if you normally do.`,
+      ];
+
+      checks.forEach((item) => {
+        const lines = doc.splitTextToSize(item, noteW - 0.24);
+        doc.setDrawColor(140, 132, 120);
+        doc.setLineWidth(0.01);
+        doc.roundedRect(noteX, ny - 0.09, 0.12, 0.12, 0.02, 0.02, "S");
+        doc.setFont(fonts.sans, "normal");
+        doc.setFontSize(8.2);
+        doc.setTextColor(34, 31, 26);
+        doc.text(lines, noteX + 0.2, ny);
+        ny += lines.length * 0.17 + 0.09;
+      });
 
       // ================= PAGE 3: 02 · FABRIC SHOPPING LIST & BUDGET =================
       doc.addPage();
@@ -2169,18 +2295,21 @@
         const estColRight = margin + contentW - 1.22;
         const linksColX = margin + contentW - 1.1;
 
-        doc.setFillColor(34, 31, 26);
-        doc.roundedRect(margin, shopY, contentW, 0.28, 0.04, 0.04, "F");
+        doc.setFillColor(239, 233, 223);
+        doc.rect(margin, shopY, contentW, 0.28, "F");
+        doc.setDrawColor(34, 31, 26);
+        doc.setLineWidth(0.012);
+        doc.line(margin, shopY + 0.28, margin + contentW, shopY + 0.28);
         doc.setFont(fonts.sans, "bold");
-        doc.setFontSize(7.5);
-        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(7.2);
+        doc.setTextColor(92, 84, 73);
         doc.text("CODE", margin + 0.08, shopY + 0.18);
         doc.text("CLOSEST SOLID MATCH (KONA & BELLA)", margin + 0.58, shopY + 0.18);
         doc.text("BUY QTY", margin + 3.28, shopY + 0.18);
         doc.text("UNIT PRICE", margin + 4.46, shopY + 0.18);
         doc.text("EST.", estColRight, shopY + 0.18, { align: "right" });
         doc.text("SHOP LINKS", linksColX, shopY + 0.18);
-        shopY += 0.32;
+        shopY += 0.31;
       };
 
       drawShoppingHeader(false);
