@@ -416,7 +416,7 @@
 
   // --- Square Decomposition ---
 
-  function computeSquareAverages() {
+  function computeSquareAverages(skipInputEl = null) {
     if (!state.samplePixels) return;
 
     const w = state.sampleWidth;
@@ -456,7 +456,7 @@
 
     squaresValue.textContent = `${cols} × ${rows}`;
     totalSquaresLabel.textContent = `${(cols * rows).toLocaleString()} squares`;
-    updateQuiltDimensions();
+    updateQuiltDimensions(skipInputEl);
   }
 
   function formatMeasure(value, unit) {
@@ -608,6 +608,22 @@
 
   // --- Rendering ---
 
+  // Fit the preview canvas cleanly inside the preview frame while preserving exact
+  // aspect ratio, so the top and right architectural dimension rulers hug it tightly.
+  function sizePreviewCanvas(canvasW, canvasH) {
+    if (!canvasW || !canvasH || !canvasFrame) return;
+    const isMobile = window.innerWidth <= 600;
+    const padX = isMobile ? 24 : 48;
+    const rulerSideW = 38;
+    const rulerTopH = 36;
+    const availW = Math.max(140, (canvasFrame.clientWidth || 640) - padX - rulerSideW);
+    const maxViewportH = Math.round(window.innerHeight * (isMobile ? 0.52 : 0.64));
+    const availH = Math.max(180, maxViewportH - rulerTopH);
+    const scale = Math.min(availW / canvasW, availH / canvasH);
+    quiltCanvas.style.width = `${Math.max(60, Math.round(canvasW * scale))}px`;
+    quiltCanvas.style.height = `${Math.max(60, Math.round(canvasH * scale))}px`;
+  }
+
   function renderQuilt() {
     if (!state.image || state.palette.length === 0) return;
 
@@ -624,6 +640,7 @@
       quiltCanvas.width = canvasW;
       quiltCanvas.height = canvasH;
     }
+    sizePreviewCanvas(canvasW, canvasH);
 
     if (state.showingOriginal) {
       const { sx, sy, sw, sh } = getCroppedSourceRect();
@@ -1166,8 +1183,15 @@
   // Sliders & toggles
   squaresSlider.addEventListener("input", () => {
     state.cols = Number(squaresSlider.value);
+    if (quiltPresetSelect) quiltPresetSelect.value = "custom";
     computeSquareAverages();
     renderQuilt();
+  });
+
+  window.addEventListener("resize", () => {
+    if (state.image && quiltCanvas.width > 0 && quiltCanvas.height > 0) {
+      sizePreviewCanvas(quiltCanvas.width, quiltCanvas.height);
+    }
   });
 
   seamLinesToggle.addEventListener("change", () => {
@@ -1185,58 +1209,70 @@
     }
   });
 
-  // Standard quilt size presets (Mini through King):
-  // Reshapes the preview via a non-destructive center crop to match the preset's exact proportions,
-  // recalculates the square grid & finished square size, and updates the live preview + rulers.
+  // Reshapes the preview image via a non-destructive center crop to match targetW × targetH,
+  // recalculates the quilt square grid (keeping the user's finished square size whenever
+  // possible so switching sizes visibly changes both the quilt's shape and square density),
+  // and re-renders the live preview + dimension rulers.
+  function applyTargetQuiltSize(targetW, targetH, skipInputEl = null) {
+    if (!state.image || !Number.isFinite(targetW) || !Number.isFinite(targetH)) return;
+    if (targetW < 2 || targetH < 2) return;
+
+    const imgAspect = state.image.naturalWidth / Math.max(1, state.image.naturalHeight);
+    const targetAspect = targetW / targetH;
+    const normRatio = targetAspect / imgAspect;
+    let cropW = 1;
+    let cropH = 1;
+    if (normRatio <= 1) {
+      cropW = Math.max(0.08, normRatio);
+    } else {
+      cropH = Math.max(0.08, 1 / normRatio);
+    }
+    state.crop = {
+      x: (1 - cropW) / 2,
+      y: (1 - cropH) / 2,
+      w: cropW,
+      h: cropH,
+    };
+
+    const minCols = Number(squaresSlider.min) || 4;
+    const maxCols = Number(squaresSlider.max) || 80;
+    const finished = Math.max(0.25, state.finishedSquareSize);
+    const idealCols = Math.round(targetW / finished);
+    const clampedCols = Math.max(minCols, Math.min(maxCols, idealCols));
+    state.cols = clampedCols;
+    squaresSlider.value = String(clampedCols);
+
+    if (idealCols < minCols || idealCols > maxCols) {
+      state.finishedSquareSize = Math.max(0.25, Math.round((targetW / clampedCols) * 100) / 100);
+    }
+
+    rebuildSampleBuffer();
+    computeSquareAverages(skipInputEl);
+    renderQuilt();
+  }
+
+  // Standard quilt size presets (Mini through King)
   if (quiltPresetSelect) {
     quiltPresetSelect.addEventListener("change", () => {
       const opt = quiltPresetSelect.selectedOptions[0];
       if (!opt || opt.value === "custom" || !state.image) return;
       const wIn = parseFloat(opt.dataset.w);
       const hIn = parseFloat(opt.dataset.h);
-      if (!Number.isFinite(wIn) || !Number.isFinite(hIn) || state.cols <= 0) return;
+      if (!Number.isFinite(wIn) || !Number.isFinite(hIn)) return;
 
       const scale = state.unit === "cm" ? 2.54 : 1;
-      const shortSide = Math.min(wIn, hIn) * scale;
-      const longSide = Math.max(wIn, hIn) * scale;
-
-      // Match preset orientation (landscape vs. portrait) to the uploaded photo's natural orientation
-      const imgAspect = state.image.naturalWidth / Math.max(1, state.image.naturalHeight);
-      const targetW = imgAspect >= 1 ? longSide : shortSide;
-      const targetH = imgAspect >= 1 ? shortSide : longSide;
-      const targetAspect = targetW / targetH;
-
-      // Center-crop the image non-destructively to the target quilt aspect ratio
-      const normRatio = targetAspect / imgAspect;
-      let cropW = 1;
-      let cropH = 1;
-      if (normRatio <= 1) {
-        cropW = Math.max(0.1, normRatio);
-      } else {
-        cropH = Math.max(0.1, 1 / normRatio);
-      }
-      state.crop = {
-        x: (1 - cropW) / 2,
-        y: (1 - cropH) / 2,
-        w: cropW,
-        h: cropH,
-      };
-
-      rebuildSampleBuffer();
-      state.finishedSquareSize = Math.max(0.25, Math.round((targetW / state.cols) * 100) / 100);
-      computeSquareAverages();
-      renderQuilt();
+      applyTargetQuiltSize(wIn * scale, hIn * scale);
     });
   }
 
-  // Direct finished quilt width/height editing recalculates finished square size, cut size, and all yardages
+  // Direct finished quilt width/height editing reshapes the preview and recalculates squares + yardages
   if (quiltWidthInput) {
     quiltWidthInput.addEventListener("input", () => {
-      const val = parseFloat(quiltWidthInput.value);
-      if (!Number.isNaN(val) && val > 0 && state.cols > 0) {
-        state.finishedSquareSize = Math.max(0.1, val / state.cols);
+      const targetW = parseFloat(quiltWidthInput.value);
+      const targetH = parseFloat(quiltHeightInput ? quiltHeightInput.value : "");
+      if (!Number.isNaN(targetW) && targetW >= 2 && !Number.isNaN(targetH) && targetH >= 2) {
         if (quiltPresetSelect) quiltPresetSelect.value = "custom";
-        updateQuiltDimensions(quiltWidthInput);
+        applyTargetQuiltSize(targetW, targetH, quiltWidthInput);
       }
     });
     quiltWidthInput.addEventListener("blur", () => updateQuiltDimensions());
@@ -1244,11 +1280,11 @@
 
   if (quiltHeightInput) {
     quiltHeightInput.addEventListener("input", () => {
-      const val = parseFloat(quiltHeightInput.value);
-      if (!Number.isNaN(val) && val > 0 && state.rows > 0) {
-        state.finishedSquareSize = Math.max(0.1, val / state.rows);
+      const targetW = parseFloat(quiltWidthInput ? quiltWidthInput.value : "");
+      const targetH = parseFloat(quiltHeightInput.value);
+      if (!Number.isNaN(targetW) && targetW >= 2 && !Number.isNaN(targetH) && targetH >= 2) {
         if (quiltPresetSelect) quiltPresetSelect.value = "custom";
-        updateQuiltDimensions(quiltHeightInput);
+        applyTargetQuiltSize(targetW, targetH, quiltHeightInput);
       }
     });
     quiltHeightInput.addEventListener("blur", () => updateQuiltDimensions());
