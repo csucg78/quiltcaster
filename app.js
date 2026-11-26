@@ -49,6 +49,8 @@
   const previewDimensions = document.getElementById("preview-dimensions");
   const previewRulerWidth = document.getElementById("preview-ruler-width");
   const previewRulerHeight = document.getElementById("preview-ruler-height");
+  const cropSubtitle = document.getElementById("crop-subtitle");
+  const cropQuiltSizeBtn = document.getElementById("crop-quilt-size-btn");
 
   const paletteSizeSlider = document.getElementById("palette-size-slider");
   const paletteSizeValue = document.getElementById("palette-size-value");
@@ -160,6 +162,8 @@
     unit: "in",
     finishedSquareSize: Number(finishedSizeInput.value) || 2.5,
     seamAllowance: Number(seamAllowanceInput.value) || 0.25,
+    // Optional locked target quilt size ({ w, h, label } in current unit) when a preset or W×H is chosen
+    targetQuiltSize: null,
   };
 
   // --- Color Utilities ---
@@ -918,6 +922,8 @@
           : derivePatternTitle(name);
       syncProjectTitle(initialTitle);
       state.crop = { x: 0, y: 0, w: 1, h: 1 };
+      state.targetQuiltSize = null;
+      if (quiltPresetSelect) quiltPresetSelect.value = "custom";
 
       if (restore && restore.settings && restore.settings.crop) {
         const rc = restore.settings.crop;
@@ -1183,9 +1189,14 @@
   // Sliders & toggles
   squaresSlider.addEventListener("input", () => {
     state.cols = Number(squaresSlider.value);
+    state.targetQuiltSize = null;
     if (quiltPresetSelect) quiltPresetSelect.value = "custom";
     computeSquareAverages();
     renderQuilt();
+    if (!cropStage.hidden) {
+      updateCropLockUI();
+      renderCropCanvas();
+    }
   });
 
   window.addEventListener("resize", () => {
@@ -1199,23 +1210,41 @@
     renderQuilt();
   });
 
-  // Physical sizing & seam allowance controls
+  // Physical sizing & seam allowance controls.
+  // Finished square size is treated as a fixed value unless it has to be changed.
+  // When a target quilt size is active, editing finished square size adjusts Quilt Squares (cols × rows)
+  // to preserve the specified quilt dimensions.
   finishedSizeInput.addEventListener("input", () => {
     const val = parseFloat(finishedSizeInput.value);
     if (!Number.isNaN(val) && val > 0) {
       state.finishedSquareSize = val;
-      if (quiltPresetSelect) quiltPresetSelect.value = "custom";
-      updateQuiltDimensions(finishedSizeInput);
+      if (state.targetQuiltSize && state.image) {
+        const minCols = Number(squaresSlider.min) || 4;
+        const maxCols = Number(squaresSlider.max) || 80;
+        const clampedCols = Math.max(minCols, Math.min(maxCols, Math.round(state.targetQuiltSize.w / val)));
+        state.cols = clampedCols;
+        squaresSlider.value = String(clampedCols);
+        computeSquareAverages(finishedSizeInput);
+        renderQuilt();
+        if (!cropStage.hidden) {
+          updateCropLockUI();
+          renderCropCanvas();
+        }
+      } else {
+        if (quiltPresetSelect) quiltPresetSelect.value = "custom";
+        updateQuiltDimensions(finishedSizeInput);
+      }
     }
   });
 
-  // Reshapes the preview image via a non-destructive center crop to match targetW × targetH,
-  // recalculates the quilt square grid (keeping the user's finished square size whenever
-  // possible so switching sizes visibly changes both the quilt's shape and square density),
-  // and re-renders the live preview + dimension rulers.
-  function applyTargetQuiltSize(targetW, targetH, skipInputEl = null) {
+  // Reshapes the quilt (and live Crop Image frame when in crop mode) to match targetW × targetH.
+  // Treats state.finishedSquareSize as fixed unless the required square count exceeds slider bounds,
+  // adjusting Quilt Squares (cols × rows) to fit the specified quilt dimensions.
+  function applyTargetQuiltSize(targetW, targetH, skipInputEl = null, label = null) {
     if (!state.image || !Number.isFinite(targetW) || !Number.isFinite(targetH)) return;
     if (targetW < 2 || targetH < 2) return;
+
+    state.targetQuiltSize = { w: targetW, h: targetH, label };
 
     const imgAspect = state.image.naturalWidth / Math.max(1, state.image.naturalHeight);
     const targetAspect = targetW / targetH;
@@ -1227,12 +1256,6 @@
     } else {
       cropH = Math.max(0.08, 1 / normRatio);
     }
-    state.crop = {
-      x: (1 - cropW) / 2,
-      y: (1 - cropH) / 2,
-      w: cropW,
-      h: cropH,
-    };
 
     const minCols = Number(squaresSlider.min) || 4;
     const maxCols = Number(squaresSlider.max) || 80;
@@ -1246,6 +1269,32 @@
       state.finishedSquareSize = Math.max(0.25, Math.round((targetW / clampedCols) * 100) / 100);
     }
 
+    // If the user is currently in Crop Image mode, reflect and lock the crop frame live on the photo!
+    if (!cropStage.hidden) {
+      cropAspect = targetAspect;
+      draftCrop = {
+        x: (1 - cropW) / 2,
+        y: (1 - cropH) / 2,
+        w: cropW,
+        h: cropH,
+      };
+      // Inset slightly when full-bleed so users have immediate room to drag/reposition
+      fitDraftCropToAspect(targetAspect, 0.86);
+      state.crop = { ...draftCrop };
+      rebuildSampleBuffer();
+      computeSquareAverages(skipInputEl);
+      updateCropLockUI("quilt");
+      renderCropCanvas();
+      return;
+    }
+
+    state.crop = {
+      x: (1 - cropW) / 2,
+      y: (1 - cropH) / 2,
+      w: cropW,
+      h: cropH,
+    };
+
     rebuildSampleBuffer();
     computeSquareAverages(skipInputEl);
     renderQuilt();
@@ -1255,24 +1304,33 @@
   if (quiltPresetSelect) {
     quiltPresetSelect.addEventListener("change", () => {
       const opt = quiltPresetSelect.selectedOptions[0];
-      if (!opt || opt.value === "custom" || !state.image) return;
+      if (!opt || !state.image) return;
+      if (opt.value === "custom") {
+        state.targetQuiltSize = null;
+        if (!cropStage.hidden) {
+          setCropAspectButton("free");
+          updateCropLockUI("free");
+        }
+        return;
+      }
       const wIn = parseFloat(opt.dataset.w);
       const hIn = parseFloat(opt.dataset.h);
       if (!Number.isFinite(wIn) || !Number.isFinite(hIn)) return;
 
       const scale = state.unit === "cm" ? 2.54 : 1;
-      applyTargetQuiltSize(wIn * scale, hIn * scale);
+      const presetName = opt.textContent.split("(")[0].trim();
+      applyTargetQuiltSize(wIn * scale, hIn * scale, null, presetName);
     });
   }
 
-  // Direct finished quilt width/height editing reshapes the preview and recalculates squares + yardages
+  // Direct finished quilt width/height editing reshapes the preview (or crop frame) and adjusts Quilt Squares
   if (quiltWidthInput) {
     quiltWidthInput.addEventListener("input", () => {
       const targetW = parseFloat(quiltWidthInput.value);
       const targetH = parseFloat(quiltHeightInput ? quiltHeightInput.value : "");
       if (!Number.isNaN(targetW) && targetW >= 2 && !Number.isNaN(targetH) && targetH >= 2) {
         if (quiltPresetSelect) quiltPresetSelect.value = "custom";
-        applyTargetQuiltSize(targetW, targetH, quiltWidthInput);
+        applyTargetQuiltSize(targetW, targetH, quiltWidthInput, null);
       }
     });
     quiltWidthInput.addEventListener("blur", () => updateQuiltDimensions());
@@ -1284,7 +1342,7 @@
       const targetH = parseFloat(quiltHeightInput.value);
       if (!Number.isNaN(targetW) && targetW >= 2 && !Number.isNaN(targetH) && targetH >= 2) {
         if (quiltPresetSelect) quiltPresetSelect.value = "custom";
-        applyTargetQuiltSize(targetW, targetH, quiltHeightInput);
+        applyTargetQuiltSize(targetW, targetH, quiltHeightInput, null);
       }
     });
     quiltHeightInput.addEventListener("blur", () => updateQuiltDimensions());
@@ -1307,6 +1365,13 @@
       state.unit = nextUnit;
       state.finishedSquareSize = Math.round(state.finishedSquareSize * factor * 100) / 100;
       state.seamAllowance = Math.round(state.seamAllowance * factor * 100) / 100;
+      if (state.targetQuiltSize) {
+        state.targetQuiltSize = {
+          ...state.targetQuiltSize,
+          w: state.targetQuiltSize.w * factor,
+          h: state.targetQuiltSize.h * factor,
+        };
+      }
 
       finishedSizeInput.value = String(state.finishedSquareSize);
       seamAllowanceInput.value = String(state.seamAllowance);
@@ -1319,6 +1384,10 @@
       unitBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.unit === nextUnit));
 
       updateQuiltDimensions();
+      if (!cropStage.hidden) {
+        updateCropLockUI();
+        renderCropCanvas();
+      }
     });
   });
 
@@ -3184,23 +3253,68 @@
   let cropDrag = null;
   let cropHoverMode = null; // Currently hovered handle or 'move'
 
+  function formatTargetSizeBadge() {
+    if (!state.targetQuiltSize) return "";
+    const dims = `${formatMeasure(state.cols * state.finishedSquareSize, state.unit)} × ${formatMeasure(
+      state.rows * state.finishedSquareSize,
+      state.unit
+    )}`;
+    return state.targetQuiltSize.label ? `${state.targetQuiltSize.label} · ${dims}` : dims;
+  }
+
+  function updateCropLockUI(activeAspect = null) {
+    const hasTarget = !!state.targetQuiltSize;
+    if (cropQuiltSizeBtn) {
+      cropQuiltSizeBtn.hidden = !hasTarget;
+      cropQuiltSizeBtn.textContent =
+        hasTarget && state.targetQuiltSize.label ? state.targetQuiltSize.label : "Quilt Size";
+    }
+    if (activeAspect !== null) {
+      cropAspectBtns.forEach((btn) => {
+        btn.classList.toggle("is-active", btn.dataset.aspect === activeAspect);
+      });
+    }
+    if (cropSubtitle) {
+      const isQuiltLocked =
+        hasTarget &&
+        cropAspect !== null &&
+        Math.abs(cropAspect - state.targetQuiltSize.w / state.targetQuiltSize.h) < 0.01;
+      if (isQuiltLocked) {
+        cropSubtitle.textContent = `Locked to ${formatTargetSizeBadge()} · drag to frame`;
+      } else {
+        cropSubtitle.textContent = "Drag handles or inside box to frame your quilt";
+      }
+    }
+  }
+
   function setCropAspectButton(aspectStr) {
+    if (aspectStr === "quilt" && state.targetQuiltSize && state.image) {
+      const ratio = state.targetQuiltSize.w / state.targetQuiltSize.h;
+      cropAspect = ratio;
+      fitDraftCropToAspect(ratio, 0.86);
+      updateCropLockUI("quilt");
+      renderCropCanvas();
+      return;
+    }
     cropAspectBtns.forEach((btn) => {
       btn.classList.toggle("is-active", btn.dataset.aspect === aspectStr);
     });
     if (aspectStr === "free") {
       cropAspect = null;
+      updateCropLockUI("free");
       renderCropCanvas();
       return;
     }
     const ratio = parseFloat(aspectStr);
     if (!Number.isFinite(ratio) || !state.image) {
       cropAspect = null;
+      updateCropLockUI("free");
       return;
     }
     cropAspect = ratio;
     // Cap preset selection to 78% of image so user can immediately reposition it in any direction
     fitDraftCropToAspect(ratio, 0.78);
+    updateCropLockUI(aspectStr);
     renderCropCanvas();
   }
 
@@ -3265,10 +3379,15 @@
     draftCrop = isFullUnmodified
       ? { x: 0.1, y: 0.1, w: 0.8, h: 0.8 }
       : { ...state.crop };
-    cropAspect = null;
-    cropAspectBtns.forEach((btn) => {
-      btn.classList.toggle("is-active", btn.dataset.aspect === "free");
-    });
+
+    if (state.targetQuiltSize) {
+      cropAspect = state.targetQuiltSize.w / state.targetQuiltSize.h;
+      fitDraftCropToAspect(cropAspect, isFullUnmodified ? 0.84 : 1);
+      updateCropLockUI("quilt");
+    } else {
+      cropAspect = null;
+      updateCropLockUI("free");
+    }
 
     const img = state.image;
     const maxDim = 820;
@@ -3298,6 +3417,18 @@
   function applyCrop() {
     if (!state.image) return;
     state.crop = { ...draftCrop };
+    // If the user unlocked or changed the crop aspect ratio away from the specified quilt size,
+    // clear the locked target size (while keeping finished square size fixed).
+    if (state.targetQuiltSize) {
+      const croppedW = state.crop.w * state.image.naturalWidth;
+      const croppedH = Math.max(1, state.crop.h * state.image.naturalHeight);
+      const actualAspect = croppedW / croppedH;
+      const targetAspect = state.targetQuiltSize.w / state.targetQuiltSize.h;
+      if (Math.abs(actualAspect - targetAspect) / targetAspect > 0.04) {
+        state.targetQuiltSize = null;
+        if (quiltPresetSelect) quiltPresetSelect.value = "custom";
+      }
+    }
     closeCropStage();
     rebuildSampleBuffer();
 
@@ -3375,6 +3506,41 @@
     cropCtx.strokeStyle = "#ffffff";
     cropCtx.lineWidth = 2.5;
     cropCtx.strokeRect(bx, by, bw, bh);
+
+    // Live quilt dimension pill on the crop frame so users see exact dimensions while framing
+    const cropRows = Math.max(1, Math.round((state.cols * bh) / Math.max(1, bw)));
+    const liveW = state.cols * state.finishedSquareSize;
+    const liveH = cropRows * state.finishedSquareSize;
+    const dimLabel =
+      state.targetQuiltSize &&
+      cropAspect !== null &&
+      Math.abs(cropAspect - state.targetQuiltSize.w / state.targetQuiltSize.h) < 0.01 &&
+      state.targetQuiltSize.label
+        ? `${state.targetQuiltSize.label} · ${formatMeasure(liveW, state.unit)} × ${formatMeasure(liveH, state.unit)}`
+        : `${formatMeasure(liveW, state.unit)} × ${formatMeasure(liveH, state.unit)}`;
+    cropCtx.save();
+    cropCtx.font = "600 12px 'JetBrains Mono', ui-monospace, monospace";
+    const textW = cropCtx.measureText(dimLabel).width;
+    const pillW = textW + 18;
+    const pillH = 22;
+    const pillX = Math.max(CROP_PAD + 4, Math.min(cw - CROP_PAD - pillW - 4, bx + (bw - pillW) / 2));
+    const pillY = by + 10 + pillH < by + bh - 24 ? by + 10 : Math.max(4, by - pillH - 6);
+    cropCtx.fillStyle = "rgba(34, 31, 26, 0.84)";
+    cropCtx.beginPath();
+    if (cropCtx.roundRect) {
+      cropCtx.roundRect(pillX, pillY, pillW, pillH, 11);
+    } else {
+      cropCtx.rect(pillX, pillY, pillW, pillH);
+    }
+    cropCtx.fill();
+    cropCtx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+    cropCtx.lineWidth = 1;
+    cropCtx.stroke();
+    cropCtx.fillStyle = "#ffffff";
+    cropCtx.textAlign = "center";
+    cropCtx.textBaseline = "middle";
+    cropCtx.fillText(dimLabel, pillX + pillW / 2, pillY + pillH / 2 + 0.5);
+    cropCtx.restore();
 
     // Center 4-way move handle badge (visual indicator that dragging inside repositions the box)
     const activeMode = cropDrag ? cropDrag.mode : cropHoverMode;
