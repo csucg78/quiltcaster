@@ -634,9 +634,9 @@
     const cols = state.cols;
     const rows = state.rows;
 
-    // Pick a crisp display square size so canvas stays sharp up to ~1000px
-    const maxDim = 960;
-    const squarePx = Math.max(8, Math.floor(maxDim / Math.max(cols, rows)));
+    // Pick a crisp display square size so canvas stays sharp even for dense King-sized grids
+    const maxDim = Math.max(cols, rows) > 120 ? 1200 : 960;
+    const squarePx = Math.max(5, Math.floor(maxDim / Math.max(cols, rows)));
     const canvasW = cols * squarePx;
     const canvasH = rows * squarePx;
 
@@ -971,14 +971,25 @@
     return Math.min(max, Math.max(min, n));
   }
 
+  const MIN_COLS = 4;
+  const DEFAULT_MAX_COLS = 80;
+  const HARD_MAX_COLS = 240;
+
+  // Dynamically expand (or restore) the Quilt Squares slider max so large quilts
+  // with small finished squares (e.g. King 108" with 1" squares -> 108 cols) are never clipped.
+  function syncSliderBoundsForCols(neededCols) {
+    const clamped = Math.max(MIN_COLS, Math.min(HARD_MAX_COLS, Math.round(neededCols)));
+    const nextMax = Math.max(DEFAULT_MAX_COLS, Math.min(HARD_MAX_COLS, Math.ceil(clamped / 10) * 10));
+    squaresSlider.max = String(nextMax);
+    squaresSlider.value = String(clamped);
+    return clamped;
+  }
+
   function applyRestoredSettings(saved) {
     const s = saved.settings || {};
 
     // Grid columns
-    state.cols = Math.round(
-      clampNumber(s.cols, Number(squaresSlider.min), Number(squaresSlider.max), state.cols)
-    );
-    squaresSlider.value = String(state.cols);
+    state.cols = syncSliderBoundsForCols(clampNumber(s.cols, MIN_COLS, HARD_MAX_COLS, state.cols));
 
     // Seam lines
     state.showSeamLines = s.showSeamLines !== false;
@@ -1213,17 +1224,14 @@
   // Physical sizing & seam allowance controls.
   // Finished square size is treated as a fixed value unless it has to be changed.
   // When a target quilt size is active, editing finished square size adjusts Quilt Squares (cols × rows)
-  // to preserve the specified quilt dimensions.
+  // and expands the slider range automatically to preserve the specified quilt dimensions.
   finishedSizeInput.addEventListener("input", () => {
     const val = parseFloat(finishedSizeInput.value);
     if (!Number.isNaN(val) && val > 0) {
       state.finishedSquareSize = val;
       if (state.targetQuiltSize && state.image) {
-        const minCols = Number(squaresSlider.min) || 4;
-        const maxCols = Number(squaresSlider.max) || 80;
-        const clampedCols = Math.max(minCols, Math.min(maxCols, Math.round(state.targetQuiltSize.w / val)));
-        state.cols = clampedCols;
-        squaresSlider.value = String(clampedCols);
+        const idealCols = Math.round(state.targetQuiltSize.w / val);
+        state.cols = syncSliderBoundsForCols(idealCols);
         computeSquareAverages(finishedSizeInput);
         renderQuilt();
         if (!cropStage.hidden) {
@@ -1238,8 +1246,8 @@
   });
 
   // Reshapes the quilt (and live Crop Image frame when in crop mode) to match targetW × targetH.
-  // Treats state.finishedSquareSize as fixed unless the required square count exceeds slider bounds,
-  // adjusting Quilt Squares (cols × rows) to fit the specified quilt dimensions.
+  // Treats state.finishedSquareSize as fixed unless the required square count exceeds hard bounds,
+  // dynamically expanding the Quilt Squares slider so large quilts with small squares fit exactly.
   function applyTargetQuiltSize(targetW, targetH, skipInputEl = null, label = null) {
     if (!state.image || !Number.isFinite(targetW) || !Number.isFinite(targetH)) return;
     if (targetW < 2 || targetH < 2) return;
@@ -1257,15 +1265,12 @@
       cropH = Math.max(0.08, 1 / normRatio);
     }
 
-    const minCols = Number(squaresSlider.min) || 4;
-    const maxCols = Number(squaresSlider.max) || 80;
     const finished = Math.max(0.25, state.finishedSquareSize);
     const idealCols = Math.round(targetW / finished);
-    const clampedCols = Math.max(minCols, Math.min(maxCols, idealCols));
+    const clampedCols = syncSliderBoundsForCols(idealCols);
     state.cols = clampedCols;
-    squaresSlider.value = String(clampedCols);
 
-    if (idealCols < minCols || idealCols > maxCols) {
+    if (idealCols < MIN_COLS || idealCols > HARD_MAX_COLS) {
       state.finishedSquareSize = Math.max(0.25, Math.round((targetW / clampedCols) * 100) / 100);
     }
 
