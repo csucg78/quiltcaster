@@ -31,6 +31,12 @@
   const topbarActions = document.getElementById("topbar-actions");
   const newImageBtn = document.getElementById("new-image-btn");
   const fileNameLabel = document.getElementById("file-name");
+  const undoBtn = document.getElementById("undo-btn");
+  const redoBtn = document.getElementById("redo-btn");
+  const historyMenuBtn = document.getElementById("history-menu-btn");
+  const historyPopover = document.getElementById("history-popover");
+  const historyList = document.getElementById("history-list");
+  const historyCount = document.getElementById("history-count");
 
   const squaresSlider = document.getElementById("squares-slider");
   const squaresValue = document.getElementById("squares-value");
@@ -54,7 +60,8 @@
   const paintClearBtn = document.getElementById("paint-clear-btn");
   const paintDoneBtn = document.getElementById("paint-done-btn");
 
-  const unitBtns = document.querySelectorAll(".unit-btn");
+  const regionBtns = document.querySelectorAll("[data-region]");
+  const unitModeBadge = document.getElementById("unit-mode-badge");
   const unitLabels = document.querySelectorAll("[data-unit-label]");
   const finishedSizeInput = document.getElementById("finished-size-input");
   const seamAllowanceInput = document.getElementById("seam-allowance-input");
@@ -83,21 +90,100 @@
   const assemblyModeSelect = document.getElementById("assembly-mode-select");
   const assemblyModeBtns = document.querySelectorAll(".segmented-btn[data-assembly]");
   const pageSizeSelect = document.getElementById("page-size-select");
-  const pageSizeBtns = document.querySelectorAll(".segmented-btn[data-page-size]");
   const savePatternBtn = document.getElementById("save-pattern-btn");
   const browseImageBtn = document.getElementById("browse-image-btn");
   const openPatternBtn = document.getElementById("open-pattern-btn");
   const openPatternBtnTop = document.getElementById("open-pattern-btn-top");
   const patternInput = document.getElementById("pattern-input");
 
-  function setPageSize(size) {
-    const valid = size === "a4" ? "a4" : "letter";
-    pageSizeSelect.value = valid;
-    pageSizeBtns.forEach((btn) => {
-      const active = btn.dataset.pageSize === valid;
+  const PRESET_LABELS = {
+    mini: { in: 'Mini · 12×12 to 20×20"', cm: "Mini · 30×30 to 50×50 cm" },
+    wall: { in: 'Wall Hanging · 20×20 to 40×40"', cm: "Wall Hanging · 50×50 to 100×100 cm" },
+    crib: { in: 'Crib · 36×52"', cm: "Crib · 91×132 cm" },
+    lap: { in: 'Lap · 40×50"', cm: "Lap · 102×127 cm" },
+    throw: { in: 'Throw · 50×65"', cm: "Throw · 127×165 cm" },
+    twin: { in: 'Twin · 68×86 to 70×90"', cm: "Twin · 173×218 to 178×229 cm" },
+    double: { in: 'Double · 80×90 to 85×95"', cm: "Double · 203×229 to 216×241 cm" },
+    queen: { in: 'Queen · 90×95 to 90×108"', cm: "Queen · 229×241 to 229×274 cm" },
+    king: { in: 'King · 108×95 to 110×108"', cm: "King · 274×241 to 279×274 cm" },
+  };
+
+  function updatePresetOptionLabels(unit) {
+    if (!quiltPresetSelect) return;
+    Array.from(quiltPresetSelect.options).forEach((opt) => {
+      const labels = PRESET_LABELS[opt.value];
+      if (labels) {
+        opt.textContent = unit === "cm" ? labels.cm : labels.in;
+      }
+    });
+  }
+
+  function syncRegionUI(unit) {
+    const isMetric = unit === "cm";
+    pageSizeSelect.value = isMetric ? "a4" : "letter";
+    regionBtns.forEach((btn) => {
+      const active = (isMetric && btn.dataset.region === "metric") || (!isMetric && btn.dataset.region === "us");
       btn.classList.toggle("is-active", active);
       btn.setAttribute("aria-checked", active ? "true" : "false");
     });
+    if (unitModeBadge) {
+      unitModeBadge.textContent = isMetric ? "cm · A4" : "in · Letter";
+    }
+    unitLabels.forEach((el) => {
+      el.textContent = unit;
+    });
+    updatePresetOptionLabels(unit);
+  }
+
+  function setPageSize(size) {
+    const valid = size === "a4" ? "a4" : "letter";
+    pageSizeSelect.value = valid;
+  }
+
+  // Switches global regional standard between US (in + Letter) and Metric / Rest of World (cm + A4)
+  function setGlobalRegionMode(mode, { convertValues = true, record = true, persist = true } = {}) {
+    const nextUnit = mode === "metric" ? "cm" : "in";
+    const changed = nextUnit !== state.unit;
+
+    if (changed && convertValues) {
+      const factor = nextUnit === "cm" ? 2.54 : 1 / 2.54;
+      state.finishedSquareSize = Math.round(state.finishedSquareSize * factor * 100) / 100;
+      state.seamAllowance = Math.round(state.seamAllowance * factor * 100) / 100;
+      if (state.targetQuiltSize) {
+        state.targetQuiltSize = {
+          ...state.targetQuiltSize,
+          w: state.targetQuiltSize.w * factor,
+          h: state.targetQuiltSize.h * factor,
+        };
+      }
+    }
+
+    state.unit = nextUnit;
+    finishedSizeInput.value = formatNumericInput(state.finishedSquareSize);
+    seamAllowanceInput.value = formatNumericInput(state.seamAllowance);
+    finishedSizeInput.step = nextUnit === "cm" ? "0.5" : "0.25";
+    seamAllowanceInput.step = nextUnit === "cm" ? "0.1" : "0.125";
+
+    syncRegionUI(nextUnit);
+
+    if (persist) {
+      try {
+        localStorage.setItem("quiltcaster-region", mode === "metric" ? "metric" : "us");
+      } catch {
+        // Ignore storage restrictions in private browsing
+      }
+    }
+
+    if (state.image) {
+      updateQuiltDimensions();
+      if (!cropStage.hidden) {
+        updateCropLockUI();
+        renderCropCanvas();
+      }
+      if (changed && record) {
+        recordHistory(nextUnit === "cm" ? "Mode: Metric (cm · A4)" : "Mode: US (in · Letter)");
+      }
+    }
   }
 
   function setAssemblyMode(mode) {
@@ -125,7 +211,11 @@
   }
 
   if (fileNameLabel) {
-    fileNameLabel.addEventListener("input", () => syncProjectTitle(fileNameLabel.value, fileNameLabel));
+    fileNameLabel.addEventListener("input", () => {
+      syncProjectTitle(fileNameLabel.value, fileNameLabel);
+      const clean = fileNameLabel.value.trim();
+      recordHistory(clean ? `Renamed to "${clean}"` : "Cleared title", "title");
+    });
   }
 
   function derivePatternTitle(filename) {
@@ -179,7 +269,7 @@
     squareAverages: [], // Array of [r, g, b] for each cell (length = cols * rows)
     hstSlashAverages: [], // Array of [tlR, tlG, tlB, brR, brG, brB] per cell (/ diagonal)
     hstBackslashAverages: [], // Array of [blR, blG, blB, trR, trG, trB] per cell (\ diagonal)
-    hstAxisContrasts: new Float64Array(0), // Max H/V half-split contrast per cell (distinguishes diagonal vs straight H/V edges)
+    cellDiagStats: [], // Exact per-cell internal RGB variance & counts for true pixel-level SSE & diagonal dominance
     hstEnabled: hstToggle ? hstToggle.checked : false,
     hstMode: "edges", // "edges" (Edge Refinement) | "ratio" (Overall Ratio)
     hstEdgeSensitivity: hstEdgeSlider ? Number(hstEdgeSlider.value) : 55,
@@ -210,6 +300,10 @@
     seamAllowance: Number(seamAllowanceInput.value) || 0.25,
     // Optional locked target quilt size ({ w, h, label } in current unit) when a preset or W×H is chosen
     targetQuiltSize: null,
+    // Persistent Undo/Redo stack (saved inside .quilt pattern files)
+    history: [],
+    historyIndex: -1,
+    isRestoringHistory: false,
   };
 
   // --- Color Utilities ---
@@ -480,35 +574,42 @@
     const sumR = new Float64Array(cellCount);
     const sumG = new Float64Array(cellCount);
     const sumB = new Float64Array(cellCount);
+    const sumSq = new Float64Array(cellCount);
     const counts = new Int32Array(cellCount);
 
     // Triangle accumulators for '/' (TL + BR) and '\' (BL + TR) Half-Square Triangles
     const tlR = new Float64Array(cellCount);
     const tlG = new Float64Array(cellCount);
     const tlB = new Float64Array(cellCount);
+    const tlSq = new Float64Array(cellCount);
     const tlN = new Int32Array(cellCount);
     const brR = new Float64Array(cellCount);
     const brG = new Float64Array(cellCount);
     const brB = new Float64Array(cellCount);
+    const brSq = new Float64Array(cellCount);
     const brN = new Int32Array(cellCount);
 
     const blR = new Float64Array(cellCount);
     const blG = new Float64Array(cellCount);
     const blB = new Float64Array(cellCount);
+    const blSq = new Float64Array(cellCount);
     const blN = new Int32Array(cellCount);
     const trR = new Float64Array(cellCount);
     const trG = new Float64Array(cellCount);
     const trB = new Float64Array(cellCount);
+    const trSq = new Float64Array(cellCount);
     const trN = new Int32Array(cellCount);
 
-    // Axis-aligned half accumulators (left vs right, top vs bottom) to separate true diagonal edges from straight H/V edges
+    // Axis-aligned half accumulators (left vs right, top vs bottom) for exact H/V vs diagonal variance comparison
     const leftR = new Float64Array(cellCount);
     const leftG = new Float64Array(cellCount);
     const leftB = new Float64Array(cellCount);
+    const leftSq = new Float64Array(cellCount);
     const leftN = new Int32Array(cellCount);
     const topR = new Float64Array(cellCount);
     const topG = new Float64Array(cellCount);
     const topB = new Float64Array(cellCount);
+    const topSq = new Float64Array(cellCount);
     const topN = new Int32Array(cellCount);
 
     const data = state.samplePixels;
@@ -525,23 +626,27 @@
         const rVal = data[pIdx];
         const gVal = data[pIdx + 1];
         const bVal = data[pIdx + 2];
+        const pSq = rVal * rVal + gVal * gVal + bVal * bVal;
         const cIdx = rowOffset + col;
 
         sumR[cIdx] += rVal;
         sumG[cIdx] += gVal;
         sumB[cIdx] += bVal;
+        sumSq[cIdx] += pSq;
         counts[cIdx]++;
 
         if (u < 0.5) {
           leftR[cIdx] += rVal;
           leftG[cIdx] += gVal;
           leftB[cIdx] += bVal;
+          leftSq[cIdx] += pSq;
           leftN[cIdx]++;
         }
         if (v < 0.5) {
           topR[cIdx] += rVal;
           topG[cIdx] += gVal;
           topB[cIdx] += bVal;
+          topSq[cIdx] += pSq;
           topN[cIdx]++;
         }
 
@@ -549,11 +654,13 @@
           tlR[cIdx] += rVal;
           tlG[cIdx] += gVal;
           tlB[cIdx] += bVal;
+          tlSq[cIdx] += pSq;
           tlN[cIdx]++;
         } else {
           brR[cIdx] += rVal;
           brG[cIdx] += gVal;
           brB[cIdx] += bVal;
+          brSq[cIdx] += pSq;
           brN[cIdx]++;
         }
 
@@ -561,20 +668,25 @@
           blR[cIdx] += rVal;
           blG[cIdx] += gVal;
           blB[cIdx] += bVal;
+          blSq[cIdx] += pSq;
           blN[cIdx]++;
         } else {
           trR[cIdx] += rVal;
           trG[cIdx] += gVal;
           trB[cIdx] += bVal;
+          trSq[cIdx] += pSq;
           trN[cIdx]++;
         }
       }
     }
 
+    const regionVar = (sr, sg, sb, sq, n) =>
+      n > 0 ? Math.max(0, sq - (sr * sr + sg * sg + sb * sb) / n) : 0;
+
     const averages = new Array(cellCount);
     const slashAvgs = new Array(cellCount);
     const backslashAvgs = new Array(cellCount);
-    const axisContrasts = new Float64Array(cellCount);
+    const cellDiagStats = new Array(cellCount);
     for (let i = 0; i < cellCount; i++) {
       const n = counts[i] || 1;
       const ar = sumR[i] / n;
@@ -600,44 +712,42 @@
         trN[i] > 0 ? trB[i] / trN[i] : ab,
       ];
 
+      const varWhole = regionVar(sumR[i], sumG[i], sumB[i], sumSq[i], n);
+      const varSlash =
+        regionVar(tlR[i], tlG[i], tlB[i], tlSq[i], tlN[i]) +
+        regionVar(brR[i], brG[i], brB[i], brSq[i], brN[i]);
+      const varBack =
+        regionVar(blR[i], blG[i], blB[i], blSq[i], blN[i]) +
+        regionVar(trR[i], trG[i], trB[i], trSq[i], trN[i]);
+
       const ln = leftN[i];
       const rn = n - ln;
-      const horizSplitContrast =
-        ln > 0 && rn > 0
-          ? Math.sqrt(
-              colorDistanceSq(
-                leftR[i] / ln,
-                leftG[i] / ln,
-                leftB[i] / ln,
-                (sumR[i] - leftR[i]) / rn,
-                (sumG[i] - leftG[i]) / rn,
-                (sumB[i] - leftB[i]) / rn
-              )
-            )
-          : 0;
+      const varVert =
+        regionVar(leftR[i], leftG[i], leftB[i], leftSq[i], ln) +
+        regionVar(sumR[i] - leftR[i], sumG[i] - leftG[i], sumB[i] - leftB[i], sumSq[i] - leftSq[i], rn);
 
       const tn = topN[i];
       const bn = n - tn;
-      const vertSplitContrast =
-        tn > 0 && bn > 0
-          ? Math.sqrt(
-              colorDistanceSq(
-                topR[i] / tn,
-                topG[i] / tn,
-                topB[i] / tn,
-                (sumR[i] - topR[i]) / bn,
-                (sumG[i] - topG[i]) / bn,
-                (sumB[i] - topB[i]) / bn
-              )
-            )
-          : 0;
+      const varHoriz =
+        regionVar(topR[i], topG[i], topB[i], topSq[i], tn) +
+        regionVar(sumR[i] - topR[i], sumG[i] - topG[i], sumB[i] - topB[i], sumSq[i] - topSq[i], bn);
 
-      axisContrasts[i] = Math.max(horizSplitContrast, vertSplitContrast);
+      cellDiagStats[i] = {
+        n,
+        nTL: tlN[i],
+        nBR: brN[i],
+        nBL: blN[i],
+        nTR: trN[i],
+        varWhole,
+        varSlash,
+        varBack,
+        minAxisVar: Math.min(varVert, varHoriz),
+      };
     }
     state.squareAverages = averages;
     state.hstSlashAverages = slashAvgs;
     state.hstBackslashAverages = backslashAvgs;
-    state.hstAxisContrasts = axisContrasts;
+    state.cellDiagStats = cellDiagStats;
 
     squaresValue.textContent = `${cols} × ${rows}`;
     updateUnitBreakdownLabels();
@@ -867,17 +977,25 @@
     return [i1, d1, i2, d2];
   }
 
-  // Evaluates the best distinct-color HST pair (pA !== pB) in O(K) time using top-2 palette candidates
+  // Evaluates the best distinct-color HST pair (pA !== pB) in O(K) time using top-2 palette candidates,
+  // also reporting `naturalDistinct` (true when the two halves naturally map to two DIFFERENT palette fabrics).
   function bestDistinctHstPair(rA, gA, bA, rB, gB, bB, palette) {
     const [a1, da1, a2, da2] = findTopTwoPalette(rA, gA, bA, palette);
     const [b1, db1, b2, db2] = findTopTwoPalette(rB, gB, bB, palette);
     if (a1 !== b1) {
-      return { pA: a1, pB: b1, err: 0.5 * (da1 + db1) };
+      return { pA: a1, pB: b1, err: 0.5 * (da1 + db1), naturalDistinct: true };
     }
     if (da1 + db2 <= da2 + db1) {
-      return { pA: a1, pB: b2, err: 0.5 * (da1 + db2) };
+      return { pA: a1, pB: b2, err: 0.5 * (da1 + db2), naturalDistinct: false };
     }
-    return { pA: a2, pB: b1, err: 0.5 * (da2 + db1) };
+    return { pA: a2, pB: b1, err: 0.5 * (da2 + db1), naturalDistinct: false };
+  }
+
+  function rgbDistSq(r1, g1, b1, r2, g2, b2) {
+    const dr = r1 - r2;
+    const dg = g1 - g2;
+    const db = b1 - b2;
+    return dr * dr + dg * dg + db * db;
   }
 
   // Samples the normalized 240×240 paint preference mask at cell (col, row).
@@ -983,75 +1101,88 @@
             backPairA[i] = back.pA;
             backPairB[i] = back.pB;
 
-            // Check 4-neighbor solid-square assignments to reward beveling true stair-step corners
-            const nCol = r > 0 ? sqBest[(r - 1) * cols + c] : -1;
-            const sCol = r + 1 < rows ? sqBest[(r + 1) * cols + c] : -1;
-            const wCol = c > 0 ? sqBest[r * cols + c - 1] : -1;
-            const eCol = c + 1 < cols ? sqBest[r * cols + c + 1] : -1;
+            // Exact pixel-level Sum of Squared Errors (SSE) via parallel-axis variance theorem:
+            //   SSE(region, pal) = internalVar(region) + N_region * ||mean(region) - pal||^2
+            // This compares solid squares vs '/' HST vs '\' HST at the actual pixel level —
+            // preventing horizontal ocean horizons, vertical lines, or smooth sky gradients
+            // from turning into nonsensical diagonal zigzags.
+            const st = state.cellDiagStats[i];
+            const avg = state.squareAverages[i];
+            const sqPal = palette[sqBest[i]];
+            const solidSSE = st.varWhole + st.n * rgbDistSq(avg[0], avg[1], avg[2], sqPal.r, sqPal.g, sqPal.b);
 
-            // '/' connects TL (pA) to N/W and BR (pB) to S/E
-            const slashSideA = (nCol === slash.pA ? 1 : 0) + (wCol === slash.pA ? 1 : 0);
-            const slashSideB = (sCol === slash.pB ? 1 : 0) + (eCol === slash.pB ? 1 : 0);
-            // '\' connects BL (pA) to S/W and TR (pB) to N/E
-            const backSideA = (sCol === back.pA ? 1 : 0) + (wCol === back.pA ? 1 : 0);
-            const backSideB = (nCol === back.pB ? 1 : 0) + (eCol === back.pB ? 1 : 0);
+            const sPalA = palette[slash.pA];
+            const sPalB = palette[slash.pB];
+            const slashSSE =
+              st.varSlash +
+              st.nTL * rgbDistSq(s[0], s[1], s[2], sPalA.r, sPalA.g, sPalA.b) +
+              st.nBR * rgbDistSq(s[3], s[4], s[5], sPalB.r, sPalB.g, sPalB.b);
 
-            const slashAdjErr = slash.err - (slashSideA + slashSideB) * 140;
-            const backAdjErr = back.err - (backSideA + backSideB) * 140;
+            const bPalA = palette[back.pA];
+            const bPalB = palette[back.pB];
+            const backSSE =
+              st.varBack +
+              st.nBL * rgbDistSq(b[0], b[1], b[2], bPalA.r, bPalA.g, bPalA.b) +
+              st.nTR * rgbDistSq(b[3], b[4], b[5], bPalB.r, bPalB.g, bPalB.b);
 
-            let chosenErr;
+            // Variance explained in source pixels by '/', '\', and best H/V axis split
+            const slashExplained = Math.max(0, st.varWhole - st.varSlash);
+            const backExplained = Math.max(0, st.varWhole - st.varBack);
+            const axisExplained = Math.max(0, st.varWhole - st.minAxisVar);
+
+            let hstSSE;
+            let diagExplained;
+            let otherDiagExplained;
+            let naturalDistinct;
             let rawDiagContrast;
-            let sideAMatches;
-            let sideBMatches;
-            if (slashAdjErr <= backAdjErr) {
+            if (slashSSE <= backSSE) {
               bestDiag[i] = 1; // '/' (TL + BR)
               bestPairA[i] = slash.pA;
               bestPairB[i] = slash.pB;
-              chosenErr = slash.err;
+              hstSSE = slashSSE;
+              diagExplained = slashExplained;
+              otherDiagExplained = backExplained;
+              naturalDistinct = slash.naturalDistinct;
               rawDiagContrast = Math.sqrt(colorDistanceSq(s[0], s[1], s[2], s[3], s[4], s[5]));
-              sideAMatches = slashSideA;
-              sideBMatches = slashSideB;
             } else {
               bestDiag[i] = 2; // '\' (BL + TR)
               bestPairA[i] = back.pA;
               bestPairB[i] = back.pB;
-              chosenErr = back.err;
+              hstSSE = backSSE;
+              diagExplained = backExplained;
+              otherDiagExplained = slashExplained;
+              naturalDistinct = back.naturalDistinct;
               rawDiagContrast = Math.sqrt(colorDistanceSq(b[0], b[1], b[2], b[3], b[4], b[5]));
-              sideAMatches = backSideA;
-              sideBMatches = backSideB;
             }
 
-            const sqErr = sqErrors[i];
-            const gain = sqErr - chosenErr;
-            const axisContrast = state.hstAxisContrasts[i] || 0;
-            const diagAdvantage = rawDiagContrast / Math.max(1, axisContrast);
-            const bothSidesConnect = sideAMatches >= 1 && sideBMatches >= 1;
-            const anySideConnects = sideAMatches + sideBMatches >= 1;
-            const surroundedUniform =
-              nCol === sqBest[i] && sCol === sqBest[i] && wCol === sqBest[i] && eCol === sqBest[i];
+            const sseGain = solidSSE - hstSSE;
+            const reductionRatio = solidSSE > 1 ? sseGain / solidSSE : 0;
 
-            // Determine whether a Half-Square Triangle genuinely helps smooth an edge at this cell:
-            //   1. Splitting diagonally reduces quantization error meaningfully over a solid square
-            //   2. Real cross-diagonal visual contrast (not flat sky/water)
-            //   3. Either angled across the diagonal OR bevels an L-corner between two neighbor regions
-            //   4. Connects to adjacent blocks (avoids isolated single-cell triangle confetti)
-            const meaningfulGain = gain > 0 && (chosenErr <= sqErr * 0.86 || gain >= 360);
-            const isAngledOrCorner = diagAdvantage >= 0.56 || (bothSidesConnect && gain >= 420);
-            const hasContinuity =
-              anySideConnects && (Math.sqrt(Math.max(0, gain)) >= 42 || bothSidesConnect);
-            const notInteriorSpeck = !surroundedUniform || Math.sqrt(Math.max(0, gain)) >= 95;
+            // True diagonal edge criteria:
+            //   1. Both triangle halves naturally map to two DIFFERENT palette fabrics (no fake splits on uniform areas)
+            //   2. Diagonal split explains at least as much image variance as a horizontal/vertical cut (rejects flat horizons!)
+            //   3. Chosen diagonal clearly beats the opposite diagonal (rejects ambiguous noise)
+            //   4. HST eliminates at least 14% of true per-pixel SSE with real visible contrast
+            const isTrueDiagonal =
+              naturalDistinct &&
+              diagExplained > 0 &&
+              diagExplained >= axisExplained * 0.92 &&
+              diagExplained >= otherDiagExplained * 1.2 &&
+              reductionRatio >= 0.14 &&
+              rawDiagContrast >= 24;
 
-            if (meaningfulGain && rawDiagContrast >= 22 && isAngledOrCorner && hasContinuity && notInteriorSpeck) {
+            if (isTrueDiagonal) {
               smoothableDiag[i] = bestDiag[i];
-              const diagFactor =
-                Math.max(0.25, Math.min(1.25, (diagAdvantage - 0.35) * 1.4)) *
-                (bothSidesConnect ? 1.18 : 1.0);
-              edgeScores[i] = Math.sqrt(gain) * diagFactor;
+              const rmsGain = Math.sqrt(Math.max(0, sseGain / Math.max(1, st.n)));
+              edgeScores[i] = reductionRatio * rmsGain;
             } else {
               smoothableDiag[i] = 0;
               edgeScores[i] = 0;
             }
-            rankScores[i] = gain >= 0 ? Math.sqrt(gain) : -Math.sqrt(-gain);
+            // For Mix Ratio mode, always rank genuine true diagonals highest, then by per-pixel SSE gain
+            rankScores[i] =
+              (isTrueDiagonal ? 1e6 : naturalDistinct ? 0 : -1e6) +
+              (sseGain >= 0 ? Math.sqrt(sseGain / Math.max(1, st.n)) : -Math.sqrt(-sseGain / Math.max(1, st.n)));
 
             if (!state.hstEnabled) continue;
 
@@ -1087,7 +1218,7 @@
         if (state.hstEnabled) {
           if (state.hstMode === "edges") {
             const t = (100 - state.hstEdgeSensitivity) / 100;
-            const minEdgeScore = 8 + 135 * t * t;
+            const minEdgeScore = 3 + 55 * t * t;
             for (let k = 0; k < autoCandidates.length; k++) {
               const idx = autoCandidates[k];
               if (smoothableDiag[idx] > 0 && edgeScores[idx] >= minEdgeScore) {
@@ -1404,6 +1535,7 @@
         nameSpan.textContent = updatedName;
         colorWrap.title = `Change Fabric ${code}: ${updatedName} (${newHex.toUpperCase()})`;
         renderQuilt();
+        recordHistory(`Edited Fabric ${code} (${updatedName})`, `swatch-${color.id}`);
       });
 
       removeBtn.addEventListener("click", () => {
@@ -1414,6 +1546,7 @@
         }
         renderPaletteSwatches();
         renderQuilt();
+        recordHistory(`Removed Fabric ${code} (${colorName})`);
       });
 
       colorWrap.appendChild(chipCode);
@@ -1563,6 +1696,12 @@
       computeSquareAverages();
       renderPaletteSwatches();
       renderQuilt();
+
+      if (restore) {
+        initHistoryFromSaved(restore);
+      } else {
+        resetHistory("Loaded image");
+      }
     };
 
     img.onerror = () => {
@@ -1681,19 +1820,23 @@
       setAssemblyMode(s.assemblyMode);
     }
 
-    // Units & sizing
-    const unit = s.unit === "cm" ? "cm" : "in";
+    // Units & global region mode (US: in + Letter, Metric: cm + A4)
+    // Backwards compatible with older .quilt files that only stored unit or pageSize
+    const resolvedRegion =
+      s.regionMode === "metric" || s.regionMode === "us"
+        ? s.regionMode
+        : s.unit === "cm" || (s.unit !== "in" && s.pageSize === "a4")
+          ? "metric"
+          : "us";
+    const unit = resolvedRegion === "metric" ? "cm" : "in";
     state.unit = unit;
     state.finishedSquareSize = clampNumber(s.finishedSquareSize, 0.1, 100, unit === "in" ? 2.5 : 6.5);
     state.seamAllowance = clampNumber(s.seamAllowance, 0, 10, unit === "in" ? 0.25 : 0.6);
-    finishedSizeInput.value = String(state.finishedSquareSize);
-    seamAllowanceInput.value = String(state.seamAllowance);
+    finishedSizeInput.value = formatNumericInput(state.finishedSquareSize);
+    seamAllowanceInput.value = formatNumericInput(state.seamAllowance);
     finishedSizeInput.step = unit === "cm" ? "0.5" : "0.25";
     seamAllowanceInput.step = unit === "cm" ? "0.1" : "0.125";
-    unitLabels.forEach((el) => {
-      el.textContent = unit;
-    });
-    unitBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.unit === unit));
+    syncRegionUI(unit);
 
     // Palette (exact colors, including any edits/deletions/additions)
     const savedPalette = Array.isArray(saved.palette) ? saved.palette : [];
@@ -1734,6 +1877,324 @@
     return c.toDataURL("image/jpeg", 0.92);
   }
 
+  // --- Persistent Undo / Redo History Stack ---
+
+  const MAX_HISTORY = 60;
+  let lastHistoryCoalesce = { key: null, time: 0 };
+
+  function captureSnapshot() {
+    return {
+      title: getCurrentProjectTitle(),
+      cols: state.cols,
+      showSeamLines: state.showSeamLines,
+      hstEnabled: state.hstEnabled,
+      hstMode: state.hstMode,
+      hstEdgeSensitivity: state.hstEdgeSensitivity,
+      hstRatio: state.hstRatio,
+      paintMaskRle: encodePaintMaskRle(),
+      unit: state.unit,
+      regionMode: state.unit === "cm" ? "metric" : "us",
+      finishedSquareSize: state.finishedSquareSize,
+      seamAllowance: state.seamAllowance,
+      preset: quiltPresetSelect ? quiltPresetSelect.value : "custom",
+      targetQuiltSize: state.targetQuiltSize ? { ...state.targetQuiltSize } : null,
+      crop: { ...state.crop },
+      palette: state.palette.map((c) => rgbToHex(c.r, c.g, c.b)),
+      assemblyMode: assemblyModeSelect ? assemblyModeSelect.value : "rows",
+      pageSize: pageSizeSelect ? pageSizeSelect.value : "letter",
+    };
+  }
+
+  function sanitizeSnapshot(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const resolvedRegion =
+      raw.regionMode === "metric" || raw.regionMode === "us"
+        ? raw.regionMode
+        : raw.unit === "cm" || (raw.unit !== "in" && raw.pageSize === "a4")
+          ? "metric"
+          : "us";
+    const unit = resolvedRegion === "metric" ? "cm" : "in";
+    const rc = raw.crop && typeof raw.crop === "object" ? raw.crop : {};
+    const cx = clampNumber(rc.x, 0, 0.95, 0);
+    const cy = clampNumber(rc.y, 0, 0.95, 0);
+    const cw = clampNumber(rc.w, 0.05, 1 - cx, 1 - cx);
+    const ch = clampNumber(rc.h, 0.05, 1 - cy, 1 - cy);
+    const palette = Array.isArray(raw.palette)
+      ? raw.palette.filter((hex) => typeof hex === "string" && /^#?[0-9a-f]{6}$/i.test(hex)).slice(0, 24)
+      : [];
+    let targetQuiltSize = null;
+    if (
+      raw.targetQuiltSize &&
+      typeof raw.targetQuiltSize === "object" &&
+      Number.isFinite(Number(raw.targetQuiltSize.w)) &&
+      Number.isFinite(Number(raw.targetQuiltSize.h))
+    ) {
+      targetQuiltSize = {
+        w: Number(raw.targetQuiltSize.w),
+        h: Number(raw.targetQuiltSize.h),
+        label: typeof raw.targetQuiltSize.label === "string" ? raw.targetQuiltSize.label : null,
+      };
+    }
+    return {
+      title: typeof raw.title === "string" ? raw.title.slice(0, 60) : getCurrentProjectTitle(),
+      cols: Math.round(clampNumber(raw.cols, MIN_COLS, HARD_MAX_COLS, state.cols)),
+      showSeamLines: raw.showSeamLines !== false,
+      hstEnabled: Boolean(raw.hstEnabled),
+      hstMode: raw.hstMode === "ratio" ? "ratio" : "edges",
+      hstEdgeSensitivity: Math.round(clampNumber(raw.hstEdgeSensitivity, 5, 100, 55)),
+      hstRatio: Math.round(clampNumber(raw.hstRatio, 0, 100, 35)),
+      paintMaskRle: Array.isArray(raw.paintMaskRle) ? raw.paintMaskRle : null,
+      unit,
+      finishedSquareSize: clampNumber(raw.finishedSquareSize, 0.1, 100, unit === "in" ? 2.5 : 6.5),
+      seamAllowance: clampNumber(raw.seamAllowance, 0, 10, unit === "in" ? 0.25 : 0.6),
+      preset: typeof raw.preset === "string" ? raw.preset : "custom",
+      targetQuiltSize,
+      crop: { x: cx, y: cy, w: cw, h: ch },
+      palette,
+      assemblyMode: raw.assemblyMode === "blocks" ? "blocks" : "rows",
+      pageSize: raw.pageSize === "a4" ? "a4" : "letter",
+    };
+  }
+
+  function restoreSnapshot(snap) {
+    if (!state.image || !snap) return;
+    state.isRestoringHistory = true;
+    try {
+      syncProjectTitle(snap.title);
+
+      const cropChanged =
+        Math.abs(state.crop.x - snap.crop.x) > 1e-5 ||
+        Math.abs(state.crop.y - snap.crop.y) > 1e-5 ||
+        Math.abs(state.crop.w - snap.crop.w) > 1e-5 ||
+        Math.abs(state.crop.h - snap.crop.h) > 1e-5;
+      state.crop = { ...snap.crop };
+      if (cropChanged) {
+        closeCropStage();
+        rebuildSampleBuffer();
+      } else {
+        updateCropButtonBadge();
+      }
+
+      state.cols = syncSliderBoundsForCols(snap.cols);
+      setSeamLinesVisible(snap.showSeamLines);
+      state.hstEnabled = snap.hstEnabled;
+      setHstPlacementMode(snap.hstMode);
+      state.hstEdgeSensitivity = snap.hstEdgeSensitivity;
+      state.hstRatio = snap.hstRatio;
+      if (hstToggle) hstToggle.checked = state.hstEnabled;
+      if (hstControls) hstControls.hidden = !state.hstEnabled;
+      if (hstEdgeSlider) hstEdgeSlider.value = String(state.hstEdgeSensitivity);
+      if (hstRatioSlider) hstRatioSlider.value = String(state.hstRatio);
+      decodePaintMaskRle(snap.paintMaskRle);
+
+      state.unit = snap.unit;
+      state.finishedSquareSize = snap.finishedSquareSize;
+      state.seamAllowance = snap.seamAllowance;
+      state.targetQuiltSize = snap.targetQuiltSize ? { ...snap.targetQuiltSize } : null;
+      if (quiltPresetSelect) quiltPresetSelect.value = snap.preset || "custom";
+
+      finishedSizeInput.value = formatNumericInput(state.finishedSquareSize);
+      seamAllowanceInput.value = formatNumericInput(state.seamAllowance);
+      finishedSizeInput.step = state.unit === "cm" ? "0.5" : "0.25";
+      seamAllowanceInput.step = state.unit === "cm" ? "0.1" : "0.125";
+      syncRegionUI(state.unit);
+
+      setAssemblyMode(snap.assemblyMode);
+
+      if (snap.palette && snap.palette.length > 0) {
+        state.palette = snap.palette.map((hex) => {
+          const [r, g, b] = hexToRgb(hex.startsWith("#") ? hex : `#${hex}`);
+          return { id: state.nextColorId++, r, g, b };
+        });
+        paletteSizeSlider.value = String(
+          clampNumber(state.palette.length, Number(paletteSizeSlider.min), Number(paletteSizeSlider.max), 8)
+        );
+      }
+
+      computeSquareAverages();
+      renderPaletteSwatches();
+      renderQuilt();
+    } finally {
+      state.isRestoringHistory = false;
+    }
+  }
+
+  function resetHistory(initialLabel = "Loaded image") {
+    lastHistoryCoalesce = { key: null, time: 0 };
+    state.history = [{ label: initialLabel, ts: Date.now(), snapshot: captureSnapshot() }];
+    state.historyIndex = 0;
+    renderHistoryUI();
+  }
+
+  // Restores saved history from newer .quilt files, and gracefully initializes a 1-step
+  // history for older .quilt files saved before undo/redo existed.
+  function initHistoryFromSaved(saved) {
+    lastHistoryCoalesce = { key: null, time: 0 };
+    const rawList = Array.isArray(saved && saved.history) ? saved.history : [];
+    const validEntries = [];
+    for (const entry of rawList) {
+      if (!entry || typeof entry !== "object") continue;
+      const snap = sanitizeSnapshot(entry.snapshot);
+      if (!snap) continue;
+      validEntries.push({
+        label: typeof entry.label === "string" && entry.label.trim() ? entry.label.trim().slice(0, 80) : "Edit",
+        ts: Number.isFinite(Number(entry.ts)) ? Number(entry.ts) : Date.now(),
+        snapshot: snap,
+      });
+    }
+    if (validEntries.length > 0) {
+      state.history = validEntries.slice(-MAX_HISTORY);
+      const savedIdx = Number(saved.historyIndex);
+      state.historyIndex = Number.isInteger(savedIdx)
+        ? Math.max(0, Math.min(state.history.length - 1, savedIdx))
+        : state.history.length - 1;
+      renderHistoryUI();
+    } else {
+      resetHistory("Opened saved pattern");
+    }
+  }
+
+  function recordHistory(label, coalesceKey = null) {
+    if (!state.image || state.isRestoringHistory) return;
+    const snap = captureSnapshot();
+    const snapJson = JSON.stringify(snap);
+
+    if (state.historyIndex >= 0 && state.history[state.historyIndex]) {
+      if (JSON.stringify(state.history[state.historyIndex].snapshot) === snapJson) {
+        return;
+      }
+    }
+
+    // Discard any undone future steps when a new edit branches off
+    if (state.historyIndex < state.history.length - 1) {
+      state.history = state.history.slice(0, state.historyIndex + 1);
+    }
+
+    const now = Date.now();
+    const canCoalesce =
+      coalesceKey &&
+      lastHistoryCoalesce.key === coalesceKey &&
+      now - lastHistoryCoalesce.time < 1200 &&
+      state.historyIndex > 0;
+
+    if (canCoalesce) {
+      state.history[state.historyIndex] = { label, ts: now, snapshot: snap };
+    } else {
+      state.history.push({ label, ts: now, snapshot: snap });
+      if (state.history.length > MAX_HISTORY) {
+        state.history.shift();
+      }
+      state.historyIndex = state.history.length - 1;
+    }
+
+    lastHistoryCoalesce = { key: coalesceKey, time: now };
+    renderHistoryUI();
+  }
+
+  function jumpToHistory(targetIndex) {
+    if (targetIndex < 0 || targetIndex >= state.history.length || targetIndex === state.historyIndex) return;
+    state.historyIndex = targetIndex;
+    lastHistoryCoalesce = { key: null, time: 0 };
+    restoreSnapshot(state.history[targetIndex].snapshot);
+    renderHistoryUI();
+  }
+
+  function undo() {
+    if (state.historyIndex > 0) {
+      jumpToHistory(state.historyIndex - 1);
+    }
+  }
+
+  function redo() {
+    if (state.historyIndex >= 0 && state.historyIndex < state.history.length - 1) {
+      jumpToHistory(state.historyIndex + 1);
+    }
+  }
+
+  function closeHistoryPopover() {
+    if (historyPopover) historyPopover.hidden = true;
+    if (historyMenuBtn) historyMenuBtn.setAttribute("aria-expanded", "false");
+  }
+
+  function renderHistoryUI() {
+    const canUndo = state.historyIndex > 0;
+    const canRedo = state.historyIndex >= 0 && state.historyIndex < state.history.length - 1;
+
+    if (undoBtn) {
+      undoBtn.disabled = !canUndo;
+      undoBtn.title = canUndo
+        ? `Undo: ${state.history[state.historyIndex].label} (Cmd/Ctrl + Z)`
+        : "Nothing to undo";
+    }
+    if (redoBtn) {
+      redoBtn.disabled = !canRedo;
+      redoBtn.title = canRedo
+        ? `Redo: ${state.history[state.historyIndex + 1].label} (Cmd/Ctrl + Shift + Z)`
+        : "Nothing to redo";
+    }
+    if (historyCount) {
+      const total = state.history.length;
+      historyCount.textContent = `${state.historyIndex + 1} / ${total}`;
+    }
+    if (historyList) {
+      historyList.innerHTML = "";
+      // Show newest actions at top of stack so users see their trail top-down
+      for (let i = state.history.length - 1; i >= 0; i--) {
+        const entry = state.history[i];
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "history-item";
+        btn.setAttribute("role", "option");
+        if (i === state.historyIndex) {
+          btn.classList.add("is-current");
+          btn.setAttribute("aria-selected", "true");
+        } else if (i > state.historyIndex) {
+          btn.classList.add("is-future");
+          btn.setAttribute("aria-selected", "false");
+        } else {
+          btn.setAttribute("aria-selected", "false");
+        }
+
+        const dot = document.createElement("span");
+        dot.className = "history-dot";
+        dot.setAttribute("aria-hidden", "true");
+
+        const labelSpan = document.createElement("span");
+        labelSpan.className = "history-item-label";
+        labelSpan.textContent = entry.label;
+
+        const idxSpan = document.createElement("span");
+        idxSpan.className = "history-item-idx";
+        idxSpan.textContent = `#${i + 1}`;
+
+        btn.appendChild(dot);
+        btn.appendChild(labelSpan);
+        btn.appendChild(idxSpan);
+        btn.addEventListener("click", () => {
+          jumpToHistory(i);
+          closeHistoryPopover();
+        });
+        historyList.appendChild(btn);
+      }
+    }
+  }
+
+  if (undoBtn) undoBtn.addEventListener("click", undo);
+  if (redoBtn) redoBtn.addEventListener("click", redo);
+  if (historyMenuBtn && historyPopover) {
+    historyMenuBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const willOpen = historyPopover.hidden;
+      historyPopover.hidden = !willOpen;
+      historyMenuBtn.setAttribute("aria-expanded", willOpen ? "true" : "false");
+    });
+    document.addEventListener("click", (e) => {
+      if (!historyPopover.hidden && !historyPopover.contains(e.target) && e.target !== historyMenuBtn) {
+        closeHistoryPopover();
+      }
+    });
+  }
+
   function savePattern() {
     if (!state.image) return;
 
@@ -1753,6 +2214,7 @@
         hstEdgeSensitivity: state.hstEdgeSensitivity,
         hstRatio: state.hstRatio,
         paintMaskRle: encodePaintMaskRle(),
+        regionMode: state.unit === "cm" ? "metric" : "us",
         unit: state.unit,
         finishedSquareSize: state.finishedSquareSize,
         seamAllowance: state.seamAllowance,
@@ -1761,6 +2223,8 @@
         crop: state.crop,
       },
       palette: state.palette.map((c) => rgbToHex(c.r, c.g, c.b)),
+      history: state.history,
+      historyIndex: state.historyIndex,
       image: getImageDataUrlForSave(),
     };
 
@@ -1889,6 +2353,7 @@
       updateCropLockUI();
       renderCropCanvas();
     }
+    recordHistory(`Grid: ${state.cols} × ${state.rows}`, "grid");
   });
 
   window.addEventListener("resize", () => {
@@ -1901,6 +2366,7 @@
     seamLinesBtn.addEventListener("click", () => {
       setSeamLinesVisible(!state.showSeamLines);
       renderQuilt();
+      recordHistory(state.showSeamLines ? "Show seam lines" : "Hide seam lines");
     });
   }
 
@@ -1910,6 +2376,7 @@
       if (hstControls) hstControls.hidden = !state.hstEnabled;
       updateQuiltDimensions();
       renderQuilt();
+      recordHistory(state.hstEnabled ? "Enabled half-square triangles" : "Disabled half-square triangles");
     });
   }
 
@@ -1917,6 +2384,9 @@
     btn.addEventListener("click", () => {
       setHstPlacementMode(btn.dataset.hstMode);
       renderQuilt();
+      recordHistory(
+        state.hstMode === "edges" ? "HST mode: Edge Refinement" : "HST mode: Mix Ratio"
+      );
     });
   });
 
@@ -1924,6 +2394,7 @@
     hstEdgeSlider.addEventListener("input", () => {
       state.hstEdgeSensitivity = Number(hstEdgeSlider.value);
       renderQuilt();
+      recordHistory(`Edge sensitivity: ${state.hstEdgeSensitivity}%`, "hst-edge");
     });
   }
 
@@ -1931,6 +2402,7 @@
     hstRatioSlider.addEventListener("input", () => {
       state.hstRatio = Number(hstRatioSlider.value);
       renderQuilt();
+      recordHistory(`Triangle mix: ${state.hstRatio}%`, "hst-ratio");
     });
   }
 
@@ -1955,6 +2427,7 @@
         if (quiltPresetSelect) quiltPresetSelect.value = "custom";
         updateQuiltDimensions(finishedSizeInput);
       }
+      recordHistory(`Finished unit: ${formatMeasure(val, state.unit)}`, "finished-unit");
     }
   });
 
@@ -2029,6 +2502,7 @@
           setCropAspectButton("free");
           updateCropLockUI("free");
         }
+        recordHistory("Size preset: Custom");
         return;
       }
       const wIn = parseFloat(opt.dataset.w);
@@ -2038,6 +2512,7 @@
       const scale = state.unit === "cm" ? 2.54 : 1;
       const presetName = opt.textContent.split("·")[0].split("(")[0].trim();
       applyTargetQuiltSize(wIn * scale, hIn * scale, null, presetName);
+      recordHistory(`Size preset: ${presetName}`);
     });
   }
 
@@ -2049,6 +2524,10 @@
       if (!Number.isNaN(targetW) && targetW >= 2 && !Number.isNaN(targetH) && targetH >= 2) {
         if (quiltPresetSelect) quiltPresetSelect.value = "custom";
         applyTargetQuiltSize(targetW, targetH, quiltWidthInput, null);
+        recordHistory(
+          `Quilt size: ${formatMeasure(state.cols * state.finishedSquareSize, state.unit)} × ${formatMeasure(state.rows * state.finishedSquareSize, state.unit)}`,
+          "quilt-size"
+        );
       }
     });
     quiltWidthInput.addEventListener("blur", () => updateQuiltDimensions());
@@ -2061,6 +2540,10 @@
       if (!Number.isNaN(targetW) && targetW >= 2 && !Number.isNaN(targetH) && targetH >= 2) {
         if (quiltPresetSelect) quiltPresetSelect.value = "custom";
         applyTargetQuiltSize(targetW, targetH, quiltHeightInput, null);
+        recordHistory(
+          `Quilt size: ${formatMeasure(state.cols * state.finishedSquareSize, state.unit)} × ${formatMeasure(state.rows * state.finishedSquareSize, state.unit)}`,
+          "quilt-size"
+        );
       }
     });
     quiltHeightInput.addEventListener("blur", () => updateQuiltDimensions());
@@ -2071,41 +2554,13 @@
     if (!Number.isNaN(val) && val >= 0) {
       state.seamAllowance = val;
       updateQuiltDimensions(seamAllowanceInput);
+      recordHistory(`Seam allowance: ${formatMeasure(val, state.unit)}`, "seam-allowance");
     }
   });
 
-  unitBtns.forEach((btn) => {
+  regionBtns.forEach((btn) => {
     btn.addEventListener("click", () => {
-      const nextUnit = btn.dataset.unit;
-      if (nextUnit === state.unit) return;
-
-      const factor = nextUnit === "cm" ? 2.54 : 1 / 2.54;
-      state.unit = nextUnit;
-      state.finishedSquareSize = Math.round(state.finishedSquareSize * factor * 100) / 100;
-      state.seamAllowance = Math.round(state.seamAllowance * factor * 100) / 100;
-      if (state.targetQuiltSize) {
-        state.targetQuiltSize = {
-          ...state.targetQuiltSize,
-          w: state.targetQuiltSize.w * factor,
-          h: state.targetQuiltSize.h * factor,
-        };
-      }
-
-      finishedSizeInput.value = String(state.finishedSquareSize);
-      seamAllowanceInput.value = String(state.seamAllowance);
-      finishedSizeInput.step = nextUnit === "cm" ? "0.5" : "0.25";
-      seamAllowanceInput.step = nextUnit === "cm" ? "0.1" : "0.125";
-
-      unitLabels.forEach((el) => {
-        el.textContent = nextUnit;
-      });
-      unitBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.unit === nextUnit));
-
-      updateQuiltDimensions();
-      if (!cropStage.hidden) {
-        updateCropLockUI();
-        renderCropCanvas();
-      }
+      setGlobalRegionMode(btn.dataset.region);
     });
   });
 
@@ -2115,6 +2570,7 @@
     state.palette = extractPalette(state.samplePixels, targetColors);
     renderPaletteSwatches();
     renderQuilt();
+    recordHistory(`Palette: ${targetColors} colors`, "palette-size");
   });
 
   resetPaletteBtn.addEventListener("click", () => {
@@ -2123,6 +2579,7 @@
     state.palette = extractPalette(state.samplePixels, targetColors);
     renderPaletteSwatches();
     renderQuilt();
+    recordHistory("Re-extracted palette");
   });
 
   addColorBtn.addEventListener("click", () => {
@@ -2138,6 +2595,7 @@
     }
     renderPaletteSwatches();
     renderQuilt();
+    recordHistory(`Added Fabric ${getFabricCode(state.palette.length - 1)}`);
   });
 
   // --- Boutique Printable PDF Pattern Booklet Export ---
@@ -4362,12 +4820,57 @@
     btn.addEventListener("click", () => setAssemblyMode(btn.dataset.assembly));
   });
 
-  // Default paper size: Letter for US/Canada, A4 elsewhere
-  const lang = (navigator.language || "en-US").toUpperCase();
-  setPageSize(/-(US|CA|MX|PH)$/.test(lang) || lang === "EN" ? "letter" : "a4");
-  pageSizeBtns.forEach((btn) => {
-    btn.addEventListener("click", () => setPageSize(btn.dataset.pageSize));
-  });
+  // Auto-detect default region mode from browser signals (IANA timezone + Intl locale + navigator.languages)
+  function detectDefaultRegionMode() {
+    const US_REGION_RE = /-(US|CA|MX|PH|PR|VI|GU|AS|MP|UM|LR|MM)(?:$|[-_])/i;
+    const US_TZ_RE =
+      /^(?:US\/|Pacific\/Honolulu$|America\/(?:New_York|Detroit|Kentucky\/|Indiana\/|Chicago|Menominee|North_Dakota\/|Denver|Boise|Phoenix|Los_Angeles|Anchorage|Juneau|Sitka|Metlakatla|Yakutat|Nome|Adak|Puerto_Rico|Toronto|Vancouver|Edmonton|Winnipeg|Halifax|St_Johns|Regina|Mexico_City|Monterrey|Tijuana|Cancun)$)/;
+
+    let intlLocale = "";
+    let timeZone = "";
+    try {
+      const opts = Intl.DateTimeFormat().resolvedOptions();
+      intlLocale = String(opts.locale || "");
+      timeZone = String(opts.timeZone || "");
+    } catch {
+      // Ignore if Intl is unavailable
+    }
+
+    // 1. Timezone is the strongest physical-location signal (even if browser UI language is en-US)
+    if (timeZone) {
+      if (US_TZ_RE.test(timeZone)) return "us";
+      if (/^(?:Europe|Asia|Australia|Africa|Antarctica|Indian)\//.test(timeZone)) return "metric";
+      if (/^Pacific\//.test(timeZone) && timeZone !== "Pacific/Honolulu") return "metric";
+      if (/^America\//.test(timeZone)) return "metric";
+    }
+
+    // 2. Fall back to Intl locale and navigator.languages / navigator.language
+    const locales = [
+      intlLocale,
+      ...(Array.isArray(navigator.languages) ? navigator.languages : []),
+      navigator.language || "",
+    ].filter(Boolean);
+
+    for (const loc of locales) {
+      if (US_REGION_RE.test(loc)) return "us";
+      if (/-[A-Z]{2}(?:$|[-_])/i.test(loc)) return "metric";
+    }
+
+    return "us";
+  }
+
+  // Global default: remember explicit user choice in localStorage, otherwise auto-detect from browser
+  let initialRegion = null;
+  try {
+    const savedRegion = localStorage.getItem("quiltcaster-region");
+    if (savedRegion === "us" || savedRegion === "metric") initialRegion = savedRegion;
+  } catch {
+    // Ignore storage restrictions
+  }
+  if (!initialRegion) {
+    initialRegion = detectDefaultRegionMode();
+  }
+  setGlobalRegionMode(initialRegion, { convertValues: initialRegion === "metric", record: false, persist: false });
 
   // Save / open patterns
   savePatternBtn.addEventListener("click", savePattern);
@@ -4389,11 +4892,30 @@
     patternInput.value = "";
   });
 
-  // Keyboard shortcut: Cmd/Ctrl + S saves the current pattern
+  // Keyboard shortcuts: Cmd/Ctrl + S (Save), Cmd/Ctrl + Z (Undo), Cmd/Ctrl + Shift + Z / Ctrl + Y (Redo), Escape (Close popover)
   window.addEventListener("keydown", (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s" && state.image) {
+    if (e.key === "Escape") {
+      closeHistoryPopover();
+      return;
+    }
+    if (!state.image) return;
+    const mod = e.metaKey || e.ctrlKey;
+    if (!mod) return;
+    const key = e.key.toLowerCase();
+    if (key === "s") {
       e.preventDefault();
       savePattern();
+      return;
+    }
+    // Let native text-input undo/redo work normally when typing in an input field
+    const tag = document.activeElement ? document.activeElement.tagName : "";
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    if (key === "z" && !e.shiftKey) {
+      e.preventDefault();
+      undo();
+    } else if ((key === "z" && e.shiftKey) || key === "y") {
+      e.preventDefault();
+      redo();
     }
   });
 
@@ -4593,6 +5115,7 @@
     computeSquareAverages();
     renderPaletteSwatches();
     renderQuilt();
+    recordHistory("Applied crop");
   }
 
   function getCropHandles(bx, by, bw, bh) {
@@ -5136,9 +5659,6 @@
     const rows = state.rows;
     const half = Math.floor(state.paintSize / 2);
     const prefVal = state.paintBrush === "hst" ? 2 : state.paintBrush === "square" ? 1 : 0;
-    if (prefVal === 2) {
-      ensureHstEnabledForTrianglePaint();
-    }
     let changed = false;
     for (let r = centerRow - half; r <= centerRow + half; r++) {
       for (let c = centerCol - half; c <= centerCol + half; c++) {
@@ -5151,6 +5671,9 @@
           changed = true;
         }
       }
+    }
+    if (changed && prefVal === 2) {
+      ensureHstEnabledForTrianglePaint();
     }
     return changed;
   }
@@ -5252,7 +5775,17 @@
       const flippedPref = stroke.initialDiag === 1 ? 4 : 3;
       writeCellPaintPref(stroke.startCol, stroke.startRow, state.cols, state.rows, flippedPref);
       renderQuilt();
+      recordHistory("Flipped △ diagonal");
+      return;
     }
+
+    const paintLabel =
+      state.paintBrush === "hst"
+        ? "Triangle Paint stroke"
+        : state.paintBrush === "square"
+          ? "Painted □ Squares"
+          : "Erased paint (Auto)";
+    recordHistory(paintLabel);
   };
 
   quiltCanvas.addEventListener("pointerup", finishPaintStroke);
@@ -5277,6 +5810,7 @@
     paintClearBtn.addEventListener("click", () => {
       state.paintMask.fill(0);
       renderQuilt();
+      recordHistory("Cleared painted areas");
     });
   }
   paintBrushBtns.forEach((btn) => {

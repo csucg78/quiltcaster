@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="64x64" href="favicon-v2.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-v2.png" />
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon-v2.png" />
-  <link rel="manifest" href="site.webmanifest?v=29" />
-  <link rel="stylesheet" href="styles.css?v=28" />
+  <link rel="manifest" href="site.webmanifest?v=42" />
+  <link rel="stylesheet" href="styles.css?v=42" />
 </head>
 <body>
   <header class="topbar">
@@ -20,36 +20,72 @@
       <img class="brand-icon" src="apple-touch-icon-v2.png" width="38" height="38" alt="" />
       <div>
         <h1>Miriam's Quiltcaster</h1>
-        <p class="tagline">Turn any image into a square-grid quilt palette</p>
+        <p class="tagline">Turn your image into a quilt.</p>
       </div>
     </div>
-    <div class="topbar-actions" id="topbar-actions" hidden>
-      <label class="project-chip" title="Click to rename project">
-        <input
-          type="text"
-          class="project-name-input"
-          id="file-name"
-          value="Untitled Quilt"
-          aria-label="Project title"
-          placeholder="Untitled Quilt"
-          maxlength="60"
-        />
-        <svg class="icon icon-edit" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-      </label>
-      <span class="topbar-divider" aria-hidden="true"></span>
-      <div class="action-group" role="group" aria-label="Pattern file actions">
-        <button type="button" class="btn btn-ghost" id="new-image-btn" title="Start from a different picture">
-          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
-          New Image
-        </button>
-        <button type="button" class="btn btn-ghost" id="open-pattern-btn-top" title="Open a saved .quilt pattern">
-          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-          Open
-        </button>
-        <button type="button" class="btn btn-ghost" id="save-pattern-btn" title="Save this pattern as a .quilt file (Cmd/Ctrl + S)">
-          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
-          Save
-        </button>
+    <div class="topbar-right">
+      <div class="topbar-actions" id="topbar-actions" hidden>
+        <label class="project-chip" title="Click to rename project">
+          <input
+            type="text"
+            class="project-name-input"
+            id="file-name"
+            value="Untitled Quilt"
+            aria-label="Project title"
+            placeholder="Untitled Quilt"
+            maxlength="60"
+          />
+          <svg class="icon icon-edit" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+        </label>
+        <span class="topbar-divider" aria-hidden="true"></span>
+        <div class="history-group" id="history-group" role="group" aria-label="Undo and redo history">
+          <button type="button" class="history-btn" id="undo-btn" title="Undo (Cmd/Ctrl + Z)" aria-label="Undo" disabled>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/></svg>
+          </button>
+          <button type="button" class="history-btn" id="redo-btn" title="Redo (Cmd/Ctrl + Shift + Z)" aria-label="Redo" disabled>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13"/></svg>
+          </button>
+          <div class="history-menu-wrap">
+            <button
+              type="button"
+              class="history-btn history-caret-btn"
+              id="history-menu-btn"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+              aria-label="Edit history"
+              title="Show edit history stack"
+            >
+              <svg class="icon icon-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div class="history-popover" id="history-popover" role="listbox" aria-label="Edit history stack" hidden>
+              <div class="history-popover-header">
+                <span>Edit History</span>
+                <span class="history-count" id="history-count">1 step</span>
+              </div>
+              <div class="history-list" id="history-list"></div>
+            </div>
+          </div>
+        </div>
+        <span class="topbar-divider" aria-hidden="true"></span>
+        <div class="action-group" role="group" aria-label="Pattern file actions">
+          <button type="button" class="btn btn-ghost" id="new-image-btn" title="Start from a different picture">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+            New Image
+          </button>
+          <button type="button" class="btn btn-ghost" id="open-pattern-btn-top" title="Open a saved .quilt pattern">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            Open
+          </button>
+          <button type="button" class="btn btn-ghost" id="save-pattern-btn" title="Save this pattern as a .quilt file (Cmd/Ctrl + S)">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+            Save
+          </button>
+        </div>
+        <span class="topbar-divider" aria-hidden="true"></span>
+      </div>
+      <div class="segmented region-toggle" role="radiogroup" aria-label="Units and paper standard">
+        <button type="button" class="segmented-btn is-active" data-region="us" role="radio" aria-checked="true" title="US mode: Inches, Yards &amp; Letter paper">US · in</button>
+        <button type="button" class="segmented-btn" data-region="metric" role="radio" aria-checked="false" title="Metric mode (Rest of World): Centimeters, Meters &amp; A4 paper">Metric · cm</button>
       </div>
     </div>
   </header>
@@ -62,25 +98,51 @@
         id="drop-zone"
         role="button"
         tabindex="0"
-        aria-label="Drop an image here or click to browse"
+        aria-label="Drop an image here or click to choose an image"
       >
-        <div class="drop-icon" aria-hidden="true">
-          <img class="drop-hero-icon" src="icon-192-v2.png" width="76" height="76" alt="" />
+        <div class="drop-stitch-frame" aria-hidden="true"></div>
+
+        <div class="drop-content">
+          <div class="drop-icon" aria-hidden="true">
+            <div class="drop-medallion">
+              <img class="drop-hero-icon" src="icon-192-v2.png" width="76" height="76" alt="" />
+            </div>
+          </div>
+
+          <span class="drop-eyebrow">QUILT PATTERN STUDIO</span>
+          <h2>Drop a photo to begin</h2>
+
+          <div class="drop-actions">
+            <button type="button" class="btn btn-primary btn-landing" id="browse-image-btn">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+              Choose an Image
+            </button>
+            <button type="button" class="btn btn-secondary btn-landing" id="open-pattern-btn">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              Open .quilt Pattern
+            </button>
+          </div>
+
+          <div class="drop-steps" aria-hidden="true">
+            <div class="drop-step">
+              <span class="drop-step-num">01</span>
+              <span class="drop-step-text">Squares &amp; HSTs</span>
+            </div>
+            <span class="drop-step-sep"></span>
+            <div class="drop-step">
+              <span class="drop-step-num">02</span>
+              <span class="drop-step-text">Kona &amp; Bella Palette</span>
+            </div>
+            <span class="drop-step-sep"></span>
+            <div class="drop-step">
+              <span class="drop-step-num">03</span>
+              <span class="drop-step-text">Printable PDF Pattern</span>
+            </div>
+          </div>
         </div>
-        <h2>Drop an image to cast your quilt</h2>
-        <p>Drag &amp; drop a PNG, JPG, WebP, or GIF here — or choose one of the two options below:</p>
-        <div class="drop-actions">
-          <button type="button" class="btn btn-primary btn-landing" id="browse-image-btn">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-            Browse for an Image
-          </button>
-          <button type="button" class="btn btn-secondary btn-landing" id="open-pattern-btn">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-            Open a Saved Pattern (.quilt)
-          </button>
-        </div>
-        <span class="drop-hint">Processed 100% locally in your browser</span>
       </div>
+
+      <p class="drop-privacy-note">100% private — processed locally in your browser</p>
       <p class="error-banner" id="error-banner" role="alert" hidden></p>
     </section>
 
@@ -159,18 +221,15 @@
           </div>
         </div>
 
-        <div class="control-card">
+        <div class="control-card quilt-dimensions-card">
           <div class="control-header">
             <label for="quilt-preset-select">Quilt Dimensions</label>
-            <div class="unit-toggle" role="group" aria-label="Measurement units">
-              <button type="button" class="unit-btn is-active" data-unit="in">in</button>
-              <button type="button" class="unit-btn" data-unit="cm">cm</button>
-            </div>
+            <span class="control-value region-mode-badge" id="unit-mode-badge">in · Letter</span>
           </div>
 
           <div class="quilt-size-group">
             <select id="quilt-preset-select" class="quilt-preset-select" aria-label="Standard quilt size preset">
-              <option value="custom">Custom dimensions</option>
+              <option value="custom">Custom size</option>
               <option value="mini" data-w="16" data-h="16">Mini · 12×12 to 20×20"</option>
               <option value="wall" data-w="30" data-h="30">Wall Hanging · 20×20 to 40×40"</option>
               <option value="crib" data-w="36" data-h="52">Crib · 36×52"</option>
@@ -212,8 +271,14 @@
               </div>
             </div>
           </div>
+        </div>
 
-          <div class="sizing-inputs sizing-inputs-spaced">
+        <div class="control-card cutting-units-card">
+          <div class="control-header">
+            <label for="finished-size-input">Cutting Units</label>
+          </div>
+
+          <div class="cutting-units-row">
             <label class="field">
               <span>Finished unit</span>
               <div class="input-with-unit">
@@ -243,16 +308,16 @@
                 <span class="unit-suffix" data-unit-label>in</span>
               </div>
             </label>
-          </div>
 
-          <div class="dimensions-summary dimensions-summary-single" id="dimensions-summary">
-            <div class="dim-stat dim-stat-inline">
-              <span class="dim-label">Cut square</span>
-              <strong class="dim-value" id="cut-square-value">3"</strong>
-            </div>
-            <div class="dim-stat dim-stat-inline" id="hst-cut-stat" hidden>
-              <span class="dim-label">HST starter</span>
-              <strong class="dim-value" id="hst-cut-square-value">3 3/8"</strong>
+            <div class="dimensions-summary dimensions-summary-single" id="dimensions-summary">
+              <div class="dim-stat dim-stat-inline">
+                <span class="dim-label">Cut square</span>
+                <strong class="dim-value" id="cut-square-value">3"</strong>
+              </div>
+              <div class="dim-stat dim-stat-inline" id="hst-cut-stat" hidden>
+                <span class="dim-label">HST starter</span>
+                <strong class="dim-value" id="hst-cut-square-value">3 3/8"</strong>
+              </div>
             </div>
           </div>
           <p class="wof-note" id="wof-note">Yardage assumes 42" WOF + 10% buffer</p>
@@ -335,7 +400,7 @@
             <div class="paint-toolbar-group">
               <span class="paint-group-label">Brush</span>
               <div class="segmented" role="radiogroup" aria-label="Shape brush mode">
-                <button type="button" class="segmented-btn is-active" data-paint-brush="hst" role="radio" aria-checked="true" title="Smooth stepped edges in brushed area using Half-Square Triangles (1×1 click flips / ↔ \)">△ Smooth Edges</button>
+                <button type="button" class="segmented-btn is-active" data-paint-brush="hst" role="radio" aria-checked="true" title="Paint Half-Square Triangles along stepped edges in brushed area (1×1 click flips / ↔ \)">△ Triangle Paint</button>
                 <button type="button" class="segmented-btn" data-paint-brush="square" role="radio" aria-checked="false" title="Force solid squares in brushed area">□ Squares</button>
                 <button type="button" class="segmented-btn" data-paint-brush="auto" role="radio" aria-checked="false" title="Restore brushed area to global settings">↺ Auto</button>
               </div>
@@ -383,13 +448,6 @@
                 <button type="button" class="segmented-btn" data-assembly="blocks" role="radio" aria-checked="false">8×8 Blocks</button>
               </div>
               <input type="hidden" id="assembly-mode-select" value="rows" />
-            </div>
-            <div class="export-setting-item">
-              <span class="export-setting-label">Paper</span>
-              <div class="segmented" role="radiogroup" aria-label="Paper size">
-                <button type="button" class="segmented-btn" data-page-size="letter" role="radio">Letter</button>
-                <button type="button" class="segmented-btn" data-page-size="a4" role="radio">A4</button>
-              </div>
               <input type="hidden" id="page-size-select" value="letter" />
             </div>
           </div>
@@ -453,6 +511,6 @@
   </main>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-  <script src="app.js?v=29" defer></script>
+  <script src="app.js?v=42" defer></script>
 </body>
 </html>

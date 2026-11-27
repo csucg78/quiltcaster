@@ -1,7 +1,7 @@
 {
   "name": "Miriam's Quiltcaster",
   "short_name": "Quiltcaster",
-  "description": "Turn any image into a square-grid quilt palette",
+  "description": "Turn your image into a quilt.",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#f6f2eb",
