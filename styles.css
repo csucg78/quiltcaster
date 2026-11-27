@@ -1399,9 +1399,14 @@ input[type="range"]::-moz-range-thumb {
   transition: background-color 0.14s ease, border-color 0.14s ease;
 }
 
-.swatch-item:hover {
+.swatch-item:hover,
+.swatch-item.is-editing {
   background: #f8f5ef;
   border-color: var(--border);
+}
+
+.swatch-item.is-editing {
+  border-color: var(--accent);
 }
 
 .swatch-color-wrap {
@@ -1416,6 +1421,224 @@ input[type="range"]::-moz-range-thumb {
   overflow: hidden;
   flex-shrink: 0;
   cursor: pointer;
+  padding: 0;
+  background-size: cover;
+  background-position: center;
+}
+
+.swatch-color-wrap.has-pattern .swatch-chip-code {
+  background: rgba(28, 25, 20, 0.72);
+  color: #ffffff !important;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 0.62rem;
+}
+
+/* Swatch Editor Popover */
+.swatch-popover {
+  position: fixed;
+  z-index: 60;
+  width: 264px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 14px 36px rgba(34, 31, 26, 0.16), 0 2px 8px rgba(34, 31, 26, 0.06);
+  overflow: hidden;
+}
+
+.swatch-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.58rem 0.78rem;
+  border-bottom: 1px solid var(--border);
+  background: #fcfaf7;
+}
+
+.swatch-popover-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+
+.swatch-popover-close {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.05rem;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.swatch-popover-close:hover {
+  background: #efe8dd;
+  color: var(--text);
+}
+
+.swatch-popover-section {
+  padding: 0.7rem 0.78rem;
+}
+
+.swatch-popover-print-section {
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.swatch-popover-color-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.swatch-popover-color-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.22rem 0.45rem 0.22rem 0.24rem;
+  background: #f8f5ef;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.swatch-popover-color-chip input[type="color"] {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.swatch-popover-hex {
+  font-family: var(--font-mono);
+  font-size: 0.73rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.swatch-popover-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.swatch-link-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-size: 0.73rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--danger);
+  cursor: pointer;
+}
+
+.swatch-link-btn:hover {
+  text-decoration: underline;
+}
+
+.swatch-print-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.swatch-print-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+  background: #f8f5ef;
+}
+
+.swatch-print-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.swatch-print-name-input {
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text);
+  background: #f8f5ef;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0.28rem 0.45rem;
+  outline: none;
+}
+
+.swatch-print-name-input:focus {
+  background: var(--surface);
+  border-color: var(--accent);
+}
+
+.btn-xs {
+  font-size: 0.72rem;
+  padding: 0.28rem 0.5rem;
+  min-height: 0;
+}
+
+.swatch-print-scale-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.swatch-scale-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.swatch-cut-segmented {
+  display: flex;
+  width: 100%;
+  margin-top: 0.35rem;
+}
+
+.swatch-cut-segmented .segmented-btn {
+  flex: 1;
+  text-align: center;
+  padding: 0.26rem 0.4rem;
+  font-size: 0.72rem;
+}
+
+.swatch-upload-print-btn {
+  width: 100%;
+  justify-content: center;
 }
 
 .swatch-chip-code {

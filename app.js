@@ -95,6 +95,24 @@
   const openPatternBtn = document.getElementById("open-pattern-btn");
   const openPatternBtnTop = document.getElementById("open-pattern-btn-top");
   const patternInput = document.getElementById("pattern-input");
+  const fabricPatternInput = document.getElementById("fabric-pattern-input");
+
+  const swatchPopover = document.getElementById("swatch-popover");
+  const swatchPopoverTitle = document.getElementById("swatch-popover-title");
+  const swatchPopoverClose = document.getElementById("swatch-popover-close");
+  const swatchPopoverColor = document.getElementById("swatch-popover-color");
+  const swatchPopoverHex = document.getElementById("swatch-popover-hex");
+  const swatchRemovePrintBtn = document.getElementById("swatch-remove-print-btn");
+  const swatchPrintPreviewRow = document.getElementById("swatch-print-preview-row");
+  const swatchPrintThumb = document.getElementById("swatch-print-thumb");
+  const swatchPrintName = document.getElementById("swatch-print-name");
+  const swatchMatchAvgBtn = document.getElementById("swatch-match-avg-btn");
+  const swatchPrintScaleRow = document.getElementById("swatch-print-scale-row");
+  const swatchPrintScale = document.getElementById("swatch-print-scale");
+  const swatchPrintScaleValue = document.getElementById("swatch-print-scale-value");
+  const swatchCutModeBtns = document.querySelectorAll("[data-cut-mode]");
+  const swatchUploadPrintBtn = document.getElementById("swatch-upload-print-btn");
+  const swatchUploadPrintLabel = document.getElementById("swatch-upload-print-label");
 
   const PRESET_LABELS = {
     mini: { in: 'Mini · 12×12 to 20×20"', cm: "Mini · 30×30 to 50×50 cm" },
@@ -1301,6 +1319,20 @@
     state.usageCounts = usageCounts;
   }
 
+  // Deterministic 0..1 hash per quilt cell so natural fabric cuts stay stable across re-renders
+  function cellHash(r, c, salt) {
+    let h = (r * 374761393 + c * 668265263 + salt * 2147483647) | 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  }
+
+  function getFabricDisplayName(color) {
+    if (color && color.patternDataUrl) {
+      return (color.patternName && color.patternName.trim()) || "Custom Print";
+    }
+    return getColorName(color.r, color.g, color.b);
+  }
+
   function drawQuiltCellsToContext(ctx, cols, rows, squarePx, { grayscale = false, showSeams = false } = {}) {
     const palette = state.palette;
     const colorCss = palette.map((pal) => {
@@ -1311,6 +1343,59 @@
       return `rgb(${pal.r}, ${pal.g}, ${pal.b})`;
     });
 
+    // Build seamlessly mirror-tiled offscreen canvases for any swatch with a loaded fabric print.
+    // Print size scales proportionally with grid density (24 / gridSpan) so sliding Chunky <-> Fine
+    // keeps fabric motifs at a consistent physical size, while default 24 cols @ 1.0x shows the full swatch.
+    const gridSpan = Math.max(4, Math.max(cols, rows));
+    const cellTiles = grayscale
+      ? null
+      : palette.map((pal) => {
+          const img = pal.patternImg;
+          if (!img || !img.complete || img.naturalWidth <= 0) return null;
+          const iw = img.naturalWidth;
+          const ih = img.naturalHeight;
+          const baseSide = Math.min(iw, ih);
+          const scale = clampNumber(pal.patternScale, 0.4, 2.5, 1.0);
+          const cutMode = pal.patternCutMode === "varied" ? "varied" : "repeat";
+          const cropSide = Math.max(12, Math.min(baseSide * 3.0, (baseSide * (24 / gridSpan)) / scale));
+          // Use an odd tile count >= 3 so the center tile is always the exact unflipped uploaded swatch
+          const minTilesX = Math.max(3, Math.ceil(cropSide / iw) + 1);
+          const minTilesY = Math.max(3, Math.ceil(cropSide / ih) + 1);
+          const tilesX = minTilesX % 2 === 0 ? minTilesX + 1 : minTilesX;
+          const tilesY = minTilesY % 2 === 0 ? minTilesY + 1 : minTilesY;
+          const midX = Math.floor(tilesX / 2);
+          const midY = Math.floor(tilesY / 2);
+          const tile = document.createElement("canvas");
+          tile.width = iw * tilesX;
+          tile.height = ih * tilesY;
+          const tctx = tile.getContext("2d");
+          for (let ty = 0; ty < tilesY; ty++) {
+            for (let tx = 0; tx < tilesX; tx++) {
+              tctx.save();
+              const flipX = Math.abs(tx - midX) % 2 === 1;
+              const flipY = Math.abs(ty - midY) % 2 === 1;
+              tctx.translate(tx * iw + (flipX ? iw : 0), ty * ih + (flipY ? ih : 0));
+              tctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+              tctx.drawImage(img, 0, 0, iw, ih);
+              tctx.restore();
+            }
+          }
+          const maxSx = Math.max(0, tile.width - cropSide);
+          const maxSy = Math.max(0, tile.height - cropSide);
+          const centerSx = maxSx / 2;
+          const centerSy = maxSy / 2;
+          return { tile, maxSx, maxSy, centerSx, centerSy, cropSide, cutMode };
+        });
+
+    const drawPatternInRect = (pIdx, x, y, r, c, salt) => {
+      const info = cellTiles ? cellTiles[pIdx] : null;
+      if (!info) return false;
+      const sx = info.cutMode === "varied" ? cellHash(r, c, salt + pIdx * 13) * info.maxSx : info.centerSx;
+      const sy = info.cutMode === "varied" ? cellHash(r, c, salt + 7 + pIdx * 29) * info.maxSy : info.centerSy;
+      ctx.drawImage(info.tile, sx, sy, info.cropSide, info.cropSide, x, y, squarePx, squarePx);
+      return true;
+    };
+
     for (let r = 0; r < rows; r++) {
       const y = r * squarePx;
       for (let c = 0; c < cols; c++) {
@@ -1319,32 +1404,62 @@
         const type = state.cellTypes[cellIdx];
         const pA = state.gridAssignments[cellIdx];
         if (type === 0) {
-          ctx.fillStyle = colorCss[pA];
-          ctx.fillRect(x, y, squarePx, squarePx);
+          if (!drawPatternInRect(pA, x, y, r, c, 1)) {
+            ctx.fillStyle = colorCss[pA];
+            ctx.fillRect(x, y, squarePx, squarePx);
+          }
         } else if (type === 1) {
           // '/' diagonal: fill BR (pB) full rect first to prevent subpixel diagonal gap, then TL (pA) triangle
           const pB = state.gridAssignmentsB[cellIdx];
-          ctx.fillStyle = colorCss[pB];
-          ctx.fillRect(x, y, squarePx, squarePx);
-          ctx.fillStyle = colorCss[pA];
-          ctx.beginPath();
-          ctx.moveTo(x, y);
-          ctx.lineTo(x + squarePx, y);
-          ctx.lineTo(x, y + squarePx);
-          ctx.closePath();
-          ctx.fill();
+          if (!drawPatternInRect(pB, x, y, r, c, 2)) {
+            ctx.fillStyle = colorCss[pB];
+            ctx.fillRect(x, y, squarePx, squarePx);
+          }
+          if (cellTiles && cellTiles[pA]) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x + squarePx, y);
+            ctx.lineTo(x, y + squarePx);
+            ctx.closePath();
+            ctx.clip();
+            drawPatternInRect(pA, x, y, r, c, 1);
+            ctx.restore();
+          } else {
+            ctx.fillStyle = colorCss[pA];
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x + squarePx, y);
+            ctx.lineTo(x, y + squarePx);
+            ctx.closePath();
+            ctx.fill();
+          }
         } else {
           // '\' diagonal: fill TR (pB) full rect first, then BL (pA) triangle
           const pB = state.gridAssignmentsB[cellIdx];
-          ctx.fillStyle = colorCss[pB];
-          ctx.fillRect(x, y, squarePx, squarePx);
-          ctx.fillStyle = colorCss[pA];
-          ctx.beginPath();
-          ctx.moveTo(x, y);
-          ctx.lineTo(x, y + squarePx);
-          ctx.lineTo(x + squarePx, y + squarePx);
-          ctx.closePath();
-          ctx.fill();
+          if (!drawPatternInRect(pB, x, y, r, c, 2)) {
+            ctx.fillStyle = colorCss[pB];
+            ctx.fillRect(x, y, squarePx, squarePx);
+          }
+          if (cellTiles && cellTiles[pA]) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x, y + squarePx);
+            ctx.lineTo(x + squarePx, y + squarePx);
+            ctx.closePath();
+            ctx.clip();
+            drawPatternInRect(pA, x, y, r, c, 1);
+            ctx.restore();
+          } else {
+            ctx.fillStyle = colorCss[pA];
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x, y + squarePx);
+            ctx.lineTo(x + squarePx, y + squarePx);
+            ctx.closePath();
+            ctx.fill();
+          }
         }
       }
     }
@@ -1465,6 +1580,342 @@
     });
   }
 
+  // --- Fabric Print Swatch Helpers & Popover Editor ---
+  let activeSwatchId = null;
+  let pendingUploadSwatchId = null;
+
+  function getActiveSwatchEntry(preferredId = activeSwatchId) {
+    if (preferredId == null) return null;
+    const idx = state.palette.findIndex((c) => c.id === preferredId);
+    return idx >= 0 ? { color: state.palette[idx], idx } : null;
+  }
+
+  function cleanFabricFileName(fileName) {
+    const base = String(fileName || "")
+      .replace(/\.[^.]+$/, "")
+      .replace(/[-_]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!base) return "Custom Print";
+    return base
+      .split(" ")
+      .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : ""))
+      .join(" ")
+      .slice(0, 32);
+  }
+
+  function attachPatternImage(color, dataUrl, onReady) {
+    if (!dataUrl) {
+      color.patternImg = null;
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      if (color.patternDataUrl === dataUrl) {
+        color.patternImg = img;
+        if (onReady) onReady();
+      }
+    };
+    img.src = dataUrl;
+  }
+
+  function rehydratePalettePatterns() {
+    let pending = 0;
+    state.palette.forEach((color) => {
+      if (color.patternDataUrl && (!color.patternImg || color.patternImg.src !== color.patternDataUrl)) {
+        pending++;
+        attachPatternImage(color, color.patternDataUrl, () => {
+          renderQuilt();
+        });
+      }
+    });
+    return pending;
+  }
+
+  function loadFabricPatternFromFile(file, color, code) {
+    if (!file || !color) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const srcImg = new Image();
+      srcImg.onload = () => {
+        const maxSide = 256;
+        const scale = Math.min(1, maxSide / Math.max(srcImg.naturalWidth, srcImg.naturalHeight));
+        const rawW = Math.max(1, Math.round(srcImg.naturalWidth * scale));
+        const rawH = Math.max(1, Math.round(srcImg.naturalHeight * scale));
+        const rawC = document.createElement("canvas");
+        rawC.width = rawW;
+        rawC.height = rawH;
+        const rawCtx = rawC.getContext("2d", { willReadFrequently: true });
+        rawCtx.drawImage(srcImg, 0, 0, rawW, rawH);
+
+        // Auto-trim transparent or uniform white studio margins from product swatch photos
+        const rawData = rawCtx.getImageData(0, 0, rawW, rawH).data;
+        const isBorderPixel = (idx) => {
+          const a = rawData[idx + 3];
+          if (a < 24) return true;
+          return rawData[idx] >= 248 && rawData[idx + 1] >= 248 && rawData[idx + 2] >= 248;
+        };
+        const rowIsBorder = (y) => {
+          let borderCnt = 0;
+          for (let x = 0; x < rawW; x++) {
+            if (isBorderPixel((y * rawW + x) * 4)) borderCnt++;
+          }
+          return borderCnt / rawW >= 0.96;
+        };
+        const colIsBorder = (x, y0, y1) => {
+          let borderCnt = 0;
+          const hSpan = Math.max(1, y1 - y0);
+          for (let y = y0; y < y1; y++) {
+            if (isBorderPixel((y * rawW + x) * 4)) borderCnt++;
+          }
+          return borderCnt / hSpan >= 0.96;
+        };
+
+        const maxTrimY = Math.floor(rawH * 0.22);
+        const maxTrimX = Math.floor(rawW * 0.22);
+        let top = 0;
+        let bottom = rawH;
+        let left = 0;
+        let right = rawW;
+        while (top < maxTrimY && rowIsBorder(top)) top++;
+        while (bottom > rawH - maxTrimY && bottom - top > 16 && rowIsBorder(bottom - 1)) bottom--;
+        while (left < maxTrimX && colIsBorder(left, top, bottom)) left++;
+        while (right > rawW - maxTrimX && right - left > 16 && colIsBorder(right - 1, top, bottom)) right--;
+
+        const w = Math.max(1, right - left);
+        const h = Math.max(1, bottom - top);
+        const c = document.createElement("canvas");
+        c.width = w;
+        c.height = h;
+        const ctx = c.getContext("2d", { willReadFrequently: true });
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(rawC, left, top, w, h, 0, 0, w, h);
+
+        // Compute average RGB of the uploaded fabric image for optional re-matching
+        const data = ctx.getImageData(0, 0, w, h).data;
+        let sr = 0;
+        let sg = 0;
+        let sb = 0;
+        const n = w * h;
+        for (let i = 0; i < data.length; i += 4) {
+          sr += data[i];
+          sg += data[i + 1];
+          sb += data[i + 2];
+        }
+        const avgRgb = [Math.round(sr / n), Math.round(sg / n), Math.round(sb / n)];
+        const dataUrl = c.toDataURL("image/jpeg", 0.86);
+
+        color.patternDataUrl = dataUrl;
+        color.patternName = cleanFabricFileName(file.name);
+        color.patternAvgRgb = avgRgb;
+        color.patternScale = color.patternScale || 1.0;
+
+        attachPatternImage(color, dataUrl, () => {
+          renderPaletteSwatches();
+          renderQuilt();
+          syncSwatchPopover();
+          recordHistory(`Uploaded print for Fabric ${code} (${color.patternName})`);
+        });
+      };
+      srcImg.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function closeSwatchPopover() {
+    if (!swatchPopover) return;
+    swatchPopover.hidden = true;
+    activeSwatchId = null;
+    paletteGrid.querySelectorAll(".swatch-item.is-editing").forEach((el) => el.classList.remove("is-editing"));
+  }
+
+  function syncSwatchPopover() {
+    if (!swatchPopover || swatchPopover.hidden) return;
+    const entry = getActiveSwatchEntry();
+    if (!entry) {
+      closeSwatchPopover();
+      return;
+    }
+    const { color, idx } = entry;
+    const code = getFabricCode(idx);
+    const hex = rgbToHex(color.r, color.g, color.b);
+    const hasPrint = Boolean(color.patternDataUrl);
+
+    swatchPopoverTitle.textContent = `Fabric ${code}`;
+    swatchPopoverColor.value = hex;
+    swatchPopoverHex.textContent = hex.toUpperCase();
+
+    swatchRemovePrintBtn.hidden = !hasPrint;
+    swatchPrintPreviewRow.hidden = !hasPrint;
+    swatchPrintScaleRow.hidden = !hasPrint;
+    swatchUploadPrintLabel.textContent = hasPrint ? "Replace Fabric Image" : "Upload Fabric Image";
+
+    if (hasPrint) {
+      swatchPrintThumb.src = color.patternDataUrl;
+      if (document.activeElement !== swatchPrintName) {
+        swatchPrintName.value = color.patternName || "Custom Print";
+      }
+      const scaleVal = clampNumber(color.patternScale, 0.4, 2.5, 1.0);
+      swatchPrintScale.value = String(scaleVal);
+      swatchPrintScaleValue.textContent = `${scaleVal.toFixed(1)}×`;
+      const cutMode = color.patternCutMode === "varied" ? "varied" : "repeat";
+      swatchCutModeBtns.forEach((btn) => {
+        const active = btn.dataset.cutMode === cutMode;
+        btn.classList.toggle("is-active", active);
+        btn.setAttribute("aria-checked", active ? "true" : "false");
+      });
+      swatchMatchAvgBtn.hidden = !Array.isArray(color.patternAvgRgb);
+    }
+
+    paletteGrid.querySelectorAll(".swatch-item").forEach((el) => {
+      el.classList.toggle("is-editing", Number(el.dataset.id) === color.id);
+    });
+  }
+
+  function openSwatchPopover(color, anchorEl) {
+    if (!swatchPopover || !color) return;
+    if (activeSwatchId === color.id && !swatchPopover.hidden) {
+      closeSwatchPopover();
+      return;
+    }
+    closeHistoryPopover();
+    activeSwatchId = color.id;
+    swatchPopover.hidden = false;
+    syncSwatchPopover();
+
+    // Position popover cleanly beside the swatch inside viewport bounds
+    const rect = anchorEl.getBoundingClientRect();
+    const popRect = swatchPopover.getBoundingClientRect();
+    const margin = 12;
+    let left = rect.right + 10;
+    if (left + popRect.width > window.innerWidth - margin) {
+      left = Math.max(margin, rect.left - popRect.width - 10);
+    }
+    if (left + popRect.width > window.innerWidth - margin) {
+      left = Math.max(margin, (window.innerWidth - popRect.width) / 2);
+    }
+    let top = rect.top - 8;
+    if (top + popRect.height > window.innerHeight - margin) {
+      top = Math.max(margin, window.innerHeight - popRect.height - margin);
+    }
+    swatchPopover.style.left = `${Math.round(left)}px`;
+    swatchPopover.style.top = `${Math.round(top)}px`;
+  }
+
+  if (swatchPopoverClose) {
+    swatchPopoverClose.addEventListener("click", closeSwatchPopover);
+  }
+  if (swatchPopoverColor) {
+    swatchPopoverColor.addEventListener("input", (e) => {
+      const entry = getActiveSwatchEntry();
+      if (!entry) return;
+      const { color, idx } = entry;
+      const code = getFabricCode(idx);
+      const [r, g, b] = hexToRgb(e.target.value);
+      color.r = r;
+      color.g = g;
+      color.b = b;
+      swatchPopoverHex.textContent = e.target.value.toUpperCase();
+      renderPaletteSwatches();
+      renderQuilt();
+      recordHistory(`Edited Fabric ${code} (${getFabricDisplayName(color)})`, `swatch-${color.id}`);
+    });
+  }
+  if (swatchUploadPrintBtn && fabricPatternInput) {
+    swatchUploadPrintBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      pendingUploadSwatchId = activeSwatchId;
+      fabricPatternInput.value = "";
+      fabricPatternInput.click();
+    });
+    fabricPatternInput.addEventListener("click", (e) => {
+      e.stopPropagation();
+    });
+    fabricPatternInput.addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      const targetId = activeSwatchId != null ? activeSwatchId : pendingUploadSwatchId;
+      const entry = getActiveSwatchEntry(targetId);
+      if (file && entry) {
+        loadFabricPatternFromFile(file, entry.color, getFabricCode(entry.idx));
+      }
+      pendingUploadSwatchId = null;
+      fabricPatternInput.value = "";
+    });
+  }
+  if (swatchPrintScale) {
+    swatchPrintScale.addEventListener("input", (e) => {
+      const entry = getActiveSwatchEntry();
+      if (!entry) return;
+      const val = clampNumber(e.target.value, 0.4, 2.5, 1.0);
+      entry.color.patternScale = val;
+      swatchPrintScaleValue.textContent = `${val.toFixed(1)}×`;
+      renderQuilt();
+      recordHistory(`Print scale ${val.toFixed(1)}× on Fabric ${getFabricCode(entry.idx)}`, `scale-${entry.color.id}`);
+    });
+  }
+  swatchCutModeBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const entry = getActiveSwatchEntry();
+      if (!entry) return;
+      const nextMode = btn.dataset.cutMode === "varied" ? "varied" : "repeat";
+      if ((entry.color.patternCutMode || "repeat") === nextMode) return;
+      entry.color.patternCutMode = nextMode;
+      syncSwatchPopover();
+      renderQuilt();
+      recordHistory(
+        `Fabric ${getFabricCode(entry.idx)}: ${nextMode === "varied" ? "Varied cuts" : "Same per square"}`
+      );
+    });
+  });
+  if (swatchPrintName) {
+    swatchPrintName.addEventListener("input", (e) => {
+      const entry = getActiveSwatchEntry();
+      if (!entry) return;
+      entry.color.patternName = e.target.value.slice(0, 32);
+      const itemEl = paletteGrid.querySelector(`.swatch-item[data-id="${entry.color.id}"] .swatch-hex`);
+      if (itemEl) itemEl.textContent = getFabricDisplayName(entry.color);
+      recordHistory(`Renamed Fabric ${getFabricCode(entry.idx)}`, `rename-swatch-${entry.color.id}`);
+    });
+  }
+  if (swatchMatchAvgBtn) {
+    swatchMatchAvgBtn.addEventListener("click", () => {
+      const entry = getActiveSwatchEntry();
+      if (!entry || !Array.isArray(entry.color.patternAvgRgb)) return;
+      const [r, g, b] = entry.color.patternAvgRgb;
+      entry.color.r = r;
+      entry.color.g = g;
+      entry.color.b = b;
+      renderPaletteSwatches();
+      renderQuilt();
+      syncSwatchPopover();
+      recordHistory(`Matched Fabric ${getFabricCode(entry.idx)} by print color`);
+    });
+  }
+  if (swatchRemovePrintBtn) {
+    swatchRemovePrintBtn.addEventListener("click", () => {
+      const entry = getActiveSwatchEntry();
+      if (!entry) return;
+      const code = getFabricCode(entry.idx);
+      entry.color.patternDataUrl = null;
+      entry.color.patternImg = null;
+      entry.color.patternName = null;
+      entry.color.patternAvgRgb = null;
+      entry.color.patternScale = 1.0;
+      renderPaletteSwatches();
+      renderQuilt();
+      syncSwatchPopover();
+      recordHistory(`Removed print from Fabric ${code}`);
+    });
+  }
+  document.addEventListener("click", (e) => {
+    if (!swatchPopover || swatchPopover.hidden) return;
+    if (e.target === fabricPatternInput) return;
+    if (swatchPopover.contains(e.target)) return;
+    if (e.target.closest && e.target.closest(".swatch-item")) return;
+    closeSwatchPopover();
+  });
+
   function renderPaletteSwatches() {
     paletteGrid.innerHTML = "";
     const canDelete = state.palette.length > 1;
@@ -1472,34 +1923,38 @@
 
     state.palette.forEach((color, idx) => {
       const hex = rgbToHex(color.r, color.g, color.b);
-      const colorName = getColorName(color.r, color.g, color.b);
+      const displayName = getFabricDisplayName(color);
       const code = getFabricCode(idx);
+      const hasPrint = Boolean(color.patternDataUrl);
 
       const item = document.createElement("div");
       item.className = "swatch-item";
+      if (activeSwatchId === color.id && swatchPopover && !swatchPopover.hidden) {
+        item.classList.add("is-editing");
+      }
       item.dataset.id = String(color.id);
 
-      const colorWrap = document.createElement("label");
-      colorWrap.className = "swatch-color-wrap";
+      const colorWrap = document.createElement("button");
+      colorWrap.type = "button";
+      colorWrap.className = hasPrint ? "swatch-color-wrap has-pattern" : "swatch-color-wrap";
       colorWrap.style.backgroundColor = hex;
-      colorWrap.title = `Change Fabric ${code}: ${colorName} (${hex.toUpperCase()})`;
+      if (hasPrint) {
+        colorWrap.style.backgroundImage = `url("${color.patternDataUrl}")`;
+      }
+      colorWrap.title = `Edit Fabric ${code}: ${displayName} (color or fabric print)`;
+      colorWrap.setAttribute("aria-label", `Edit Fabric ${code}: ${displayName}`);
 
       const chipCode = document.createElement("span");
       chipCode.className = "swatch-chip-code";
       chipCode.textContent = code;
       chipCode.style.color = luminance(color.r, color.g, color.b) > 145 ? "#1c1914" : "#ffffff";
 
-      const picker = document.createElement("input");
-      picker.type = "color";
-      picker.value = hex;
-      picker.setAttribute("aria-label", `Edit Fabric ${code}: ${colorName}`);
-
       const info = document.createElement("div");
       info.className = "swatch-info";
 
       const nameSpan = document.createElement("span");
       nameSpan.className = "swatch-hex";
-      nameSpan.textContent = colorName;
+      nameSpan.textContent = displayName;
 
       const statsRow = document.createElement("div");
       statsRow.className = "swatch-stats-row";
@@ -1519,38 +1974,28 @@
       removeBtn.type = "button";
       removeBtn.className = "swatch-remove";
       removeBtn.innerHTML = "&times;";
-      removeBtn.title = canDelete ? `Remove Fabric ${code} (${colorName}) from palette` : "At least 1 color required";
-      removeBtn.setAttribute("aria-label", `Remove Fabric ${code} (${colorName})`);
+      removeBtn.title = canDelete ? `Remove Fabric ${code} (${displayName}) from palette` : "At least 1 color required";
+      removeBtn.setAttribute("aria-label", `Remove Fabric ${code} (${displayName})`);
       removeBtn.disabled = !canDelete;
 
-      picker.addEventListener("input", (e) => {
-        const newHex = e.target.value;
-        const [r, g, b] = hexToRgb(newHex);
-        color.r = r;
-        color.g = g;
-        color.b = b;
-        colorWrap.style.backgroundColor = newHex;
-        chipCode.style.color = luminance(r, g, b) > 145 ? "#1c1914" : "#ffffff";
-        const updatedName = getColorName(r, g, b);
-        nameSpan.textContent = updatedName;
-        colorWrap.title = `Change Fabric ${code}: ${updatedName} (${newHex.toUpperCase()})`;
-        renderQuilt();
-        recordHistory(`Edited Fabric ${code} (${updatedName})`, `swatch-${color.id}`);
+      item.addEventListener("click", (e) => {
+        if (e.target.closest && e.target.closest(".swatch-remove")) return;
+        openSwatchPopover(color, item);
       });
 
       removeBtn.addEventListener("click", () => {
         if (state.palette.length <= 1) return;
+        if (activeSwatchId === color.id) closeSwatchPopover();
         state.palette = state.palette.filter((c) => c.id !== color.id);
         if (state.palette.length >= Number(paletteSizeSlider.min)) {
           paletteSizeSlider.value = String(state.palette.length);
         }
         renderPaletteSwatches();
         renderQuilt();
-        recordHistory(`Removed Fabric ${code} (${colorName})`);
+        recordHistory(`Removed Fabric ${code} (${displayName})`);
       });
 
       colorWrap.appendChild(chipCode);
-      colorWrap.appendChild(picker);
       info.appendChild(nameSpan);
       info.appendChild(statsRow);
       item.appendChild(colorWrap);
@@ -1838,18 +2283,30 @@
     seamAllowanceInput.step = unit === "cm" ? "0.1" : "0.125";
     syncRegionUI(unit);
 
-    // Palette (exact colors, including any edits/deletions/additions)
+    // Palette (exact colors + optional uploaded fabric prints)
     const savedPalette = Array.isArray(saved.palette) ? saved.palette : [];
+    const savedPatterns = Array.isArray(saved.palettePatterns) ? saved.palettePatterns : [];
     const restored = savedPalette
       .filter((hex) => typeof hex === "string" && /^#?[0-9a-f]{6}$/i.test(hex))
       .slice(0, 24)
-      .map((hex) => {
+      .map((hex, idx) => {
         const [r, g, b] = hexToRgb(hex.startsWith("#") ? hex : `#${hex}`);
-        return { id: state.nextColorId++, r, g, b };
+        const entry = { id: state.nextColorId++, r, g, b };
+        const pat = savedPatterns[idx];
+        if (pat && typeof pat === "object" && typeof pat.dataUrl === "string" && pat.dataUrl.startsWith("data:image/")) {
+          entry.patternDataUrl = pat.dataUrl;
+          entry.patternName = typeof pat.name === "string" ? pat.name.slice(0, 32) : "Custom Print";
+          entry.patternAvgRgb =
+            Array.isArray(pat.avgRgb) && pat.avgRgb.length === 3 ? pat.avgRgb.map((n) => Math.round(clampNumber(n, 0, 255, 128))) : null;
+          entry.patternScale = clampNumber(pat.scale, 0.4, 2.5, 1.0);
+          entry.patternCutMode = pat.cutMode === "varied" ? "varied" : "repeat";
+        }
+        return entry;
       });
 
     if (restored.length > 0) {
       state.palette = restored;
+      rehydratePalettePatterns();
     } else {
       state.palette = extractPalette(state.samplePixels, Number(paletteSizeSlider.value));
     }
@@ -1882,7 +2339,43 @@
   const MAX_HISTORY = 60;
   let lastHistoryCoalesce = { key: null, time: 0 };
 
+  function serializePalettePatterns() {
+    if (!state.palette.some((c) => c.patternDataUrl)) return null;
+    return state.palette.map((c) =>
+      c.patternDataUrl
+        ? {
+            dataUrl: c.patternDataUrl,
+            name: c.patternName || null,
+            avgRgb: Array.isArray(c.patternAvgRgb) ? [...c.patternAvgRgb] : null,
+            scale: clampNumber(c.patternScale, 0.4, 2.5, 1.0),
+            cutMode: c.patternCutMode === "varied" ? "varied" : "repeat",
+          }
+        : null
+    );
+  }
+
+  function sanitizePalettePatterns(rawPatterns) {
+    if (!Array.isArray(rawPatterns)) return null;
+    const out = rawPatterns.slice(0, 24).map((pat) => {
+      if (!pat || typeof pat !== "object" || typeof pat.dataUrl !== "string" || !pat.dataUrl.startsWith("data:image/")) {
+        return null;
+      }
+      return {
+        dataUrl: pat.dataUrl,
+        name: typeof pat.name === "string" ? pat.name.slice(0, 32) : "Custom Print",
+        avgRgb:
+          Array.isArray(pat.avgRgb) && pat.avgRgb.length === 3
+            ? pat.avgRgb.map((n) => Math.round(clampNumber(n, 0, 255, 128)))
+            : null,
+        scale: clampNumber(pat.scale, 0.4, 2.5, 1.0),
+        cutMode: pat.cutMode === "varied" ? "varied" : "repeat",
+      };
+    });
+    return out.some(Boolean) ? out : null;
+  }
+
   function captureSnapshot() {
+    const palettePatterns = serializePalettePatterns();
     return {
       title: getCurrentProjectTitle(),
       cols: state.cols,
@@ -1900,6 +2393,7 @@
       targetQuiltSize: state.targetQuiltSize ? { ...state.targetQuiltSize } : null,
       crop: { ...state.crop },
       palette: state.palette.map((c) => rgbToHex(c.r, c.g, c.b)),
+      ...(palettePatterns ? { palettePatterns } : {}),
       assemblyMode: assemblyModeSelect ? assemblyModeSelect.value : "rows",
       pageSize: pageSizeSelect ? pageSizeSelect.value : "letter",
     };
@@ -1951,6 +2445,7 @@
       targetQuiltSize,
       crop: { x: cx, y: cy, w: cw, h: ch },
       palette,
+      palettePatterns: sanitizePalettePatterns(raw.palettePatterns),
       assemblyMode: raw.assemblyMode === "blocks" ? "blocks" : "rows",
       pageSize: raw.pageSize === "a4" ? "a4" : "letter",
     };
@@ -2002,15 +2497,27 @@
       setAssemblyMode(snap.assemblyMode);
 
       if (snap.palette && snap.palette.length > 0) {
-        state.palette = snap.palette.map((hex) => {
+        const snapPatterns = Array.isArray(snap.palettePatterns) ? snap.palettePatterns : [];
+        state.palette = snap.palette.map((hex, idx) => {
           const [r, g, b] = hexToRgb(hex.startsWith("#") ? hex : `#${hex}`);
-          return { id: state.nextColorId++, r, g, b };
+          const entry = { id: state.nextColorId++, r, g, b };
+          const pat = snapPatterns[idx];
+          if (pat && pat.dataUrl) {
+            entry.patternDataUrl = pat.dataUrl;
+            entry.patternName = pat.name || "Custom Print";
+            entry.patternAvgRgb = Array.isArray(pat.avgRgb) ? [...pat.avgRgb] : null;
+            entry.patternScale = clampNumber(pat.scale, 0.4, 2.5, 1.0);
+          entry.patternCutMode = pat.cutMode === "varied" ? "varied" : "repeat";
+          }
+          return entry;
         });
+        rehydratePalettePatterns();
         paletteSizeSlider.value = String(
           clampNumber(state.palette.length, Number(paletteSizeSlider.min), Number(paletteSizeSlider.max), 8)
         );
       }
 
+      closeSwatchPopover();
       computeSquareAverages();
       renderPaletteSwatches();
       renderQuilt();
@@ -2223,6 +2730,7 @@
         crop: state.crop,
       },
       palette: state.palette.map((c) => rgbToHex(c.r, c.g, c.b)),
+      ...(serializePalettePatterns() ? { palettePatterns: serializePalettePatterns() } : {}),
       history: state.history,
       historyIndex: state.historyIndex,
       image: getImageDataUrlForSave(),
@@ -2755,7 +3263,23 @@
     }
   }
 
-  function drawCodeBadge(doc, fonts, x, y, w, h, code, r, g, b) {
+  function drawCodeBadge(doc, fonts, x, y, w, h, code, r, g, b, patternDataUrl = null) {
+    if (patternDataUrl) {
+      doc.addImage(patternDataUrl, "JPEG", x, y, w, h);
+      doc.setDrawColor(120, 112, 102);
+      doc.setLineWidth(0.008);
+      doc.rect(x, y, w, h, "S");
+      // High-contrast centered pill for the fabric letter code over printed fabrics
+      const pillW = Math.min(w * 0.62, 0.2);
+      const pillH = Math.min(h * 0.66, 0.16);
+      doc.setFillColor(28, 25, 20);
+      doc.roundedRect(x + (w - pillW) / 2, y + (h - pillH) / 2, pillW, pillH, 0.03, 0.03, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFont(fonts.mono, "bold");
+      doc.setFontSize(7.6);
+      doc.text(code, x + w / 2, y + h * 0.66, { align: "center" });
+      return;
+    }
     doc.setFillColor(r, g, b);
     doc.setDrawColor(120, 112, 102);
     doc.setLineWidth(0.008);
@@ -3035,13 +3559,20 @@
           const solidCount = state.solidCounts[idx] || 0;
           const hstHalves = state.hstHalfCounts[idx] || 0;
           const hstStarters = state.hstStarterCounts[idx] || 0;
-          const match = getFabricCatalogMatch(color.r, color.g, color.b);
+          const match = color.patternDataUrl
+            ? {
+                name: getFabricDisplayName(color),
+                konaName: `${getFabricDisplayName(color)} (Print)`,
+                bellaName: "Custom Fabric Print",
+              }
+            : getFabricCatalogMatch(color.r, color.g, color.b);
           const fq = calculateFatQuarterFit(solidCount, hstStarters);
           return {
             index: idx,
             code: getFabricCode(idx),
             name: match.name,
             match,
+            patternDataUrl: color.patternDataUrl || null,
             fq,
             hex: rgbToHex(color.r, color.g, color.b).toUpperCase(),
             r: color.r,
@@ -3324,7 +3855,7 @@
           doc.rect(margin, curY, contentW, cutRowH, "F");
         }
 
-        drawCodeBadge(doc, fonts, margin + 0.08, curY + 0.09, 0.36, 0.24, c.code, c.r, c.g, c.b);
+        drawCodeBadge(doc, fonts, margin + 0.08, curY + 0.09, 0.36, 0.24, c.code, c.r, c.g, c.b, c.patternDataUrl);
 
         doc.setFillColor(c.r, c.g, c.b);
         doc.setDrawColor(140, 132, 120);
@@ -3739,7 +4270,7 @@
         totalTopCostHigh += opt.costHigh;
         totalTopCostAvg += opt.costAvg;
 
-        drawCodeBadge(doc, fonts, margin + 0.08, shopY + 0.11, 0.38, 0.24, c.code, c.r, c.g, c.b);
+        drawCodeBadge(doc, fonts, margin + 0.08, shopY + 0.11, 0.38, 0.24, c.code, c.r, c.g, c.b, c.patternDataUrl);
 
         doc.setFont(fonts.sans, "bold");
         doc.setFontSize(8.5);
@@ -4319,7 +4850,7 @@
         doc.setDrawColor(140, 132, 120);
         doc.circle(tx + fTagW - 0.16, ty + 0.42, 0.045, "FD");
 
-        drawCodeBadge(doc, fonts, tx + 0.08, ty + 0.3, 0.34, 0.22, c.code, c.r, c.g, c.b);
+        drawCodeBadge(doc, fonts, tx + 0.08, ty + 0.3, 0.34, 0.22, c.code, c.r, c.g, c.b, c.patternDataUrl);
 
         doc.setFont(fonts.sans, "bold");
         doc.setFontSize(8.4);
@@ -4533,8 +5064,9 @@
           const fabric = calculateColorFabric(solidCount, hstStarters);
           return {
             code: getFabricCode(idx),
-            name: match.name,
-            konaName: match.konaName,
+            name: color.patternDataUrl ? getFabricDisplayName(color) : match.name,
+            konaName: color.patternDataUrl ? getFabricDisplayName(color) : match.konaName,
+            patternDataUrl: color.patternDataUrl || null,
             r: color.r,
             g: color.g,
             b: color.b,
@@ -4760,7 +5292,7 @@
         // Color swatch chip with letter badge
         const chipW = 0.34;
         const chipH = swRowH - 0.08;
-        drawCodeBadge(doc, fonts, cx + 0.04, cy + 0.04, chipW, chipH, c.code, c.r, c.g, c.b);
+        drawCodeBadge(doc, fonts, cx + 0.04, cy + 0.04, chipW, chipH, c.code, c.r, c.g, c.b, c.patternDataUrl);
 
         const textX = cx + chipW + 0.1;
         const maxTxtW = swCellW - chipW - 0.14;
@@ -4896,6 +5428,7 @@
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       closeHistoryPopover();
+      closeSwatchPopover();
       return;
     }
     if (!state.image) return;
