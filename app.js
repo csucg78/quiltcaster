@@ -35,7 +35,24 @@
   const squaresSlider = document.getElementById("squares-slider");
   const squaresValue = document.getElementById("squares-value");
   const totalSquaresLabel = document.getElementById("total-squares-label");
-  const seamLinesToggle = document.getElementById("seam-lines-toggle");
+  const seamLinesBtn = document.getElementById("seam-lines-btn");
+  const hstToggle = document.getElementById("hst-toggle");
+  const hstControls = document.getElementById("hst-controls");
+  const hstModeBtns = document.querySelectorAll("[data-hst-mode]");
+  const hstEdgePanel = document.getElementById("hst-edge-panel");
+  const hstRatioPanel = document.getElementById("hst-ratio-panel");
+  const hstEdgeSlider = document.getElementById("hst-edge-slider");
+  const hstEdgeValue = document.getElementById("hst-edge-value");
+  const hstRatioSlider = document.getElementById("hst-ratio-slider");
+  const hstRatioValue = document.getElementById("hst-ratio-value");
+  const paintToggleBtn = document.getElementById("paint-toggle-btn");
+  const paintBtnLabel = document.getElementById("paint-btn-label");
+  const paintToolbar = document.getElementById("paint-toolbar");
+  const paintBrushBtns = document.querySelectorAll("[data-paint-brush]");
+  const paintSizeBtns = document.querySelectorAll("[data-paint-size]");
+  const paintStatusLabel = document.getElementById("paint-status-label");
+  const paintClearBtn = document.getElementById("paint-clear-btn");
+  const paintDoneBtn = document.getElementById("paint-done-btn");
 
   const unitBtns = document.querySelectorAll(".unit-btn");
   const unitLabels = document.querySelectorAll("[data-unit-label]");
@@ -44,9 +61,11 @@
   const quiltPresetSelect = document.getElementById("quilt-preset-select");
   const quiltWidthInput = document.getElementById("quilt-width-input");
   const quiltHeightInput = document.getElementById("quilt-height-input");
+  const dimensionsSummary = document.getElementById("dimensions-summary");
   const cutSquareValue = document.getElementById("cut-square-value");
+  const hstCutStat = document.getElementById("hst-cut-stat");
+  const hstCutSquareValue = document.getElementById("hst-cut-square-value");
   const wofNote = document.getElementById("wof-note");
-  const previewDimensions = document.getElementById("preview-dimensions");
   const previewRulerWidth = document.getElementById("preview-ruler-width");
   const previewRulerHeight = document.getElementById("preview-ruler-height");
   const cropSubtitle = document.getElementById("crop-subtitle");
@@ -59,8 +78,8 @@
   const resetPaletteBtn = document.getElementById("reset-palette-btn");
 
   const compareBtn = document.getElementById("compare-btn");
+  const exportSheetBtn = document.getElementById("export-sheet-btn");
   const exportPdfBtn = document.getElementById("export-pdf-btn");
-  const patternTitleInput = document.getElementById("pattern-title-input");
   const assemblyModeSelect = document.getElementById("assembly-mode-select");
   const assemblyModeBtns = document.querySelectorAll(".segmented-btn[data-assembly]");
   const pageSizeSelect = document.getElementById("page-size-select");
@@ -91,13 +110,15 @@
     });
   }
 
+  function getCurrentProjectTitle() {
+    const custom = fileNameLabel ? fileNameLabel.value.trim() : "";
+    return custom || derivePatternTitle(state.fileName) || "Custom Pixel Quilt";
+  }
+
   function syncProjectTitle(title, sourceEl = null) {
     const val = title || "";
     if (fileNameLabel && sourceEl !== fileNameLabel) {
       fileNameLabel.value = val;
-    }
-    if (patternTitleInput && sourceEl !== patternTitleInput) {
-      patternTitleInput.value = val;
     }
     const clean = val.trim();
     document.title = clean ? `${clean} · Miriam's Quiltcaster` : "Miriam's Quiltcaster";
@@ -105,9 +126,6 @@
 
   if (fileNameLabel) {
     fileNameLabel.addEventListener("input", () => syncProjectTitle(fileNameLabel.value, fileNameLabel));
-  }
-  if (patternTitleInput) {
-    patternTitleInput.addEventListener("input", () => syncProjectTitle(patternTitleInput.value, patternTitleInput));
   }
 
   function derivePatternTitle(filename) {
@@ -136,6 +154,14 @@
   const quiltCanvas = document.getElementById("quilt-canvas");
   const quiltCtx = quiltCanvas.getContext("2d");
 
+  // Resolution-independent 240×240 normalized preference mask (matches HARD_MAX_COLS = 240):
+  //   0 = Auto (governed by global HST toggle & ratio)
+  //   1 = Force Solid Square
+  //   2 = Force HST (auto sharpest '/' or '\' diagonal)
+  //   3 = Force '/' HST
+  //   4 = Force '\' HST
+  const PAINT_MASK_RES = 240;
+
   // Application state
   const state = {
     image: null,
@@ -147,16 +173,36 @@
     sampleWidth: 0,
     sampleHeight: 0,
     samplePixels: null,
-    // Grid
+    // Grid & Half-Square Triangles (HSTs)
     cols: Number(squaresSlider.value),
     rows: 1,
     squareAverages: [], // Array of [r, g, b] for each cell (length = cols * rows)
-    gridAssignments: new Int32Array(0), // Palette index per cell
-    usageCounts: new Int32Array(0), // Square count per palette color
+    hstSlashAverages: [], // Array of [tlR, tlG, tlB, brR, brG, brB] per cell (/ diagonal)
+    hstBackslashAverages: [], // Array of [blR, blG, blB, trR, trG, trB] per cell (\ diagonal)
+    hstAxisContrasts: new Float64Array(0), // Max H/V half-split contrast per cell (distinguishes diagonal vs straight H/V edges)
+    hstEnabled: hstToggle ? hstToggle.checked : false,
+    hstMode: "edges", // "edges" (Edge Refinement) | "ratio" (Overall Ratio)
+    hstEdgeSensitivity: hstEdgeSlider ? Number(hstEdgeSlider.value) : 55,
+    hstRatio: hstRatioSlider ? Number(hstRatioSlider.value) : 35,
+    hstCount: 0,
+    smoothableDiag: new Uint8Array(0), // Per-cell: 0 = flat/non-edge, 1 = '/' smooths edge, 2 = '\' smooths edge
+    paintMask: new Uint8Array(PAINT_MASK_RES * PAINT_MASK_RES),
+    paintMode: false,
+    paintBrush: "hst", // "hst" | "square" | "auto"
+    paintSize: 3, // 1 | 3 | 5
+    paintedCellsCount: 0,
+    hasPaintedMask: false,
+    cellTypes: new Uint8Array(0), // 0 = solid square, 1 = '/' HST (TL+BR), 2 = '\' HST (BL+TR)
+    gridAssignments: new Int32Array(0), // Primary palette index (solid square, or Half A: TL / BL)
+    gridAssignmentsB: new Int32Array(0), // Secondary palette index (Half B: BR / TR for HSTs, -1 for solid)
+    solidCounts: new Int32Array(0), // Solid square count per palette color
+    hstHalfCounts: new Int32Array(0), // HST triangle half count per palette color
+    hstStarterCounts: new Int32Array(0), // 2-at-a-time HST starter squares needed per palette color
+    usageCounts: new Int32Array(0), // Total pieces (solid + HST halves) per palette color
     // Palette: array of { id, r, g, b }
     palette: [],
     nextColorId: 1,
-    showSeamLines: seamLinesToggle.checked,
+    showSeamLines: true,
     showingOriginal: false,
     // Physical quilt sizing
     unit: "in",
@@ -436,31 +482,183 @@
     const sumB = new Float64Array(cellCount);
     const counts = new Int32Array(cellCount);
 
+    // Triangle accumulators for '/' (TL + BR) and '\' (BL + TR) Half-Square Triangles
+    const tlR = new Float64Array(cellCount);
+    const tlG = new Float64Array(cellCount);
+    const tlB = new Float64Array(cellCount);
+    const tlN = new Int32Array(cellCount);
+    const brR = new Float64Array(cellCount);
+    const brG = new Float64Array(cellCount);
+    const brB = new Float64Array(cellCount);
+    const brN = new Int32Array(cellCount);
+
+    const blR = new Float64Array(cellCount);
+    const blG = new Float64Array(cellCount);
+    const blB = new Float64Array(cellCount);
+    const blN = new Int32Array(cellCount);
+    const trR = new Float64Array(cellCount);
+    const trG = new Float64Array(cellCount);
+    const trB = new Float64Array(cellCount);
+    const trN = new Int32Array(cellCount);
+
+    // Axis-aligned half accumulators (left vs right, top vs bottom) to separate true diagonal edges from straight H/V edges
+    const leftR = new Float64Array(cellCount);
+    const leftG = new Float64Array(cellCount);
+    const leftB = new Float64Array(cellCount);
+    const leftN = new Int32Array(cellCount);
+    const topR = new Float64Array(cellCount);
+    const topG = new Float64Array(cellCount);
+    const topB = new Float64Array(cellCount);
+    const topN = new Int32Array(cellCount);
+
     const data = state.samplePixels;
     for (let y = 0; y < h; y++) {
-      const row = Math.min(rows - 1, Math.floor((y * rows) / h));
+      const fy = ((y + 0.5) * rows) / h;
+      const row = Math.min(rows - 1, Math.floor(fy));
+      const v = fy - row;
       const rowOffset = row * cols;
       for (let x = 0; x < w; x++) {
-        const col = Math.min(cols - 1, Math.floor((x * cols) / w));
+        const fx = ((x + 0.5) * cols) / w;
+        const col = Math.min(cols - 1, Math.floor(fx));
+        const u = fx - col;
         const pIdx = (y * w + x) * 4;
+        const rVal = data[pIdx];
+        const gVal = data[pIdx + 1];
+        const bVal = data[pIdx + 2];
         const cIdx = rowOffset + col;
-        sumR[cIdx] += data[pIdx];
-        sumG[cIdx] += data[pIdx + 1];
-        sumB[cIdx] += data[pIdx + 2];
+
+        sumR[cIdx] += rVal;
+        sumG[cIdx] += gVal;
+        sumB[cIdx] += bVal;
         counts[cIdx]++;
+
+        if (u < 0.5) {
+          leftR[cIdx] += rVal;
+          leftG[cIdx] += gVal;
+          leftB[cIdx] += bVal;
+          leftN[cIdx]++;
+        }
+        if (v < 0.5) {
+          topR[cIdx] += rVal;
+          topG[cIdx] += gVal;
+          topB[cIdx] += bVal;
+          topN[cIdx]++;
+        }
+
+        if (u + v < 1 || (u + v === 1 && u < 0.5)) {
+          tlR[cIdx] += rVal;
+          tlG[cIdx] += gVal;
+          tlB[cIdx] += bVal;
+          tlN[cIdx]++;
+        } else {
+          brR[cIdx] += rVal;
+          brG[cIdx] += gVal;
+          brB[cIdx] += bVal;
+          brN[cIdx]++;
+        }
+
+        if (v > u || (v === u && v >= 0.5)) {
+          blR[cIdx] += rVal;
+          blG[cIdx] += gVal;
+          blB[cIdx] += bVal;
+          blN[cIdx]++;
+        } else {
+          trR[cIdx] += rVal;
+          trG[cIdx] += gVal;
+          trB[cIdx] += bVal;
+          trN[cIdx]++;
+        }
       }
     }
 
     const averages = new Array(cellCount);
+    const slashAvgs = new Array(cellCount);
+    const backslashAvgs = new Array(cellCount);
+    const axisContrasts = new Float64Array(cellCount);
     for (let i = 0; i < cellCount; i++) {
       const n = counts[i] || 1;
-      averages[i] = [sumR[i] / n, sumG[i] / n, sumB[i] / n];
+      const ar = sumR[i] / n;
+      const ag = sumG[i] / n;
+      const ab = sumB[i] / n;
+      averages[i] = [ar, ag, ab];
+
+      slashAvgs[i] = [
+        tlN[i] > 0 ? tlR[i] / tlN[i] : ar,
+        tlN[i] > 0 ? tlG[i] / tlN[i] : ag,
+        tlN[i] > 0 ? tlB[i] / tlN[i] : ab,
+        brN[i] > 0 ? brR[i] / brN[i] : ar,
+        brN[i] > 0 ? brG[i] / brN[i] : ag,
+        brN[i] > 0 ? brB[i] / brN[i] : ab,
+      ];
+
+      backslashAvgs[i] = [
+        blN[i] > 0 ? blR[i] / blN[i] : ar,
+        blN[i] > 0 ? blG[i] / blN[i] : ag,
+        blN[i] > 0 ? blB[i] / blN[i] : ab,
+        trN[i] > 0 ? trR[i] / trN[i] : ar,
+        trN[i] > 0 ? trG[i] / trN[i] : ag,
+        trN[i] > 0 ? trB[i] / trN[i] : ab,
+      ];
+
+      const ln = leftN[i];
+      const rn = n - ln;
+      const horizSplitContrast =
+        ln > 0 && rn > 0
+          ? Math.sqrt(
+              colorDistanceSq(
+                leftR[i] / ln,
+                leftG[i] / ln,
+                leftB[i] / ln,
+                (sumR[i] - leftR[i]) / rn,
+                (sumG[i] - leftG[i]) / rn,
+                (sumB[i] - leftB[i]) / rn
+              )
+            )
+          : 0;
+
+      const tn = topN[i];
+      const bn = n - tn;
+      const vertSplitContrast =
+        tn > 0 && bn > 0
+          ? Math.sqrt(
+              colorDistanceSq(
+                topR[i] / tn,
+                topG[i] / tn,
+                topB[i] / tn,
+                (sumR[i] - topR[i]) / bn,
+                (sumG[i] - topG[i]) / bn,
+                (sumB[i] - topB[i]) / bn
+              )
+            )
+          : 0;
+
+      axisContrasts[i] = Math.max(horizSplitContrast, vertSplitContrast);
     }
     state.squareAverages = averages;
+    state.hstSlashAverages = slashAvgs;
+    state.hstBackslashAverages = backslashAvgs;
+    state.hstAxisContrasts = axisContrasts;
 
     squaresValue.textContent = `${cols} × ${rows}`;
-    totalSquaresLabel.textContent = `${(cols * rows).toLocaleString()} squares`;
+    updateUnitBreakdownLabels();
     updateQuiltDimensions(skipInputEl);
+  }
+
+  function updateUnitBreakdownLabels() {
+    const total = state.cols * state.rows;
+    const hsts = state.hstEnabled ? state.hstCount : 0;
+    const solids = Math.max(0, total - hsts);
+    if (state.hstEnabled && hsts > 0) {
+      totalSquaresLabel.textContent = `${solids.toLocaleString()} sq · ${hsts.toLocaleString()} HSTs`;
+    } else {
+      totalSquaresLabel.textContent = `${total.toLocaleString()} squares`;
+    }
+    if (hstEdgeValue) {
+      hstEdgeValue.textContent = `${state.hstEdgeSensitivity}%`;
+    }
+    if (hstRatioValue) {
+      hstRatioValue.textContent = `${state.hstRatio}%`;
+    }
   }
 
   function formatMeasure(value, unit) {
@@ -512,28 +710,43 @@
     return `${meters.toFixed(1)} m`;
   }
 
-  function calculateColorFabric(squareCount) {
+  // Standard 2-at-a-time HST starter square cut size:
+  // Finished square + 3.5 * seamAllowance (exact quilting standard: Finished + 7/8" at 1/4" seam).
+  function getHstCutSize() {
+    return Math.max(0.1, state.finishedSquareSize) + 3.5 * Math.max(0, state.seamAllowance);
+  }
+
+  function calculateColorFabric(solidSquareCount, hstStarterSquareCount = 0) {
     const unit = state.unit;
     const cutSize = Math.max(0.1, state.finishedSquareSize) + 2 * Math.max(0, state.seamAllowance);
+    const hstCutSize = getHstCutSize();
     const wof = getUsableWof(unit);
     const squaresPerStrip = Math.max(1, Math.floor(wof / cutSize));
-    if (squareCount <= 0) {
+    const hstSquaresPerStrip = Math.max(1, Math.floor(wof / hstCutSize));
+    if (solidSquareCount <= 0 && hstStarterSquareCount <= 0) {
       return {
         cutSize,
+        hstCutSize,
         wof,
         squaresPerStrip,
+        hstSquaresPerStrip,
         strips: 0,
+        hstStrips: 0,
         length: 0,
         formatted: formatFabricAmount(0, unit),
       };
     }
-    const strips = Math.ceil(squareCount / squaresPerStrip);
-    const length = strips * cutSize;
+    const strips = solidSquareCount > 0 ? Math.ceil(solidSquareCount / squaresPerStrip) : 0;
+    const hstStrips = hstStarterSquareCount > 0 ? Math.ceil(hstStarterSquareCount / hstSquaresPerStrip) : 0;
+    const length = strips * cutSize + hstStrips * hstCutSize;
     return {
       cutSize,
+      hstCutSize,
       wof,
       squaresPerStrip,
+      hstSquaresPerStrip,
       strips,
+      hstStrips,
       length,
       formatted: formatFabricAmount(length * (1 + FABRIC_BUFFER), unit),
     };
@@ -582,12 +795,17 @@
 
     // Cut square adds seam allowance on both left/right and top/bottom edges
     const cutSize = finished + 2 * seam;
-    const cutText = `${formatMeasure(cutSize, unit)} × ${formatMeasure(cutSize, unit)}`;
-    cutSquareValue.textContent = cutText;
+    cutSquareValue.textContent = state.hstEnabled
+      ? formatMeasure(cutSize, unit)
+      : `${formatMeasure(cutSize, unit)} × ${formatMeasure(cutSize, unit)}`;
+
+    const hstCutSize = getHstCutSize();
+    if (hstCutStat) hstCutStat.hidden = !state.hstEnabled;
+    if (dimensionsSummary) dimensionsSummary.classList.toggle("has-hst", state.hstEnabled);
+    if (hstCutSquareValue) hstCutSquareValue.textContent = formatMeasure(hstCutSize, unit);
 
     const quiltW = state.cols * finished;
     const quiltH = state.rows * finished;
-    const quiltText = `${formatMeasure(quiltW, unit)} × ${formatMeasure(quiltH, unit)}`;
 
     if (finishedSizeInput && skipInputEl !== finishedSizeInput) {
       finishedSizeInput.value = formatNumericInput(finished);
@@ -601,13 +819,12 @@
 
     wofNote.textContent =
       unit === "in"
-        ? `Fabric estimates: 42" usable WOF, +10% extra for squaring up & mistakes`
-        : `Fabric estimates: 106 cm usable WOF, +10% extra for squaring up & mistakes`;
+        ? `Yardage assumes 42" WOF + 10% buffer`
+        : `Yardage assumes 106 cm WOF + 10% buffer`;
 
-    previewDimensions.textContent = `Finished: ${quiltText} · Cut squares: ${cutText}`;
     if (previewRulerWidth) previewRulerWidth.textContent = formatMeasure(quiltW, unit);
     if (previewRulerHeight) previewRulerHeight.textContent = formatMeasure(quiltH, unit);
-    updateSwatchCounts(state.usageCounts);
+    updateSwatchCounts();
   }
 
   // --- Rendering ---
@@ -628,6 +845,418 @@
     quiltCanvas.style.height = `${Math.max(60, Math.round(canvasH * scale))}px`;
   }
 
+  // Returns the 2 closest palette indices [idx1, dist1, idx2, dist2] for (r, g, b) in O(K) time
+  function findTopTwoPalette(r, g, b, palette) {
+    let i1 = 0;
+    let d1 = Infinity;
+    let i2 = 0;
+    let d2 = Infinity;
+    for (let p = 0; p < palette.length; p++) {
+      const pal = palette[p];
+      const d = colorDistanceSq(r, g, b, pal.r, pal.g, pal.b);
+      if (d < d1) {
+        d2 = d1;
+        i2 = i1;
+        d1 = d;
+        i1 = p;
+      } else if (d < d2) {
+        d2 = d;
+        i2 = p;
+      }
+    }
+    return [i1, d1, i2, d2];
+  }
+
+  // Evaluates the best distinct-color HST pair (pA !== pB) in O(K) time using top-2 palette candidates
+  function bestDistinctHstPair(rA, gA, bA, rB, gB, bB, palette) {
+    const [a1, da1, a2, da2] = findTopTwoPalette(rA, gA, bA, palette);
+    const [b1, db1, b2, db2] = findTopTwoPalette(rB, gB, bB, palette);
+    if (a1 !== b1) {
+      return { pA: a1, pB: b1, err: 0.5 * (da1 + db1) };
+    }
+    if (da1 + db2 <= da2 + db1) {
+      return { pA: a1, pB: b2, err: 0.5 * (da1 + db2) };
+    }
+    return { pA: a2, pB: b1, err: 0.5 * (da2 + db1) };
+  }
+
+  // Samples the normalized 240×240 paint preference mask at cell (col, row).
+  // Because PAINT_MASK_RES >= HARD_MAX_COLS, every cell maps to a non-empty, disjoint span.
+  function sampleCellPaintPref(col, row, cols, rows) {
+    const R = PAINT_MASK_RES;
+    const x0 = Math.round((col * R) / cols);
+    const x1 = Math.max(x0 + 1, Math.round(((col + 1) * R) / cols));
+    const y0 = Math.round((row * R) / rows);
+    const y1 = Math.max(y0 + 1, Math.round(((row + 1) * R) / rows));
+    const cx = Math.min(R - 1, Math.floor((x0 + x1) / 2));
+    const cy = Math.min(R - 1, Math.floor((y0 + y1) / 2));
+    return state.paintMask[cy * R + cx];
+  }
+
+  function writeCellPaintPref(col, row, cols, rows, prefVal) {
+    if (col < 0 || col >= cols || row < 0 || row >= rows) return false;
+    const R = PAINT_MASK_RES;
+    const x0 = Math.round((col * R) / cols);
+    const x1 = Math.max(x0 + 1, Math.round(((col + 1) * R) / cols));
+    const y0 = Math.round((row * R) / rows);
+    const y1 = Math.max(y0 + 1, Math.round(((row + 1) * R) / rows));
+    let changed = false;
+    for (let my = y0; my < y1; my++) {
+      const rowOff = my * R;
+      for (let mx = x0; mx < x1; mx++) {
+        if (state.paintMask[rowOff + mx] !== prefVal) {
+          state.paintMask[rowOff + mx] = prefVal;
+          changed = true;
+        }
+      }
+    }
+    return changed;
+  }
+
+  function assignGridCells() {
+    const cols = state.cols;
+    const rows = state.rows;
+    const totalCells = cols * rows;
+    const palette = state.palette;
+    const K = palette.length;
+
+    const cellTypes = new Uint8Array(totalCells);
+    const assignmentsA = new Int32Array(totalCells);
+    const assignmentsB = new Int32Array(totalCells).fill(-1);
+    const sqBest = new Int32Array(totalCells);
+    const sqErrors = new Float64Array(totalCells);
+    const cellPrefs = new Uint8Array(totalCells);
+    const smoothableDiag = new Uint8Array(totalCells);
+
+    let rawMaskActiveCount = 0;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const i = r * cols + c;
+        const pref = sampleCellPaintPref(c, r, cols, rows);
+        cellPrefs[i] = pref;
+        if (pref !== 0) rawMaskActiveCount++;
+
+        const avg = state.squareAverages[i];
+        let bestIdx = 0;
+        let bestDist = Infinity;
+        for (let p = 0; p < K; p++) {
+          const pal = palette[p];
+          const d = colorDistanceSq(avg[0], avg[1], avg[2], pal.r, pal.g, pal.b);
+          if (d < bestDist) {
+            bestDist = d;
+            bestIdx = p;
+          }
+        }
+        sqBest[i] = bestIdx;
+        assignmentsA[i] = bestIdx;
+        sqErrors[i] = bestDist;
+      }
+    }
+    state.hasPaintedMask = rawMaskActiveCount > 0;
+
+    let hstCount = 0;
+    let effectivePaintedCount = 0;
+    if ((state.hstEnabled || state.paintMode) && K >= 2) {
+      const bestDiag = new Uint8Array(totalCells);
+      const bestPairA = new Int32Array(totalCells);
+      const bestPairB = new Int32Array(totalCells);
+      const slashPairA = new Int32Array(totalCells);
+      const slashPairB = new Int32Array(totalCells);
+      const backPairA = new Int32Array(totalCells);
+      const backPairB = new Int32Array(totalCells);
+      const edgeScores = new Float64Array(totalCells);
+      const rankScores = new Float64Array(totalCells);
+      const autoCandidates = [];
+
+      const needHstEval =
+        state.paintMode || state.hstMode === "edges" || state.hstRatio > 0 || rawMaskActiveCount > 0;
+      if (needHstEval) {
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const i = r * cols + c;
+            const s = state.hstSlashAverages[i];
+            const b = state.hstBackslashAverages[i];
+            const slash = bestDistinctHstPair(s[0], s[1], s[2], s[3], s[4], s[5], palette);
+            const back = bestDistinctHstPair(b[0], b[1], b[2], b[3], b[4], b[5], palette);
+            slashPairA[i] = slash.pA;
+            slashPairB[i] = slash.pB;
+            backPairA[i] = back.pA;
+            backPairB[i] = back.pB;
+
+            // Check 4-neighbor solid-square assignments to reward beveling true stair-step corners
+            const nCol = r > 0 ? sqBest[(r - 1) * cols + c] : -1;
+            const sCol = r + 1 < rows ? sqBest[(r + 1) * cols + c] : -1;
+            const wCol = c > 0 ? sqBest[r * cols + c - 1] : -1;
+            const eCol = c + 1 < cols ? sqBest[r * cols + c + 1] : -1;
+
+            // '/' connects TL (pA) to N/W and BR (pB) to S/E
+            const slashSideA = (nCol === slash.pA ? 1 : 0) + (wCol === slash.pA ? 1 : 0);
+            const slashSideB = (sCol === slash.pB ? 1 : 0) + (eCol === slash.pB ? 1 : 0);
+            // '\' connects BL (pA) to S/W and TR (pB) to N/E
+            const backSideA = (sCol === back.pA ? 1 : 0) + (wCol === back.pA ? 1 : 0);
+            const backSideB = (nCol === back.pB ? 1 : 0) + (eCol === back.pB ? 1 : 0);
+
+            const slashAdjErr = slash.err - (slashSideA + slashSideB) * 140;
+            const backAdjErr = back.err - (backSideA + backSideB) * 140;
+
+            let chosenErr;
+            let rawDiagContrast;
+            let sideAMatches;
+            let sideBMatches;
+            if (slashAdjErr <= backAdjErr) {
+              bestDiag[i] = 1; // '/' (TL + BR)
+              bestPairA[i] = slash.pA;
+              bestPairB[i] = slash.pB;
+              chosenErr = slash.err;
+              rawDiagContrast = Math.sqrt(colorDistanceSq(s[0], s[1], s[2], s[3], s[4], s[5]));
+              sideAMatches = slashSideA;
+              sideBMatches = slashSideB;
+            } else {
+              bestDiag[i] = 2; // '\' (BL + TR)
+              bestPairA[i] = back.pA;
+              bestPairB[i] = back.pB;
+              chosenErr = back.err;
+              rawDiagContrast = Math.sqrt(colorDistanceSq(b[0], b[1], b[2], b[3], b[4], b[5]));
+              sideAMatches = backSideA;
+              sideBMatches = backSideB;
+            }
+
+            const sqErr = sqErrors[i];
+            const gain = sqErr - chosenErr;
+            const axisContrast = state.hstAxisContrasts[i] || 0;
+            const diagAdvantage = rawDiagContrast / Math.max(1, axisContrast);
+            const bothSidesConnect = sideAMatches >= 1 && sideBMatches >= 1;
+            const anySideConnects = sideAMatches + sideBMatches >= 1;
+            const surroundedUniform =
+              nCol === sqBest[i] && sCol === sqBest[i] && wCol === sqBest[i] && eCol === sqBest[i];
+
+            // Determine whether a Half-Square Triangle genuinely helps smooth an edge at this cell:
+            //   1. Splitting diagonally reduces quantization error meaningfully over a solid square
+            //   2. Real cross-diagonal visual contrast (not flat sky/water)
+            //   3. Either angled across the diagonal OR bevels an L-corner between two neighbor regions
+            //   4. Connects to adjacent blocks (avoids isolated single-cell triangle confetti)
+            const meaningfulGain = gain > 0 && (chosenErr <= sqErr * 0.86 || gain >= 360);
+            const isAngledOrCorner = diagAdvantage >= 0.56 || (bothSidesConnect && gain >= 420);
+            const hasContinuity =
+              anySideConnects && (Math.sqrt(Math.max(0, gain)) >= 42 || bothSidesConnect);
+            const notInteriorSpeck = !surroundedUniform || Math.sqrt(Math.max(0, gain)) >= 95;
+
+            if (meaningfulGain && rawDiagContrast >= 22 && isAngledOrCorner && hasContinuity && notInteriorSpeck) {
+              smoothableDiag[i] = bestDiag[i];
+              const diagFactor =
+                Math.max(0.25, Math.min(1.25, (diagAdvantage - 0.35) * 1.4)) *
+                (bothSidesConnect ? 1.18 : 1.0);
+              edgeScores[i] = Math.sqrt(gain) * diagFactor;
+            } else {
+              smoothableDiag[i] = 0;
+              edgeScores[i] = 0;
+            }
+            rankScores[i] = gain >= 0 ? Math.sqrt(gain) : -Math.sqrt(-gain);
+
+            if (!state.hstEnabled) continue;
+
+            const pref = cellPrefs[i];
+            if (pref === 1) {
+              // Force Solid Square
+              effectivePaintedCount++;
+            } else if (pref >= 2) {
+              // Painted with △ Smooth Edges brush: ONLY convert cells where triangles genuinely smooth an edge!
+              if (smoothableDiag[i] > 0) {
+                effectivePaintedCount++;
+                if (pref === 3) {
+                  cellTypes[i] = 1;
+                  assignmentsA[i] = slashPairA[i];
+                  assignmentsB[i] = slashPairB[i];
+                } else if (pref === 4) {
+                  cellTypes[i] = 2;
+                  assignmentsA[i] = backPairA[i];
+                  assignmentsB[i] = backPairB[i];
+                } else {
+                  cellTypes[i] = bestDiag[i];
+                  assignmentsA[i] = bestPairA[i];
+                  assignmentsB[i] = bestPairB[i];
+                }
+                hstCount++;
+              }
+            } else {
+              autoCandidates.push(i);
+            }
+          }
+        }
+
+        if (state.hstEnabled) {
+          if (state.hstMode === "edges") {
+            const t = (100 - state.hstEdgeSensitivity) / 100;
+            const minEdgeScore = 8 + 135 * t * t;
+            for (let k = 0; k < autoCandidates.length; k++) {
+              const idx = autoCandidates[k];
+              if (smoothableDiag[idx] > 0 && edgeScores[idx] >= minEdgeScore) {
+                cellTypes[idx] = bestDiag[idx];
+                assignmentsA[idx] = bestPairA[idx];
+                assignmentsB[idx] = bestPairB[idx];
+                hstCount++;
+              }
+            }
+          } else if (state.hstRatio > 0 && autoCandidates.length > 0) {
+            const targetAutoCount = Math.min(
+              autoCandidates.length,
+              Math.round(autoCandidates.length * (state.hstRatio / 100))
+            );
+            if (targetAutoCount > 0) {
+              autoCandidates.sort((a, b) => rankScores[b] - rankScores[a]);
+              for (let k = 0; k < targetAutoCount; k++) {
+                const idx = autoCandidates[k];
+                cellTypes[idx] = bestDiag[idx];
+                assignmentsA[idx] = bestPairA[idx];
+                assignmentsB[idx] = bestPairB[idx];
+                hstCount++;
+              }
+            }
+          }
+        }
+      }
+    } else if (rawMaskActiveCount > 0) {
+      for (let i = 0; i < totalCells; i++) {
+        if (cellPrefs[i] === 1) effectivePaintedCount++;
+      }
+    }
+    state.smoothableDiag = smoothableDiag;
+    state.paintedCellsCount = effectivePaintedCount;
+
+    const solidCounts = new Int32Array(K);
+    const hstHalfCounts = new Int32Array(K);
+    const pairCounts = new Int32Array(K * K);
+
+    for (let i = 0; i < totalCells; i++) {
+      const t = cellTypes[i];
+      const pA = assignmentsA[i];
+      if (t === 0) {
+        solidCounts[pA]++;
+      } else {
+        const pB = assignmentsB[i];
+        hstHalfCounts[pA]++;
+        hstHalfCounts[pB]++;
+        const u = Math.min(pA, pB);
+        const v = Math.max(pA, pB);
+        pairCounts[u * K + v]++;
+      }
+    }
+
+    // 2-at-a-time HST piecing: 1 starter square of u + 1 starter square of v yields 2 finished u/v HSTs
+    const hstStarterCounts = new Int32Array(K);
+    for (let u = 0; u < K; u++) {
+      for (let v = u; v < K; v++) {
+        const cnt = pairCounts[u * K + v];
+        if (cnt > 0) {
+          const pairsNeeded = Math.ceil(cnt / 2);
+          hstStarterCounts[u] += pairsNeeded;
+          hstStarterCounts[v] += pairsNeeded;
+        }
+      }
+    }
+
+    const usageCounts = new Int32Array(K);
+    for (let p = 0; p < K; p++) {
+      usageCounts[p] = solidCounts[p] + hstHalfCounts[p];
+    }
+
+    state.hstCount = hstCount;
+    state.cellTypes = cellTypes;
+    state.gridAssignments = assignmentsA;
+    state.gridAssignmentsB = assignmentsB;
+    state.solidCounts = solidCounts;
+    state.hstHalfCounts = hstHalfCounts;
+    state.hstStarterCounts = hstStarterCounts;
+    state.usageCounts = usageCounts;
+  }
+
+  function drawQuiltCellsToContext(ctx, cols, rows, squarePx, { grayscale = false, showSeams = false } = {}) {
+    const palette = state.palette;
+    const colorCss = palette.map((pal) => {
+      if (grayscale) {
+        const lum = Math.round(luminance(pal.r, pal.g, pal.b));
+        return `rgb(${lum}, ${lum}, ${lum})`;
+      }
+      return `rgb(${pal.r}, ${pal.g}, ${pal.b})`;
+    });
+
+    for (let r = 0; r < rows; r++) {
+      const y = r * squarePx;
+      for (let c = 0; c < cols; c++) {
+        const x = c * squarePx;
+        const cellIdx = r * cols + c;
+        const type = state.cellTypes[cellIdx];
+        const pA = state.gridAssignments[cellIdx];
+        if (type === 0) {
+          ctx.fillStyle = colorCss[pA];
+          ctx.fillRect(x, y, squarePx, squarePx);
+        } else if (type === 1) {
+          // '/' diagonal: fill BR (pB) full rect first to prevent subpixel diagonal gap, then TL (pA) triangle
+          const pB = state.gridAssignmentsB[cellIdx];
+          ctx.fillStyle = colorCss[pB];
+          ctx.fillRect(x, y, squarePx, squarePx);
+          ctx.fillStyle = colorCss[pA];
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x + squarePx, y);
+          ctx.lineTo(x, y + squarePx);
+          ctx.closePath();
+          ctx.fill();
+        } else {
+          // '\' diagonal: fill TR (pB) full rect first, then BL (pA) triangle
+          const pB = state.gridAssignmentsB[cellIdx];
+          ctx.fillStyle = colorCss[pB];
+          ctx.fillRect(x, y, squarePx, squarePx);
+          ctx.fillStyle = colorCss[pA];
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x, y + squarePx);
+          ctx.lineTo(x + squarePx, y + squarePx);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+    }
+
+    if (showSeams && squarePx >= 6) {
+      const canvasW = cols * squarePx;
+      const canvasH = rows * squarePx;
+      ctx.save();
+      ctx.strokeStyle = grayscale ? "rgba(0, 0, 0, 0.14)" : "rgba(25, 22, 18, 0.16)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let c = 1; c < cols; c++) {
+        const x = c * squarePx + 0.5;
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvasH);
+      }
+      for (let r = 1; r < rows; r++) {
+        const y = r * squarePx + 0.5;
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvasW, y);
+      }
+      if (state.hstCount > 0) {
+        for (let r = 0; r < rows; r++) {
+          const y = r * squarePx;
+          for (let c = 0; c < cols; c++) {
+            const type = state.cellTypes[r * cols + c];
+            if (type === 1) {
+              const x = c * squarePx;
+              ctx.moveTo(x, y + squarePx);
+              ctx.lineTo(x + squarePx, y);
+            } else if (type === 2) {
+              const x = c * squarePx;
+              ctx.moveTo(x, y);
+              ctx.lineTo(x + squarePx, y + squarePx);
+            }
+          }
+        }
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
   function renderQuilt() {
     if (!state.image || state.palette.length === 0) return;
 
@@ -646,80 +1275,62 @@
     }
     sizePreviewCanvas(canvasW, canvasH);
 
+    assignGridCells();
+    updateUnitBreakdownLabels();
+    updateSwatchCounts();
+    updatePaintToolbarUI();
+
     if (state.showingOriginal) {
       const { sx, sy, sw, sh } = getCroppedSourceRect();
       quiltCtx.drawImage(state.image, sx, sy, sw, sh, 0, 0, canvasW, canvasH);
       return;
     }
 
-    const palette = state.palette;
-    const usageCounts = new Int32Array(palette.length);
-    const assignments = new Int32Array(cols * rows);
-
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const cellIdx = r * cols + c;
-        const avg = state.squareAverages[cellIdx];
-        let bestIdx = 0;
-        let bestDist = Infinity;
-        for (let p = 0; p < palette.length; p++) {
-          const pal = palette[p];
-          const d = colorDistanceSq(avg[0], avg[1], avg[2], pal.r, pal.g, pal.b);
-          if (d < bestDist) {
-            bestDist = d;
-            bestIdx = p;
-          }
-        }
-        assignments[cellIdx] = bestIdx;
-        usageCounts[bestIdx]++;
-        const chosen = palette[bestIdx];
-        quiltCtx.fillStyle = `rgb(${chosen.r}, ${chosen.g}, ${chosen.b})`;
-        quiltCtx.fillRect(c * squarePx, r * squarePx, squarePx, squarePx);
-      }
-    }
-
-    state.gridAssignments = assignments;
-    state.usageCounts = usageCounts;
-
-    if (state.showSeamLines && squarePx >= 6) {
-      quiltCtx.save();
-      quiltCtx.strokeStyle = "rgba(25, 22, 18, 0.16)";
-      quiltCtx.lineWidth = 1;
-      quiltCtx.beginPath();
-      for (let c = 1; c < cols; c++) {
-        const x = c * squarePx + 0.5;
-        quiltCtx.moveTo(x, 0);
-        quiltCtx.lineTo(x, canvasH);
-      }
-      for (let r = 1; r < rows; r++) {
-        const y = r * squarePx + 0.5;
-        quiltCtx.moveTo(0, y);
-        quiltCtx.lineTo(canvasW, y);
-      }
-      quiltCtx.stroke();
-      quiltCtx.restore();
-    }
-
-    updateSwatchCounts(usageCounts);
+    drawQuiltCellsToContext(quiltCtx, cols, rows, squarePx, {
+      grayscale: false,
+      showSeams: state.showSeamLines,
+    });
+    drawPaintCursorOverlay(squarePx);
   }
 
-  function updateSwatchCounts(usageCounts) {
+  function updateSwatchCounts() {
     const items = paletteGrid.querySelectorAll(".swatch-item");
     items.forEach((item, idx) => {
-      const count = usageCounts[idx] ?? 0;
-      const calc = calculateColorFabric(count);
+      const solidCnt = state.solidCounts[idx] ?? 0;
+      const hstHalfCnt = state.hstHalfCounts[idx] ?? 0;
+      const hstStarterCnt = state.hstStarterCounts[idx] ?? 0;
+      const calc = calculateColorFabric(solidCnt, hstStarterCnt);
       const countEl = item.querySelector(".swatch-count");
       const fabricEl = item.querySelector(".swatch-fabric");
       if (countEl) {
-        countEl.textContent = `${count} sq`;
+        if (hstHalfCnt > 0 && solidCnt > 0) {
+          countEl.textContent = `${solidCnt} sq · ${hstHalfCnt} △`;
+        } else if (hstHalfCnt > 0) {
+          countEl.textContent = `${hstHalfCnt} △ HST`;
+        } else {
+          countEl.textContent = `${solidCnt} sq`;
+        }
       }
       if (fabricEl) {
         fabricEl.textContent = calc.formatted;
       }
-      item.title =
-        count > 0
-          ? `${count} squares · Cut ${calc.strips} WOF strip${calc.strips === 1 ? "" : "s"} (${formatMeasure(calc.cutSize, state.unit)} wide, ${calc.squaresPerStrip}/strip) · Est. ${calc.formatted}`
-          : "0 squares used";
+      if (solidCnt > 0 || hstStarterCnt > 0) {
+        const parts = [];
+        if (solidCnt > 0) {
+          parts.push(
+            `${solidCnt} solid sq (${calc.strips} strip${calc.strips === 1 ? "" : "s"} @ ${formatMeasure(calc.cutSize, state.unit)})`
+          );
+        }
+        if (hstStarterCnt > 0) {
+          parts.push(
+            `${hstHalfCnt} HST halves -> cut ${hstStarterCnt} starter sq (${calc.hstStrips} strip${calc.hstStrips === 1 ? "" : "s"} @ ${formatMeasure(calc.hstCutSize, state.unit)})`
+          );
+        }
+        parts.push(`Est. ${calc.formatted}`);
+        item.title = parts.join(" · ");
+      } else {
+        item.title = "0 pieces used";
+      }
     });
   }
 
@@ -739,7 +1350,13 @@
 
       const colorWrap = document.createElement("label");
       colorWrap.className = "swatch-color-wrap";
+      colorWrap.style.backgroundColor = hex;
       colorWrap.title = `Change Fabric ${code}: ${colorName} (${hex.toUpperCase()})`;
+
+      const chipCode = document.createElement("span");
+      chipCode.className = "swatch-chip-code";
+      chipCode.textContent = code;
+      chipCode.style.color = luminance(color.r, color.g, color.b) > 145 ? "#1c1914" : "#ffffff";
 
       const picker = document.createElement("input");
       picker.type = "color";
@@ -749,22 +1366,12 @@
       const info = document.createElement("div");
       info.className = "swatch-info";
 
-      const headerRow = document.createElement("div");
-      headerRow.className = "swatch-header-row";
-
-      const codeBadge = document.createElement("span");
-      codeBadge.className = "swatch-code";
-      codeBadge.textContent = code;
-
       const nameSpan = document.createElement("span");
       nameSpan.className = "swatch-hex";
       nameSpan.textContent = colorName;
 
-      headerRow.appendChild(codeBadge);
-      headerRow.appendChild(nameSpan);
-
       const statsRow = document.createElement("div");
-      statsRow.className = "swatch-header-row";
+      statsRow.className = "swatch-stats-row";
 
       const countSpan = document.createElement("span");
       countSpan.className = "swatch-count";
@@ -791,6 +1398,8 @@
         color.r = r;
         color.g = g;
         color.b = b;
+        colorWrap.style.backgroundColor = newHex;
+        chipCode.style.color = luminance(r, g, b) > 145 ? "#1c1914" : "#ffffff";
         const updatedName = getColorName(r, g, b);
         nameSpan.textContent = updatedName;
         colorWrap.title = `Change Fabric ${code}: ${updatedName} (${newHex.toUpperCase()})`;
@@ -807,8 +1416,9 @@
         renderQuilt();
       });
 
+      colorWrap.appendChild(chipCode);
       colorWrap.appendChild(picker);
-      info.appendChild(headerRow);
+      info.appendChild(nameSpan);
       info.appendChild(statsRow);
       item.appendChild(colorWrap);
       item.appendChild(info);
@@ -922,6 +1532,8 @@
           : derivePatternTitle(name);
       syncProjectTitle(initialTitle);
       state.crop = { x: 0, y: 0, w: 1, h: 1 };
+      state.paintMask.fill(0);
+      setPaintMode(false);
       state.targetQuiltSize = null;
       if (quiltPresetSelect) quiltPresetSelect.value = "custom";
 
@@ -985,15 +1597,82 @@
     return clamped;
   }
 
+  function encodePaintMaskRle() {
+    const mask = state.paintMask;
+    let hasAny = false;
+    for (let i = 0; i < mask.length; i++) {
+      if (mask[i] !== 0) {
+        hasAny = true;
+        break;
+      }
+    }
+    if (!hasAny) return null;
+    const runs = [];
+    let cur = mask[0];
+    let len = 1;
+    for (let i = 1; i < mask.length; i++) {
+      if (mask[i] === cur) {
+        len++;
+      } else {
+        runs.push(cur, len);
+        cur = mask[i];
+        len = 1;
+      }
+    }
+    runs.push(cur, len);
+    return runs;
+  }
+
+  function decodePaintMaskRle(runs) {
+    state.paintMask.fill(0);
+    if (!Array.isArray(runs) || runs.length < 2) return;
+    let offset = 0;
+    for (let i = 0; i + 1 < runs.length && offset < state.paintMask.length; i += 2) {
+      const val = Math.max(0, Math.min(4, Number(runs[i]) || 0));
+      const len = Math.max(0, Math.floor(Number(runs[i + 1]) || 0));
+      const end = Math.min(state.paintMask.length, offset + len);
+      state.paintMask.fill(val, offset, end);
+      offset = end;
+    }
+  }
+
+  function setHstPlacementMode(mode) {
+    const valid = mode === "ratio" ? "ratio" : "edges";
+    state.hstMode = valid;
+    hstModeBtns.forEach((btn) => {
+      const active = btn.dataset.hstMode === valid;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-checked", active ? "true" : "false");
+    });
+    if (hstEdgePanel) hstEdgePanel.hidden = valid !== "edges";
+    if (hstRatioPanel) hstRatioPanel.hidden = valid !== "ratio";
+  }
+
+  function setSeamLinesVisible(visible) {
+    state.showSeamLines = Boolean(visible);
+    if (seamLinesBtn) {
+      seamLinesBtn.classList.toggle("is-toggled", state.showSeamLines);
+      seamLinesBtn.setAttribute("aria-pressed", state.showSeamLines ? "true" : "false");
+    }
+  }
+
   function applyRestoredSettings(saved) {
     const s = saved.settings || {};
 
     // Grid columns
     state.cols = syncSliderBoundsForCols(clampNumber(s.cols, MIN_COLS, HARD_MAX_COLS, state.cols));
 
-    // Seam lines
-    state.showSeamLines = s.showSeamLines !== false;
-    seamLinesToggle.checked = state.showSeamLines;
+    // Seam lines & Half-Square Triangles
+    setSeamLinesVisible(s.showSeamLines !== false);
+    state.hstEnabled = Boolean(s.hstEnabled);
+    setHstPlacementMode(s.hstMode === "ratio" ? "ratio" : "edges");
+    state.hstEdgeSensitivity = Math.round(clampNumber(s.hstEdgeSensitivity, 5, 100, 55));
+    state.hstRatio = Math.round(clampNumber(s.hstRatio, 0, 100, 35));
+    if (hstToggle) hstToggle.checked = state.hstEnabled;
+    if (hstControls) hstControls.hidden = !state.hstEnabled;
+    if (hstEdgeSlider) hstEdgeSlider.value = String(state.hstEdgeSensitivity);
+    if (hstRatioSlider) hstRatioSlider.value = String(state.hstRatio);
+    decodePaintMaskRle(s.paintMaskRle);
 
     if (s.pageSize === "a4" || s.pageSize === "letter") {
       setPageSize(s.pageSize);
@@ -1058,10 +1737,7 @@
   function savePattern() {
     if (!state.image) return;
 
-    const currentTitle =
-      (fileNameLabel && fileNameLabel.value.trim()) ||
-      (patternTitleInput && patternTitleInput.value.trim()) ||
-      derivePatternTitle(state.fileName);
+    const currentTitle = getCurrentProjectTitle();
 
     const pattern = {
       format: PATTERN_FORMAT,
@@ -1072,6 +1748,11 @@
       settings: {
         cols: state.cols,
         showSeamLines: state.showSeamLines,
+        hstEnabled: state.hstEnabled,
+        hstMode: state.hstMode,
+        hstEdgeSensitivity: state.hstEdgeSensitivity,
+        hstRatio: state.hstRatio,
+        paintMaskRle: encodePaintMaskRle(),
         unit: state.unit,
         finishedSquareSize: state.finishedSquareSize,
         seamAllowance: state.seamAllowance,
@@ -1216,10 +1897,42 @@
     }
   });
 
-  seamLinesToggle.addEventListener("change", () => {
-    state.showSeamLines = seamLinesToggle.checked;
-    renderQuilt();
+  if (seamLinesBtn) {
+    seamLinesBtn.addEventListener("click", () => {
+      setSeamLinesVisible(!state.showSeamLines);
+      renderQuilt();
+    });
+  }
+
+  if (hstToggle) {
+    hstToggle.addEventListener("change", () => {
+      state.hstEnabled = hstToggle.checked;
+      if (hstControls) hstControls.hidden = !state.hstEnabled;
+      updateQuiltDimensions();
+      renderQuilt();
+    });
+  }
+
+  hstModeBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      setHstPlacementMode(btn.dataset.hstMode);
+      renderQuilt();
+    });
   });
+
+  if (hstEdgeSlider) {
+    hstEdgeSlider.addEventListener("input", () => {
+      state.hstEdgeSensitivity = Number(hstEdgeSlider.value);
+      renderQuilt();
+    });
+  }
+
+  if (hstRatioSlider) {
+    hstRatioSlider.addEventListener("input", () => {
+      state.hstRatio = Number(hstRatioSlider.value);
+      renderQuilt();
+    });
+  }
 
   // Physical sizing & seam allowance controls.
   // Finished square size is treated as a fixed value unless it has to be changed.
@@ -1323,7 +2036,7 @@
       if (!Number.isFinite(wIn) || !Number.isFinite(hIn)) return;
 
       const scale = state.unit === "cm" ? 2.54 : 1;
-      const presetName = opt.textContent.split("(")[0].trim();
+      const presetName = opt.textContent.split("·")[0].split("(")[0].trim();
       applyTargetQuiltSize(wIn * scale, hIn * scale, null, presetName);
     });
   }
@@ -1530,15 +2243,22 @@
       .replace(/ (\u00bc|\u00bd|\u00be) yd/g, "$1 yd");
   }
 
-  function calculateFatQuarterFit(squareCount) {
+  function calculateFatQuarterFit(solidSquareCount, hstStarterSquareCount = 0) {
     const unit = state.unit;
     const cutSize = Math.max(0.1, state.finishedSquareSize) + 2 * Math.max(0, state.seamAllowance);
+    const hstCutSize = getHstCutSize();
     // Standard Fat Quarter: 18" x 21" (45 cm x 52 cm)
     const fqW = unit === "in" ? 18 : 45;
     const fqH = unit === "in" ? 21 : 52;
     const perFq = Math.floor(fqW / cutSize) * Math.floor(fqH / cutSize);
-    const neededWithBuffer = Math.ceil(squareCount * (1 + FABRIC_BUFFER));
-    const fitsOneFq = squareCount > 0 && perFq >= neededWithBuffer;
+    const fqSolidPerStrip = Math.max(1, Math.floor(fqH / cutSize));
+    const fqHstPerStrip = Math.max(1, Math.floor(fqH / hstCutSize));
+    const solidNeed = Math.ceil(solidSquareCount * (1 + FABRIC_BUFFER));
+    const hstNeed = Math.ceil(hstStarterSquareCount * (1 + FABRIC_BUFFER));
+    const fqSolidStrips = solidNeed > 0 && cutSize <= fqH ? Math.ceil(solidNeed / fqSolidPerStrip) : solidNeed > 0 ? 999 : 0;
+    const fqHstStrips = hstNeed > 0 && hstCutSize <= fqH ? Math.ceil(hstNeed / fqHstPerStrip) : hstNeed > 0 ? 999 : 0;
+    const neededLen = fqSolidStrips * cutSize + fqHstStrips * hstCutSize;
+    const fitsOneFq = solidSquareCount + hstStarterSquareCount > 0 && neededLen <= fqW;
     return { perFq, fitsOneFq, fqLabel: unit === "in" ? '18"\u00d721"' : "45\u00d752 cm" };
   }
 
@@ -1794,35 +2514,10 @@
     off.height = rows * sq;
     const ctx = off.getContext("2d");
 
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const pal = state.palette[state.gridAssignments[r * cols + c]];
-        if (grayscale) {
-          const lum = Math.round(luminance(pal.r, pal.g, pal.b));
-          ctx.fillStyle = `rgb(${lum}, ${lum}, ${lum})`;
-        } else {
-          ctx.fillStyle = `rgb(${pal.r}, ${pal.g}, ${pal.b})`;
-        }
-        ctx.fillRect(c * sq, r * sq, sq, sq);
-      }
-    }
-
-    if (sq >= 6) {
-      ctx.strokeStyle = grayscale ? "rgba(0, 0, 0, 0.14)" : "rgba(25, 22, 18, 0.14)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      for (let c = 1; c < cols; c++) {
-        const x = c * sq + 0.5;
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, off.height);
-      }
-      for (let r = 1; r < rows; r++) {
-        const y = r * sq + 0.5;
-        ctx.moveTo(0, y);
-        ctx.lineTo(off.width, y);
-      }
-      ctx.stroke();
-    }
+    drawQuiltCellsToContext(ctx, cols, rows, sq, {
+      grayscale,
+      showSeams: sq >= 6,
+    });
 
     return {
       dataUrl: off.toDataURL("image/png"),
@@ -1866,19 +2561,24 @@
       const finished = Math.max(0.1, state.finishedSquareSize);
       const seam = Math.max(0, state.seamAllowance);
       const cutSize = finished + 2 * seam;
+      const hstCutSize = getHstCutSize();
+      const hasHsts = state.hstEnabled && state.hstCount > 0;
+      const solidCellsTotal = Math.max(0, cols * rows - (hasHsts ? state.hstCount : 0));
       const quiltW = cols * finished;
       const quiltH = rows * finished;
       const wof = getUsableWof(unit);
 
-      const customTitle = patternTitleInput ? patternTitleInput.value.trim() : "";
-      const title = customTitle || derivePatternTitle(state.fileName) || "Custom Pixel Quilt";
+      const title = getCurrentProjectTitle();
 
-      // Build active color list (skipping any palette colors with 0 assigned squares)
+      // Build active color list (skipping any palette colors with 0 assigned pieces)
       const activeColors = state.palette
         .map((color, idx) => {
           const count = state.usageCounts[idx] || 0;
+          const solidCount = state.solidCounts[idx] || 0;
+          const hstHalves = state.hstHalfCounts[idx] || 0;
+          const hstStarters = state.hstStarterCounts[idx] || 0;
           const match = getFabricCatalogMatch(color.r, color.g, color.b);
-          const fq = calculateFatQuarterFit(count);
+          const fq = calculateFatQuarterFit(solidCount, hstStarters);
           return {
             index: idx,
             code: getFabricCode(idx),
@@ -1890,7 +2590,10 @@
             g: color.g,
             b: color.b,
             count,
-            fabric: calculateColorFabric(count),
+            solidCount,
+            hstHalves,
+            hstStarters,
+            fabric: calculateColorFabric(solidCount, hstStarters),
           };
         })
         .filter((c) => c.count > 0);
@@ -1963,7 +2666,10 @@
       doc.setFont(fonts.sans, "normal");
       doc.setFontSize(10);
       doc.setTextColor(108, 100, 88);
-      const subSummary = `Finished Quilt: ${formatPdfMeasure(quiltW, unit)} \u00d7 ${formatPdfMeasure(quiltH, unit)}   \u00b7   ${(cols * rows).toLocaleString()} Squares   \u00b7   ${activeColors.length} Solid Fabrics`;
+      const unitsSummary = hasHsts
+        ? `${solidCellsTotal.toLocaleString()} Squares + ${state.hstCount.toLocaleString()} HSTs`
+        : `${(cols * rows).toLocaleString()} Squares`;
+      const subSummary = `Finished Quilt: ${formatPdfMeasure(quiltW, unit)} \u00d7 ${formatPdfMeasure(quiltH, unit)}   \u00b7   ${unitsSummary}   \u00b7   ${activeColors.length} Solid Fabrics`;
       doc.text(subSummary, margin, 1.48);
 
       // Terracotta accent rule
@@ -1982,8 +2688,13 @@
       const coverStats = [
         ["FINISHED QUILT", `${formatPdfMeasure(quiltW, unit)} \u00d7 ${formatPdfMeasure(quiltH, unit)}`],
         ["GRID DIMENSIONS", `${cols} cols \u00d7 ${rows} rows`],
-        ["FINISHED SQUARE", `${formatPdfMeasure(finished, unit)} \u00d7 ${formatPdfMeasure(finished, unit)}`],
-        ["CUT SQUARE SIZE", `${formatPdfMeasure(cutSize, unit)} \u00d7 ${formatPdfMeasure(cutSize, unit)}`],
+        ["FINISHED UNIT", `${formatPdfMeasure(finished, unit)} \u00d7 ${formatPdfMeasure(finished, unit)}`],
+        [
+          hasHsts ? "CUT SIZES (SQ / HST)" : "CUT SQUARE SIZE",
+          hasHsts
+            ? `${formatPdfMeasure(cutSize, unit)} sq \u00b7 ${formatPdfMeasure(hstCutSize, unit)} HST`
+            : `${formatPdfMeasure(cutSize, unit)} \u00d7 ${formatPdfMeasure(cutSize, unit)}`,
+        ],
         ["SEAM ALLOWANCE", formatPdfMeasure(seam, unit)],
         ["ASSEMBLY STYLE", isBlockMode ? "8\u00d78 Sub-Blocks" : "Row-by-Row"],
       ];
@@ -2093,7 +2804,9 @@
           doc.setFontSize(8.6);
           doc.setTextColor(108, 100, 88);
           const cutIntroLines = doc.splitTextToSize(
-            `Cut ${formatPdfMeasure(cutSize, unit)} \u00d7 ${formatPdfMeasure(cutSize, unit)} squares (includes ${formatPdfMeasure(seam, unit)} seam allowance). Yardage includes +10% safety buffer on ${formatPdfMeasure(wof, unit)} WOF.`,
+            hasHsts
+              ? `Cut ${formatPdfMeasure(cutSize, unit)} solid squares and ${formatPdfMeasure(hstCutSize, unit)} HST starter squares (2-at-a-time method: pair 2 starter squares RST, draw diagonal, sew ${formatPdfMeasure(seam, unit)} on both sides, cut on line & square up to ${formatPdfMeasure(cutSize, unit)}). Includes +10% buffer on ${formatPdfMeasure(wof, unit)} WOF.`
+              : `Cut ${formatPdfMeasure(cutSize, unit)} \u00d7 ${formatPdfMeasure(cutSize, unit)} squares (includes ${formatPdfMeasure(seam, unit)} seam allowance). Yardage includes +10% safety buffer on ${formatPdfMeasure(wof, unit)} WOF.`,
             contentW
           );
           doc.text(cutIntroLines, margin, curY);
@@ -2132,8 +2845,8 @@
         doc.text("SWATCH", margin + 0.58, curY + 0.18);
         doc.text("TAPE FABRIC", margin + 1.14, curY + 0.18);
         doc.text("COLOR NAME", margin + 2.12, curY + 0.18);
-        doc.text("SQUARES", margin + 3.75, curY + 0.18, { align: "right" });
-        doc.text(`CUTTING (${formatPdfMeasure(cutSize, unit)} STRIPS)`, margin + 3.92, curY + 0.18);
+        doc.text(hasHsts ? "CUT PIECES" : "SQUARES", margin + 3.75, curY + 0.18, { align: "right" });
+        doc.text(hasHsts ? "WOF CUTTING STRIPS" : `CUTTING (${formatPdfMeasure(cutSize, unit)} STRIPS)`, margin + 3.92, curY + 0.18);
         doc.text("NEED", margin + contentW - 0.1, curY + 0.18, { align: "right" });
         curY += 0.31;
       };
@@ -2168,17 +2881,30 @@
         doc.setFont(fonts.sans, "bold");
         doc.setFontSize(8.8);
         doc.setTextColor(34, 31, 26);
-        doc.text(fitSingleLine(doc, c.name, 1.12), margin + 2.12, curY + 0.25);
+        doc.text(fitSingleLine(doc, c.name, 1.04), margin + 2.12, curY + 0.25);
 
         doc.setFont(fonts.mono, "bold");
-        doc.setFontSize(8.6);
-        doc.text(String(c.count), margin + 3.75, curY + 0.25, { align: "right" });
+        doc.setFontSize(hasHsts && c.hstStarters > 0 ? 7.6 : 8.6);
+        const piecesTxt =
+          hasHsts && c.hstStarters > 0 && c.solidCount > 0
+            ? `${c.solidCount}sq+${c.hstStarters}H`
+            : hasHsts && c.hstStarters > 0
+              ? `${c.hstStarters} HST`
+              : String(c.solidCount);
+        doc.text(piecesTxt, margin + 3.75, curY + 0.25, { align: "right" });
 
         const cutColMaxW = contentW - 4.72;
         doc.setFont(fonts.sans, "normal");
-        doc.setFontSize(8.1);
+        doc.setFontSize(8.0);
         doc.setTextColor(70, 65, 58);
-        const stripTxt = `${c.fabric.strips} WOF strip${c.fabric.strips === 1 ? "" : "s"} (${c.fabric.squaresPerStrip}/strip)`;
+        let stripTxt;
+        if (c.hstStarters > 0 && c.solidCount > 0) {
+          stripTxt = `${c.fabric.strips}\u00d7${formatPdfMeasure(cutSize, unit)} + ${c.fabric.hstStrips}\u00d7${formatPdfMeasure(hstCutSize, unit)} WOF`;
+        } else if (c.hstStarters > 0) {
+          stripTxt = `${c.fabric.hstStrips}\u00d7${formatPdfMeasure(hstCutSize, unit)} HST strip${c.fabric.hstStrips === 1 ? "" : "s"} (${c.fabric.hstSquaresPerStrip}/strip)`;
+        } else {
+          stripTxt = `${c.fabric.strips} WOF strip${c.fabric.strips === 1 ? "" : "s"} (${c.fabric.squaresPerStrip}/strip)`;
+        }
         doc.text(fitSingleLine(doc, stripTxt, cutColMaxW), margin + 3.92, curY + 0.2);
         if (c.fq.fitsOneFq) {
           doc.setFont(fonts.sans, "bold");
@@ -2438,7 +3164,10 @@
         return {
           isFq: false,
           buyLabel: formatPdfYardage(c.fabric.formatted),
-          subLabel: `${c.fabric.strips} WOF strip${c.fabric.strips === 1 ? "" : "s"}`,
+          subLabel:
+            c.fabric.hstStrips > 0
+              ? `${c.fabric.strips + c.fabric.hstStrips} total WOF strips`
+              : `${c.fabric.strips} WOF strip${c.fabric.strips === 1 ? "" : "s"}`,
           unitPriceLabel: `$${PRICE_FQS.toFixed(2)}-$${PRICE_MSQC.toFixed(2)}/yd`,
           costLow: yds * PRICE_FQS,
           costHigh: yds * PRICE_MSQC,
@@ -2734,21 +3463,66 @@
 
             for (let c = 0; c < subCols; c++) {
               const globalCol = cStart + c;
-              const palIdx = state.gridAssignments[globalRow * cols + globalCol];
+              const cellIdx = globalRow * cols + globalCol;
+              const cellType = state.cellTypes[cellIdx];
+              const palIdx = state.gridAssignments[cellIdx];
               const pal = state.palette[palIdx];
               const code = codeByPaletteIndex.get(palIdx) || "?";
               const cx = gridX + c * cellSize;
 
-              doc.setFillColor(pal.r, pal.g, pal.b);
-              doc.setDrawColor(168, 160, 150);
-              doc.setLineWidth(0.005);
-              doc.rect(cx, ry, cellSize, cellSize, "FD");
+              if (cellType === 0) {
+                doc.setFillColor(pal.r, pal.g, pal.b);
+                doc.setDrawColor(168, 160, 150);
+                doc.setLineWidth(0.005);
+                doc.rect(cx, ry, cellSize, cellSize, "FD");
 
-              const isLight = luminance(pal.r, pal.g, pal.b) > 142;
-              doc.setTextColor(isLight ? 25 : 255, isLight ? 22 : 255, isLight ? 18 : 255);
-              doc.setFont(fonts.mono, "bold");
-              doc.setFontSize(cellFont);
-              doc.text(code, cx + cellSize / 2, ry + cellSize * 0.65, { align: "center" });
+                const isLight = luminance(pal.r, pal.g, pal.b) > 142;
+                doc.setTextColor(isLight ? 25 : 255, isLight ? 22 : 255, isLight ? 18 : 255);
+                doc.setFont(fonts.mono, "bold");
+                doc.setFontSize(cellFont);
+                doc.text(code, cx + cellSize / 2, ry + cellSize * 0.65, { align: "center" });
+              } else {
+                const palIdxB = state.gridAssignmentsB[cellIdx];
+                const palB = state.palette[palIdxB] || pal;
+                const codeB = codeByPaletteIndex.get(palIdxB) || "?";
+                const hstFont = Math.min(6.4, Math.max(4.0, cellSize * 15));
+
+                // Fill base rect with Half B, then overlay Half A triangle + diagonal seam
+                doc.setFillColor(palB.r, palB.g, palB.b);
+                doc.rect(cx, ry, cellSize, cellSize, "F");
+                doc.setFillColor(pal.r, pal.g, pal.b);
+                if (cellType === 1) {
+                  // '/' diagonal: Half A = TL, Half B = BR
+                  doc.triangle(cx, ry, cx + cellSize, ry, cx, ry + cellSize, "F");
+                  doc.setDrawColor(150, 142, 130);
+                  doc.setLineWidth(0.005);
+                  doc.rect(cx, ry, cellSize, cellSize, "S");
+                  doc.line(cx, ry + cellSize, cx + cellSize, ry);
+                } else {
+                  // '\' diagonal: Half A = BL, Half B = TR
+                  doc.triangle(cx, ry, cx, ry + cellSize, cx + cellSize, ry + cellSize, "F");
+                  doc.setDrawColor(150, 142, 130);
+                  doc.setLineWidth(0.005);
+                  doc.rect(cx, ry, cellSize, cellSize, "S");
+                  doc.line(cx, ry, cx + cellSize, ry + cellSize);
+                }
+
+                doc.setFont(fonts.mono, "bold");
+                doc.setFontSize(hstFont);
+                const lightA = luminance(pal.r, pal.g, pal.b) > 142;
+                const lightB = luminance(palB.r, palB.g, palB.b) > 142;
+                if (cellType === 1) {
+                  doc.setTextColor(lightA ? 25 : 255, lightA ? 22 : 255, lightA ? 18 : 255);
+                  doc.text(code, cx + cellSize * 0.27, ry + cellSize * 0.37, { align: "center" });
+                  doc.setTextColor(lightB ? 25 : 255, lightB ? 22 : 255, lightB ? 18 : 255);
+                  doc.text(codeB, cx + cellSize * 0.73, ry + cellSize * 0.85, { align: "center" });
+                } else {
+                  doc.setTextColor(lightA ? 25 : 255, lightA ? 22 : 255, lightA ? 18 : 255);
+                  doc.text(code, cx + cellSize * 0.27, ry + cellSize * 0.85, { align: "center" });
+                  doc.setTextColor(lightB ? 25 : 255, lightB ? 22 : 255, lightB ? 18 : 255);
+                  doc.text(codeB, cx + cellSize * 0.73, ry + cellSize * 0.37, { align: "center" });
+                }
+              }
             }
           }
 
@@ -2848,26 +3622,42 @@
 
       drawAssemblyHeader(false);
 
-      // Helper to encode a segment [cStart..cEnd) of row `r` into run-length items { count, code, pal }
+      // Helper to encode a segment [cStart..cEnd) of row `r` into run-length items
       const encodeRowRuns = (r, cStart, cEnd) => {
         const runs = [];
-        let prevCode = null;
-        let prevPal = null;
-        let runLen = 0;
+        let prevKey = null;
+        let curRun = null;
         for (let c = cStart; c < cEnd; c++) {
-          const pIdx = state.gridAssignments[r * cols + c];
+          const cellIdx = r * cols + c;
+          const cellType = state.cellTypes[cellIdx];
+          const pIdx = state.gridAssignments[cellIdx];
           const code = codeByPaletteIndex.get(pIdx) || "?";
           const pal = state.palette[pIdx];
-          if (code === prevCode) {
-            runLen++;
+
+          let key;
+          let item;
+          if (cellType === 0) {
+            key = `S:${code}`;
+            item = { count: 1, isHst: false, code, pal };
           } else {
-            if (prevCode !== null) runs.push({ count: runLen, code: prevCode, pal: prevPal });
-            prevCode = code;
-            prevPal = pal;
-            runLen = 1;
+            const pIdxB = state.gridAssignmentsB[cellIdx];
+            const codeB = codeByPaletteIndex.get(pIdxB) || "?";
+            const palB = state.palette[pIdxB] || pal;
+            const sep = cellType === 1 ? "/" : "\\";
+            const hstCode = `${code}${sep}${codeB}`;
+            key = `H:${hstCode}`;
+            item = { count: 1, isHst: true, diag: cellType, code: hstCode, pal, palB };
+          }
+
+          if (key === prevKey && curRun) {
+            curRun.count++;
+          } else {
+            if (curRun) runs.push(curRun);
+            prevKey = key;
+            curRun = item;
           }
         }
-        if (prevCode !== null) runs.push({ count: runLen, code: prevCode, pal: prevPal });
+        if (curRun) runs.push(curRun);
         return runs;
       };
 
@@ -2923,16 +3713,36 @@
             cy += lineStepY;
           }
           const pal = run.pal || { r: 230, g: 230, b: 230 };
-          doc.setFillColor(pal.r, pal.g, pal.b);
-          doc.setDrawColor(145, 137, 125);
-          doc.setLineWidth(0.006);
-          doc.roundedRect(cx, cy, w, chipH, 0.04, 0.04, "FD");
+          if (run.isHst && run.palB) {
+            // Split-color chip for Half-Square Triangle units (e.g. A/B or A\B)
+            const halfW = w / 2;
+            doc.setFillColor(pal.r, pal.g, pal.b);
+            doc.rect(cx, cy, halfW, chipH, "F");
+            doc.setFillColor(run.palB.r, run.palB.g, run.palB.b);
+            doc.rect(cx + halfW, cy, halfW, chipH, "F");
+            doc.setDrawColor(120, 112, 102);
+            doc.setLineWidth(0.008);
+            doc.rect(cx, cy, w, chipH, "S");
 
-          const isLight = luminance(pal.r, pal.g, pal.b) > 145;
-          doc.setTextColor(isLight ? 25 : 255, isLight ? 22 : 255, isLight ? 18 : 255);
-          doc.setFont(fonts.mono, "bold");
-          doc.setFontSize(7.4);
-          doc.text(txt, cx + w / 2, cy + 0.138, { align: "center" });
+            // Crisp pill label pill-backing so text is legible across any two-tone split
+            doc.setFillColor(255, 255, 255);
+            doc.roundedRect(cx + 0.04, cy + 0.03, w - 0.08, chipH - 0.06, 0.02, 0.02, "F");
+            doc.setTextColor(34, 31, 26);
+            doc.setFont(fonts.mono, "bold");
+            doc.setFontSize(7.1);
+            doc.text(txt, cx + w / 2, cy + 0.136, { align: "center" });
+          } else {
+            doc.setFillColor(pal.r, pal.g, pal.b);
+            doc.setDrawColor(145, 137, 125);
+            doc.setLineWidth(0.006);
+            doc.roundedRect(cx, cy, w, chipH, 0.04, 0.04, "FD");
+
+            const isLight = luminance(pal.r, pal.g, pal.b) > 145;
+            doc.setTextColor(isLight ? 25 : 255, isLight ? 22 : 255, isLight ? 18 : 255);
+            doc.setFont(fonts.mono, "bold");
+            doc.setFontSize(7.4);
+            doc.text(txt, cx + w / 2, cy + 0.138, { align: "center" });
+          }
           cx += w + chipGapX;
         });
 
@@ -3061,7 +3871,13 @@
         doc.setFont(fonts.sans, "normal");
         doc.setFontSize(7);
         doc.setTextColor(108, 100, 88);
-        doc.text(fitSingleLine(doc, `${c.count} sq \u00b7 Cut ${formatPdfMeasure(cutSize, unit)}`, fTagW - 0.58), tx + 0.5, ty + 0.58);
+        const tagCutSummary =
+          c.hstStarters > 0 && c.solidCount > 0
+            ? `${c.solidCount}\u00d7${formatPdfMeasure(cutSize, unit)} + ${c.hstStarters}\u00d7${formatPdfMeasure(hstCutSize, unit)} HST`
+            : c.hstStarters > 0
+              ? `${c.hstStarters}\u00d7${formatPdfMeasure(hstCutSize, unit)} HST sq`
+              : `${c.solidCount} sq \u00b7 Cut ${formatPdfMeasure(cutSize, unit)}`;
+        doc.text(fitSingleLine(doc, tagCutSummary, fTagW - 0.58), tx + 0.5, ty + 0.58);
         doc.text(fitSingleLine(doc, c.match.konaName, fTagW - 0.58), tx + 0.5, ty + 0.7);
       });
       ty += fTagH + 0.3;
@@ -3209,6 +4025,338 @@
     }
   }
 
+  // Single-page printable Color Design Sheet PDF for early concept sharing & pin-up review
+  async function exportDesignSheetPdf() {
+    if (!state.image || state.palette.length === 0 || state.gridAssignments.length === 0) return;
+
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+      alert("PDF export library is still loading or unavailable offline. Please check your connection and try again.");
+      return;
+    }
+
+    if (exportSheetBtn) exportSheetBtn.disabled = true;
+    const originalBtnHtml = exportSheetBtn ? exportSheetBtn.innerHTML : "";
+    if (exportSheetBtn) exportSheetBtn.textContent = "Preparing Sheet...";
+
+    try {
+      const [fontData, brandIconDataUrl] = await Promise.all([loadPdfFonts(), loadPdfBrandIcon()]);
+      const { jsPDF } = window.jspdf;
+      const isA4 = pageSizeSelect.value === "a4";
+      const doc = new jsPDF({ orientation: "portrait", unit: "in", format: isA4 ? "a4" : "letter" });
+      doc.setLineHeightFactor(1.38);
+      const fonts = registerPdfFonts(doc, fontData);
+
+      const pageW = isA4 ? 8.27 : 8.5;
+      const pageH = isA4 ? 11.69 : 11.0;
+      const margin = 0.55;
+      const contentW = pageW - margin * 2;
+
+      const unit = state.unit;
+      const cols = state.cols;
+      const rows = state.rows;
+      const finished = Math.max(0.1, state.finishedSquareSize);
+      const seam = Math.max(0, state.seamAllowance);
+      const cutSize = finished + 2 * seam;
+      const hstCutSize = getHstCutSize();
+      const hasHsts = state.hstEnabled && state.hstCount > 0;
+      const solidCellsTotal = Math.max(0, cols * rows - (hasHsts ? state.hstCount : 0));
+      const quiltW = cols * finished;
+      const quiltH = rows * finished;
+
+      const title = getCurrentProjectTitle();
+
+      const activeColors = state.palette
+        .map((color, idx) => {
+          const count = state.usageCounts[idx] || 0;
+          const solidCount = state.solidCounts[idx] || 0;
+          const hstHalves = state.hstHalfCounts[idx] || 0;
+          const hstStarters = state.hstStarterCounts[idx] || 0;
+          const match = getFabricCatalogMatch(color.r, color.g, color.b);
+          const fabric = calculateColorFabric(solidCount, hstStarters);
+          return {
+            code: getFabricCode(idx),
+            name: match.name,
+            konaName: match.konaName,
+            r: color.r,
+            g: color.g,
+            b: color.b,
+            count,
+            solidCount,
+            hstHalves,
+            fabric,
+          };
+        })
+        .filter((c) => c.count > 0);
+
+      const totalTopLen = activeColors.reduce((acc, c) => acc + c.fabric.length * (1 + FABRIC_BUFFER), 0);
+      const totalTopFormatted = formatPdfYardage(formatFabricAmount(totalTopLen, unit));
+
+      // 1. Warm Editorial Header Band
+      doc.setFillColor(246, 242, 235);
+      doc.rect(0, 0, pageW, 1.56, "F");
+      doc.setDrawColor(223, 214, 199);
+      doc.setLineWidth(0.01);
+      doc.line(0, 1.56, pageW, 1.56);
+
+      if (brandIconDataUrl) {
+        doc.addImage(brandIconDataUrl, "PNG", margin, 0.36, 0.38, 0.38);
+      }
+      const eyeX = brandIconDataUrl ? margin + 0.5 : margin;
+      doc.setFont(fonts.sans, "bold");
+      doc.setFontSize(7.6);
+      doc.setTextColor(184, 77, 44);
+      doc.text("MIRIAM'S QUILTCASTER  \u00b7  DESIGN PREVIEW SHEET", eyeX, 0.59);
+
+      const dateStr = new Date().toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+      doc.setFont(fonts.mono, "normal");
+      doc.setFontSize(7.2);
+      doc.setTextColor(135, 127, 115);
+      doc.text(dateStr, pageW - margin, 0.59, { align: "right" });
+
+      doc.setFont(fonts.serif, "normal");
+      doc.setFontSize(23);
+      doc.setTextColor(34, 31, 26);
+      doc.text(fitSingleLine(doc, title, contentW), margin, 1.05);
+
+      doc.setFont(fonts.sans, "normal");
+      doc.setFontSize(9.2);
+      doc.setTextColor(108, 100, 88);
+      const pieceSummary = hasHsts
+        ? `${solidCellsTotal.toLocaleString()} Squares + ${state.hstCount.toLocaleString()} HSTs`
+        : `${(cols * rows).toLocaleString()} Squares`;
+      const headerSub = `Finished Dimensions: ${formatPdfMeasure(quiltW, unit)} \u00d7 ${formatPdfMeasure(quiltH, unit)}   \u00b7   ${cols} \u00d7 ${rows} Grid (${pieceSummary})   \u00b7   ${activeColors.length} Solid Fabrics`;
+      doc.text(fitSingleLine(doc, headerSub, contentW), margin, 1.32);
+
+      // 2. Compute Bottom Palette Strip & 4-Stat Spec Bar Coordinates First so Hero Gets Max Space
+      const swCols = activeColors.length <= 6 ? 3 : 4;
+      const swRows = Math.max(1, Math.ceil(activeColors.length / swCols));
+      const swRowH = swRows >= 5 ? 0.29 : 0.34;
+      const swGapY = 0.06;
+      const swGapX = 0.12;
+      const paletteHeaderH = 0.22;
+      const paletteBlockH = paletteHeaderH + swRows * swRowH + (swRows - 1) * swGapY;
+      const footerTopY = pageH - 0.44;
+      const paletteTopY = footerTopY - 0.14 - paletteBlockH;
+
+      const specBarH = 0.62;
+      const specBarY = paletteTopY - 0.18 - specBarH;
+
+      // 3. Large Color Quilt Mockup with Architectural Top & Right Dimension Callouts
+      const mockup = buildMockupDataUrl({ grayscale: false });
+      const heroZoneTop = 1.72;
+      const heroZoneBottom = specBarY - 0.16;
+      const rulerTopSpace = 0.3;
+      const rulerRightSpace = 0.56;
+      const matPad = 0.11;
+
+      const maxImgW = Math.max(1.5, contentW - rulerRightSpace - matPad * 2);
+      const maxImgH = Math.max(1.5, heroZoneBottom - heroZoneTop - rulerTopSpace - matPad * 2);
+      const aspect = mockup.width / Math.max(1, mockup.height);
+      let drawW = maxImgW;
+      let drawH = drawW / aspect;
+      if (drawH > maxImgH) {
+        drawH = maxImgH;
+        drawW = drawH * aspect;
+      }
+
+      const totalVisualW = drawW + rulerRightSpace * 0.65;
+      const imgX = margin + (contentW - totalVisualW) / 2;
+      const imgY = heroZoneTop + rulerTopSpace + (maxImgH - drawH) / 2;
+
+      // Crisp gallery mat frame
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(210, 200, 184);
+      doc.setLineWidth(0.014);
+      doc.roundedRect(imgX - matPad, imgY - matPad, drawW + matPad * 2, drawH + matPad * 2, 0.05, 0.05, "FD");
+      doc.addImage(mockup.dataUrl, "PNG", imgX, imgY, drawW, drawH);
+
+      // Architectural Top Width Dimension Ruler
+      const wLabel = formatPdfMeasure(quiltW, unit);
+      const topRulerY = imgY - matPad - 0.16;
+      doc.setFont(fonts.mono, "bold");
+      doc.setFontSize(8.2);
+      const wPillW = Math.max(0.56, doc.getTextWidth(wLabel) + 0.22);
+      const wPillH = 0.2;
+      const wMidX = imgX + drawW / 2;
+
+      doc.setDrawColor(145, 136, 124);
+      doc.setLineWidth(0.009);
+      doc.line(imgX, topRulerY - 0.045, imgX, topRulerY + 0.045);
+      doc.line(imgX + drawW, topRulerY - 0.045, imgX + drawW, topRulerY + 0.045);
+      if (drawW > wPillW + 0.14) {
+        doc.line(imgX, topRulerY, wMidX - wPillW / 2 - 0.05, topRulerY);
+        doc.line(wMidX + wPillW / 2 + 0.05, topRulerY, imgX + drawW, topRulerY);
+      }
+      doc.setFillColor(252, 250, 247);
+      doc.setDrawColor(184, 77, 44);
+      doc.setLineWidth(0.01);
+      doc.roundedRect(wMidX - wPillW / 2, topRulerY - wPillH / 2, wPillW, wPillH, 0.1, 0.1, "FD");
+      doc.setTextColor(34, 31, 26);
+      doc.text(wLabel, wMidX, topRulerY + 0.038, { align: "center" });
+
+      // Architectural Right Height Dimension Ruler
+      const hLabel = formatPdfMeasure(quiltH, unit);
+      const rightRulerX = imgX + drawW + matPad + 0.24;
+      const hPillW = Math.max(0.54, doc.getTextWidth(hLabel) + 0.2);
+      const hPillH = 0.2;
+      const hMidY = imgY + drawH / 2;
+
+      doc.setDrawColor(145, 136, 124);
+      doc.setLineWidth(0.009);
+      doc.line(rightRulerX - 0.045, imgY, rightRulerX + 0.045, imgY);
+      doc.line(rightRulerX - 0.045, imgY + drawH, rightRulerX + 0.045, imgY + drawH);
+      if (drawH > hPillH + 0.14) {
+        doc.line(rightRulerX, imgY, rightRulerX, hMidY - hPillH / 2 - 0.05);
+        doc.line(rightRulerX, hMidY + hPillH / 2 + 0.05, rightRulerX, imgY + drawH);
+      }
+      doc.setFillColor(252, 250, 247);
+      doc.setDrawColor(184, 77, 44);
+      doc.setLineWidth(0.01);
+      doc.roundedRect(rightRulerX - hPillW / 2, hMidY - hPillH / 2, hPillW, hPillH, 0.1, 0.1, "FD");
+      doc.setTextColor(34, 31, 26);
+      doc.text(hLabel, rightRulerX, hMidY + 0.038, { align: "center" });
+
+      // 4. Key Dimensions & Scope Bar (4 clean columns)
+      doc.setFillColor(252, 250, 247);
+      doc.setDrawColor(223, 214, 199);
+      doc.setLineWidth(0.01);
+      doc.roundedRect(margin, specBarY, contentW, specBarH, 0.06, 0.06, "FD");
+
+      const specItems = [
+        [
+          "FINISHED QUILT SIZE",
+          `${formatPdfMeasure(quiltW, unit)} \u00d7 ${formatPdfMeasure(quiltH, unit)}`,
+          `Width \u00d7 Height`,
+          true,
+        ],
+        [
+          "PATCHWORK GRID",
+          `${cols} \u00d7 ${rows} units`,
+          hasHsts ? `${solidCellsTotal} sq \u00b7 ${state.hstCount} HST` : `${(cols * rows).toLocaleString()} squares`,
+          false,
+        ],
+        [
+          "FINISHED UNIT",
+          `${formatPdfMeasure(finished, unit)} \u00d7 ${formatPdfMeasure(finished, unit)}`,
+          hasHsts
+            ? `Cut ${formatPdfMeasure(cutSize, unit)} / ${formatPdfMeasure(hstCutSize, unit)} HST`
+            : `Cut ${formatPdfMeasure(cutSize, unit)} (${formatPdfMeasure(seam, unit)} seam)`,
+          false,
+        ],
+        [
+          "EST. TOP FABRIC",
+          `~${totalTopFormatted}`,
+          `${activeColors.length} solid fabric${activeColors.length === 1 ? "" : "s"}`,
+          false,
+        ],
+      ];
+
+      const sColW = contentW / 4;
+      specItems.forEach(([lbl, mainVal, subVal, accent], idx) => {
+        const sx = margin + idx * sColW + 0.14;
+        if (idx > 0) {
+          doc.setDrawColor(232, 225, 214);
+          doc.setLineWidth(0.007);
+          doc.line(margin + idx * sColW, specBarY + 0.1, margin + idx * sColW, specBarY + specBarH - 0.1);
+        }
+        doc.setFont(fonts.sans, "bold");
+        doc.setFontSize(6.5);
+        doc.setTextColor(135, 127, 115);
+        doc.text(lbl, sx, specBarY + 0.19);
+
+        doc.setFont(fonts.sans, "bold");
+        doc.setFontSize(9.6);
+        doc.setTextColor(accent ? 184 : 34, accent ? 77 : 31, accent ? 44 : 26);
+        doc.text(fitSingleLine(doc, mainVal, sColW - 0.22), sx, specBarY + 0.38);
+
+        doc.setFont(fonts.sans, "normal");
+        doc.setFontSize(7.0);
+        doc.setTextColor(108, 100, 88);
+        doc.text(fitSingleLine(doc, subVal, sColW - 0.22), sx, specBarY + 0.52);
+      });
+
+      // 5. Color Story / Fabric Palette Swatch Strip
+      doc.setFont(fonts.sans, "bold");
+      doc.setFontSize(7.3);
+      doc.setTextColor(92, 84, 73);
+      doc.text("COLOR PALETTE & FABRIC OVERVIEW", margin, paletteTopY + 0.13);
+
+      const swCellW = (contentW - swGapX * (swCols - 1)) / swCols;
+      const swStartY = paletteTopY + paletteHeaderH;
+
+      activeColors.forEach((c, idx) => {
+        const col = idx % swCols;
+        const row = Math.floor(idx / swCols);
+        const cx = margin + col * (swCellW + swGapX);
+        const cy = swStartY + row * (swRowH + swGapY);
+
+        doc.setFillColor(250, 248, 244);
+        doc.setDrawColor(225, 217, 204);
+        doc.setLineWidth(0.007);
+        doc.roundedRect(cx, cy, swCellW, swRowH, 0.04, 0.04, "FD");
+
+        // Color swatch chip with letter badge
+        const chipW = 0.34;
+        const chipH = swRowH - 0.08;
+        drawCodeBadge(doc, fonts, cx + 0.04, cy + 0.04, chipW, chipH, c.code, c.r, c.g, c.b);
+
+        const textX = cx + chipW + 0.1;
+        const maxTxtW = swCellW - chipW - 0.14;
+        doc.setFont(fonts.sans, "bold");
+        doc.setFontSize(7.6);
+        doc.setTextColor(34, 31, 26);
+        doc.text(fitSingleLine(doc, c.konaName, maxTxtW), textX, cy + swRowH * 0.43);
+
+        doc.setFont(fonts.sans, "normal");
+        doc.setFontSize(6.6);
+        doc.setTextColor(108, 100, 88);
+        const swMeta =
+          c.hstHalves > 0 && c.solidCount > 0
+            ? `${c.solidCount} sq \u00b7 ${c.hstHalves} HST \u00b7 ${formatPdfYardage(c.fabric.formatted)}`
+            : c.hstHalves > 0
+              ? `${c.hstHalves} HST \u00b7 ${formatPdfYardage(c.fabric.formatted)}`
+              : `${c.solidCount} sq \u00b7 ${formatPdfYardage(c.fabric.formatted)}`;
+        doc.text(fitSingleLine(doc, swMeta, maxTxtW), textX, cy + swRowH * 0.8);
+      });
+
+      // 6. Clean Single-Page Footer
+      doc.setDrawColor(228, 221, 210);
+      doc.setLineWidth(0.006);
+      doc.line(margin, footerTopY, pageW - margin, footerTopY);
+
+      if (brandIconDataUrl) {
+        doc.addImage(brandIconDataUrl, "PNG", margin, pageH - 0.38, 0.15, 0.15);
+      }
+      doc.setFont(fonts.sans, "normal");
+      doc.setFontSize(7.4);
+      doc.setTextColor(135, 127, 115);
+      doc.text(
+        "Miriam's Quiltcaster  \u00b7  Concept Design Sheet (export Full Booklet when ready to cut & sew)",
+        brandIconDataUrl ? margin + 0.21 : margin,
+        pageH - 0.27
+      );
+      doc.setFont(fonts.mono, "bold");
+      doc.text(`${formatPdfMeasure(quiltW, unit)} \u00d7 ${formatPdfMeasure(quiltH, unit)}`, pageW - margin, pageH - 0.27, {
+        align: "right",
+      });
+
+      const safeFile = title.replace(/[^a-z0-9-_]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "quiltcaster";
+      doc.save(`${safeFile}-design-sheet.pdf`);
+    } finally {
+      if (exportSheetBtn) {
+        exportSheetBtn.disabled = false;
+        exportSheetBtn.innerHTML = originalBtnHtml;
+      }
+    }
+  }
+
+  if (exportSheetBtn) {
+    exportSheetBtn.addEventListener("click", exportDesignSheetPdf);
+  }
   exportPdfBtn.addEventListener("click", exportPdfPattern);
   assemblyModeBtns.forEach((btn) => {
     btn.addEventListener("click", () => setAssemblyMode(btn.dataset.assembly));
@@ -3803,7 +4951,345 @@
 
   window.addEventListener("mouseup", endCropDrag);
 
-  cropBtn.addEventListener("click", openCropStage);
+  // --- Interactive Shape Painting (Brush Triangles / Squares onto Quilt Areas) ---
+
+  let paintHoverCell = null; // { col, row } while hovering in paint mode
+  let activePaintStroke = null; // { pointerId, startCol, startRow, lastCol, lastRow, initialPref, initialDiag, movedCell }
+
+  function updatePaintToolbarUI() {
+    const hasPainted = state.hasPaintedMask;
+    const activeCount = state.paintedCellsCount;
+    if (paintToggleBtn) {
+      paintToggleBtn.classList.toggle("is-painting", state.paintMode);
+      paintToggleBtn.classList.toggle("is-cropped", !state.paintMode && hasPainted);
+    }
+    if (paintBtnLabel) {
+      if (state.paintMode) {
+        paintBtnLabel.textContent = "Painting";
+      } else if (activeCount > 0) {
+        paintBtnLabel.textContent = `Paint (${activeCount})`;
+      } else {
+        paintBtnLabel.textContent = "Paint";
+      }
+    }
+    if (paintClearBtn) {
+      paintClearBtn.hidden = !hasPainted;
+      paintClearBtn.textContent = activeCount > 0 ? `Clear (${activeCount})` : "Clear";
+    }
+    if (paintStatusLabel) {
+      if (activeCount > 0) {
+        paintStatusLabel.textContent = `${activeCount} edge/custom cell${activeCount === 1 ? "" : "s"} · flat areas stay squares`;
+      } else {
+        paintStatusLabel.textContent = "Brush over stepped edges to smooth with △";
+      }
+    }
+  }
+
+  function setPaintBrush(mode) {
+    const valid = mode === "square" || mode === "auto" ? mode : "hst";
+    state.paintBrush = valid;
+    paintBrushBtns.forEach((btn) => {
+      const active = btn.dataset.paintBrush === valid;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-checked", active ? "true" : "false");
+    });
+    if (state.paintMode && state.image) {
+      redrawPreviewWithOverlayOnly();
+    }
+  }
+
+  function setPaintSize(size) {
+    const n = Number(size);
+    const valid = n === 1 || n === 5 ? n : 3;
+    state.paintSize = valid;
+    paintSizeBtns.forEach((btn) => {
+      const active = Number(btn.dataset.paintSize) === valid;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-checked", active ? "true" : "false");
+    });
+    if (state.paintMode && state.image) {
+      redrawPreviewWithOverlayOnly();
+    }
+  }
+
+  function setPaintMode(enabled, initialBrush = null) {
+    state.paintMode = Boolean(enabled);
+    if (initialBrush) {
+      setPaintBrush(initialBrush);
+    }
+    if (paintToolbar) {
+      paintToolbar.hidden = !state.paintMode;
+    }
+    quiltCanvas.classList.toggle("is-paintable", state.paintMode);
+    if (!state.paintMode) {
+      paintHoverCell = null;
+      activePaintStroke = null;
+    }
+    if (state.image && state.palette.length > 0) {
+      // Re-run assignGridCells when entering paint mode so smoothableDiag is ready for live hover preview
+      renderQuilt();
+    } else {
+      updatePaintToolbarUI();
+    }
+  }
+
+  function redrawPreviewWithOverlayOnly() {
+    if (!state.image || state.palette.length === 0 || state.showingOriginal) return;
+    const cols = state.cols;
+    const rows = state.rows;
+    const squarePx = Math.round(quiltCanvas.width / Math.max(1, cols));
+    drawQuiltCellsToContext(quiltCtx, cols, rows, squarePx, {
+      grayscale: false,
+      showSeams: state.showSeamLines,
+    });
+    drawPaintCursorOverlay(squarePx);
+  }
+
+  function drawPaintCursorOverlay(squarePx) {
+    if (!state.paintMode || !paintHoverCell || squarePx <= 0) return;
+    const cols = state.cols;
+    const rows = state.rows;
+    const half = Math.floor(state.paintSize / 2);
+    const c0 = Math.max(0, paintHoverCell.col - half);
+    const c1 = Math.min(cols - 1, paintHoverCell.col + half);
+    const r0 = Math.max(0, paintHoverCell.row - half);
+    const r1 = Math.min(rows - 1, paintHoverCell.row + half);
+
+    const bx = c0 * squarePx;
+    const by = r0 * squarePx;
+    const bw = (c1 - c0 + 1) * squarePx;
+    const bh = (r1 - r0 + 1) * squarePx;
+
+    quiltCtx.save();
+    if (state.paintBrush === "hst") {
+      // Light footprint wash + highlight ONLY the cells inside the brush where triangles actually smooth an edge!
+      quiltCtx.fillStyle = "rgba(184, 77, 44, 0.08)";
+      quiltCtx.fillRect(bx, by, bw, bh);
+
+      for (let r = r0; r <= r1; r++) {
+        for (let c = c0; c <= c1; c++) {
+          const diag = state.smoothableDiag[r * cols + c] || 0;
+          if (diag > 0) {
+            const cx = c * squarePx;
+            const cy = r * squarePx;
+            quiltCtx.fillStyle = "rgba(184, 77, 44, 0.28)";
+            quiltCtx.fillRect(cx, cy, squarePx, squarePx);
+            if (squarePx >= 8) {
+              quiltCtx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+              quiltCtx.lineWidth = 1.5;
+              quiltCtx.beginPath();
+              if (diag === 1) {
+                quiltCtx.moveTo(cx + 1.5, cy + squarePx - 1.5);
+                quiltCtx.lineTo(cx + squarePx - 1.5, cy + 1.5);
+              } else {
+                quiltCtx.moveTo(cx + 1.5, cy + 1.5);
+                quiltCtx.lineTo(cx + squarePx - 1.5, cy + squarePx - 1.5);
+              }
+              quiltCtx.stroke();
+            }
+          }
+        }
+      }
+    } else {
+      quiltCtx.fillStyle =
+        state.paintBrush === "square" ? "rgba(58, 107, 124, 0.18)" : "rgba(34, 31, 26, 0.14)";
+      quiltCtx.fillRect(bx, by, bw, bh);
+    }
+
+    // Crisp dual-stroke brush outline (white halo + terracotta/slate inner border)
+    quiltCtx.strokeStyle = "rgba(255, 255, 255, 0.92)";
+    quiltCtx.lineWidth = 3;
+    quiltCtx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+    quiltCtx.strokeStyle =
+      state.paintBrush === "hst" ? "#b84d2c" : state.paintBrush === "square" ? "#3a6b7c" : "#46413a";
+    quiltCtx.lineWidth = 1.6;
+    quiltCtx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+    quiltCtx.restore();
+  }
+
+  function clientToQuiltCell(clientX, clientY) {
+    const rect = quiltCanvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    const fx = (clientX - rect.left) / rect.width;
+    const fy = (clientY - rect.top) / rect.height;
+    if (fx < 0 || fx > 1 || fy < 0 || fy > 1) return null;
+    const col = Math.max(0, Math.min(state.cols - 1, Math.floor(fx * state.cols)));
+    const row = Math.max(0, Math.min(state.rows - 1, Math.floor(fy * state.rows)));
+    return { col, row };
+  }
+
+  function ensureHstEnabledForTrianglePaint() {
+    if (!state.hstEnabled) {
+      // Enable HSTs in 0% Ratio mode so unpainted areas remain solid squares while painted cells get triangles!
+      state.hstEnabled = true;
+      setHstPlacementMode("ratio");
+      state.hstRatio = 0;
+      if (hstToggle) hstToggle.checked = true;
+      if (hstControls) hstControls.hidden = false;
+      if (hstRatioSlider) hstRatioSlider.value = "0";
+      updateQuiltDimensions();
+    }
+  }
+
+  function applyBrushDab(centerCol, centerRow) {
+    const cols = state.cols;
+    const rows = state.rows;
+    const half = Math.floor(state.paintSize / 2);
+    const prefVal = state.paintBrush === "hst" ? 2 : state.paintBrush === "square" ? 1 : 0;
+    if (prefVal === 2) {
+      ensureHstEnabledForTrianglePaint();
+    }
+    let changed = false;
+    for (let r = centerRow - half; r <= centerRow + half; r++) {
+      for (let c = centerCol - half; c <= centerCol + half; c++) {
+        if (c < 0 || c >= cols || r < 0 || r >= rows) continue;
+        // When painting with △ Smooth Edges, only mark cells where an HST actually smooths an edge
+        if (prefVal === 2 && state.smoothableDiag.length === cols * rows && state.smoothableDiag[r * cols + c] === 0) {
+          continue;
+        }
+        if (writeCellPaintPref(c, r, cols, rows, prefVal)) {
+          changed = true;
+        }
+      }
+    }
+    return changed;
+  }
+
+  function applyBrushSegment(c0, r0, c1, r1) {
+    let changed = false;
+    const steps = Math.max(Math.abs(c1 - c0), Math.abs(r1 - r0));
+    if (steps === 0) {
+      return applyBrushDab(c0, r0);
+    }
+    for (let s = 0; s <= steps; s++) {
+      const col = Math.round(c0 + ((c1 - c0) * s) / steps);
+      const row = Math.round(r0 + ((r1 - r0) * s) / steps);
+      if (applyBrushDab(col, row)) changed = true;
+    }
+    return changed;
+  }
+
+  quiltCanvas.addEventListener("pointerdown", (e) => {
+    if (!state.paintMode || !state.image || state.showingOriginal) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    const cell = clientToQuiltCell(e.clientX, e.clientY);
+    if (!cell) return;
+    e.preventDefault();
+    try {
+      quiltCanvas.setPointerCapture(e.pointerId);
+    } catch {
+      // Ignore if synthetic event without active pointer
+    }
+    paintHoverCell = cell;
+    const cellIdx = cell.row * state.cols + cell.col;
+    const initialPref = sampleCellPaintPref(cell.col, cell.row, state.cols, state.rows);
+    const initialDiag = state.cellTypes[cellIdx] || 0;
+    activePaintStroke = {
+      pointerId: e.pointerId,
+      startCol: cell.col,
+      startRow: cell.row,
+      lastCol: cell.col,
+      lastRow: cell.row,
+      initialPref,
+      initialDiag,
+      movedCell: false,
+    };
+    if (applyBrushDab(cell.col, cell.row)) {
+      renderQuilt();
+    } else {
+      redrawPreviewWithOverlayOnly();
+    }
+  });
+
+  quiltCanvas.addEventListener("pointermove", (e) => {
+    if (!state.paintMode || !state.image) return;
+    const cell = clientToQuiltCell(e.clientX, e.clientY);
+    if (!activePaintStroke) {
+      if (
+        (cell && (!paintHoverCell || cell.col !== paintHoverCell.col || cell.row !== paintHoverCell.row)) ||
+        (!cell && paintHoverCell)
+      ) {
+        paintHoverCell = cell;
+        redrawPreviewWithOverlayOnly();
+      }
+      return;
+    }
+    if (e.pointerId !== activePaintStroke.pointerId || !cell) return;
+    e.preventDefault();
+    paintHoverCell = cell;
+    if (cell.col !== activePaintStroke.lastCol || cell.row !== activePaintStroke.lastRow) {
+      activePaintStroke.movedCell = true;
+      const changed = applyBrushSegment(
+        activePaintStroke.lastCol,
+        activePaintStroke.lastRow,
+        cell.col,
+        cell.row
+      );
+      activePaintStroke.lastCol = cell.col;
+      activePaintStroke.lastRow = cell.row;
+      if (changed) {
+        renderQuilt();
+      } else {
+        redrawPreviewWithOverlayOnly();
+      }
+    }
+  });
+
+  const finishPaintStroke = (e) => {
+    if (!activePaintStroke) return;
+    if (e && typeof e.pointerId === "number" && e.pointerId !== activePaintStroke.pointerId) return;
+    const stroke = activePaintStroke;
+    activePaintStroke = null;
+
+    // Single-cell tap with 1×1 △ brush on an already-HST cell flips its '/' <-> '\' diagonal!
+    if (
+      !stroke.movedCell &&
+      state.paintBrush === "hst" &&
+      state.paintSize === 1 &&
+      stroke.initialPref >= 2 &&
+      stroke.initialDiag >= 1
+    ) {
+      const flippedPref = stroke.initialDiag === 1 ? 4 : 3;
+      writeCellPaintPref(stroke.startCol, stroke.startRow, state.cols, state.rows, flippedPref);
+      renderQuilt();
+    }
+  };
+
+  quiltCanvas.addEventListener("pointerup", finishPaintStroke);
+  quiltCanvas.addEventListener("pointercancel", finishPaintStroke);
+  quiltCanvas.addEventListener("pointerleave", () => {
+    if (!state.paintMode || activePaintStroke) return;
+    if (paintHoverCell) {
+      paintHoverCell = null;
+      redrawPreviewWithOverlayOnly();
+    }
+  });
+
+  if (paintToggleBtn) {
+    paintToggleBtn.addEventListener("click", () => {
+      setPaintMode(!state.paintMode);
+    });
+  }
+  if (paintDoneBtn) {
+    paintDoneBtn.addEventListener("click", () => setPaintMode(false));
+  }
+  if (paintClearBtn) {
+    paintClearBtn.addEventListener("click", () => {
+      state.paintMask.fill(0);
+      renderQuilt();
+    });
+  }
+  paintBrushBtns.forEach((btn) => {
+    btn.addEventListener("click", () => setPaintBrush(btn.dataset.paintBrush));
+  });
+  paintSizeBtns.forEach((btn) => {
+    btn.addEventListener("click", () => setPaintSize(btn.dataset.paintSize));
+  });
+
+  cropBtn.addEventListener("click", () => {
+    if (state.paintMode) setPaintMode(false);
+    openCropStage();
+  });
   cropCancelBtn.addEventListener("click", closeCropStage);
   cropApplyBtn.addEventListener("click", applyCrop);
   cropResetBtn.addEventListener("click", () => {

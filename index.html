@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="64x64" href="favicon-v2.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-v2.png" />
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon-v2.png" />
-  <link rel="manifest" href="site.webmanifest?v=18" />
-  <link rel="stylesheet" href="styles.css?v=18" />
+  <link rel="manifest" href="site.webmanifest?v=29" />
+  <link rel="stylesheet" href="styles.css?v=28" />
 </head>
 <body>
   <header class="topbar">
@@ -25,18 +25,18 @@
     </div>
     <div class="topbar-actions" id="topbar-actions" hidden>
       <label class="project-chip" title="Click to rename project">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
         <input
           type="text"
           class="project-name-input"
           id="file-name"
           value="Untitled Quilt"
-          aria-label="Project name"
-          placeholder="Name your quilt..."
+          aria-label="Project title"
+          placeholder="Untitled Quilt"
           maxlength="60"
         />
         <svg class="icon icon-edit" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
       </label>
+      <span class="topbar-divider" aria-hidden="true"></span>
       <div class="action-group" role="group" aria-label="Pattern file actions">
         <button type="button" class="btn btn-ghost" id="new-image-btn" title="Start from a different picture">
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
@@ -93,7 +93,7 @@
       <aside class="controls-panel" aria-label="Quilt controls">
         <div class="control-card">
           <div class="control-header">
-            <label for="squares-slider">Quilt Squares</label>
+            <label for="squares-slider">Grid &amp; Shapes</label>
             <span class="control-value" id="squares-value">24 × 18</span>
           </div>
           <input
@@ -109,24 +109,113 @@
             <span id="total-squares-label">432 squares</span>
             <span>Fine</span>
           </div>
-          <label class="checkbox-row">
-            <input type="checkbox" id="seam-lines-toggle" checked />
-            <span>Show quilt seam lines</span>
+
+          <label class="switch-row" for="hst-toggle">
+            <span class="switch-label">Half-square triangles</span>
+            <input type="checkbox" id="hst-toggle" class="toggle-switch" />
           </label>
+
+          <div class="hst-controls" id="hst-controls" hidden>
+            <div class="segmented hst-mode-segmented" role="radiogroup" aria-label="HST placement mode">
+              <button type="button" class="segmented-btn is-active" data-hst-mode="edges" role="radio" aria-checked="true" title="Place triangles automatically only along sharp diagonal edges">Edge Refinement</button>
+              <button type="button" class="segmented-btn" data-hst-mode="ratio" role="radio" aria-checked="false" title="Control the overall percentage of triangles to squares">Mix Ratio</button>
+            </div>
+            <div id="hst-edge-panel">
+              <div class="control-header hst-header">
+                <label for="hst-edge-slider">Edge sensitivity</label>
+                <span class="control-value" id="hst-edge-value">55%</span>
+              </div>
+              <input
+                type="range"
+                id="hst-edge-slider"
+                min="5"
+                max="100"
+                value="55"
+                step="5"
+              />
+              <div class="control-meta">
+                <span>Sharpest only</span>
+                <span>More edges</span>
+              </div>
+            </div>
+            <div id="hst-ratio-panel" hidden>
+              <div class="control-header hst-header">
+                <label for="hst-ratio-slider">Triangle mix</label>
+                <span class="control-value" id="hst-ratio-value">35%</span>
+              </div>
+              <input
+                type="range"
+                id="hst-ratio-slider"
+                min="0"
+                max="100"
+                value="35"
+                step="5"
+              />
+              <div class="control-meta">
+                <span>All squares</span>
+                <span>All HSTs</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="control-card">
           <div class="control-header">
-            <label>Dimensions &amp; Seam Allowance</label>
+            <label for="quilt-preset-select">Quilt Dimensions</label>
             <div class="unit-toggle" role="group" aria-label="Measurement units">
               <button type="button" class="unit-btn is-active" data-unit="in">in</button>
               <button type="button" class="unit-btn" data-unit="cm">cm</button>
             </div>
           </div>
 
-          <div class="sizing-inputs">
+          <div class="quilt-size-group">
+            <select id="quilt-preset-select" class="quilt-preset-select" aria-label="Standard quilt size preset">
+              <option value="custom">Custom dimensions</option>
+              <option value="mini" data-w="16" data-h="16">Mini · 12×12 to 20×20"</option>
+              <option value="wall" data-w="30" data-h="30">Wall Hanging · 20×20 to 40×40"</option>
+              <option value="crib" data-w="36" data-h="52">Crib · 36×52"</option>
+              <option value="lap" data-w="40" data-h="50">Lap · 40×50"</option>
+              <option value="throw" data-w="50" data-h="65">Throw · 50×65"</option>
+              <option value="twin" data-w="68" data-h="86">Twin · 68×86 to 70×90"</option>
+              <option value="double" data-w="80" data-h="90">Double · 80×90 to 85×95"</option>
+              <option value="queen" data-w="90" data-h="100">Queen · 90×95 to 90×108"</option>
+              <option value="king" data-w="108" data-h="100">King · 108×95 to 110×108"</option>
+            </select>
+
+            <div class="quilt-size-inputs">
+              <div class="input-with-unit">
+                <span class="axis-prefix" aria-hidden="true">W</span>
+                <input
+                  type="number"
+                  id="quilt-width-input"
+                  min="4"
+                  max="500"
+                  step="1"
+                  value="60"
+                  aria-label="Finished quilt width"
+                />
+                <span class="unit-suffix" data-unit-label>in</span>
+              </div>
+              <span class="size-times" aria-hidden="true">×</span>
+              <div class="input-with-unit">
+                <span class="axis-prefix" aria-hidden="true">H</span>
+                <input
+                  type="number"
+                  id="quilt-height-input"
+                  min="4"
+                  max="500"
+                  step="1"
+                  value="45"
+                  aria-label="Finished quilt height"
+                />
+                <span class="unit-suffix" data-unit-label>in</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="sizing-inputs sizing-inputs-spaced">
             <label class="field">
-              <span>Finished square</span>
+              <span>Finished unit</span>
               <div class="input-with-unit">
                 <input
                   type="number"
@@ -156,65 +245,22 @@
             </label>
           </div>
 
-          <div class="quilt-size-row">
-            <label class="field-label" for="quilt-preset-select">Standard quilt size</label>
-            <select id="quilt-preset-select" class="quilt-preset-select">
-              <option value="custom">Custom size</option>
-              <option value="mini" data-w="16" data-h="16">Mini (12×12 to 20×20")</option>
-              <option value="wall" data-w="30" data-h="30">Wall Hanging (20×20 to 40×40")</option>
-              <option value="crib" data-w="36" data-h="52">Crib (36×52")</option>
-              <option value="lap" data-w="40" data-h="50">Lap (40×50")</option>
-              <option value="throw" data-w="50" data-h="65">Throw (50×65")</option>
-              <option value="twin" data-w="68" data-h="86">Twin (68×86 to 70×90")</option>
-              <option value="double" data-w="80" data-h="90">Double (80×90 to 85×95")</option>
-              <option value="queen" data-w="90" data-h="100">Queen (90×95 to 90×108")</option>
-              <option value="king" data-w="108" data-h="100">King (108×95 to 110×108")</option>
-            </select>
-          </div>
-
-          <div class="quilt-size-row">
-            <span class="field-label">Finished quilt size (W × H)</span>
-            <div class="quilt-size-inputs">
-              <div class="input-with-unit">
-                <input
-                  type="number"
-                  id="quilt-width-input"
-                  min="4"
-                  max="500"
-                  step="1"
-                  value="60"
-                  aria-label="Finished quilt width"
-                />
-                <span class="unit-suffix" data-unit-label>in</span>
-              </div>
-              <span class="size-times" aria-hidden="true">×</span>
-              <div class="input-with-unit">
-                <input
-                  type="number"
-                  id="quilt-height-input"
-                  min="4"
-                  max="500"
-                  step="1"
-                  value="45"
-                  aria-label="Finished quilt height"
-                />
-                <span class="unit-suffix" data-unit-label>in</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="dimensions-summary dimensions-summary-single">
+          <div class="dimensions-summary dimensions-summary-single" id="dimensions-summary">
             <div class="dim-stat dim-stat-inline">
-              <span class="dim-label">Cut square size</span>
-              <strong class="dim-value" id="cut-square-value">3" × 3"</strong>
+              <span class="dim-label">Cut square</span>
+              <strong class="dim-value" id="cut-square-value">3"</strong>
+            </div>
+            <div class="dim-stat dim-stat-inline" id="hst-cut-stat" hidden>
+              <span class="dim-label">HST starter</span>
+              <strong class="dim-value" id="hst-cut-square-value">3 3/8"</strong>
             </div>
           </div>
-          <p class="wof-note" id="wof-note">Fabric estimates based on 42" usable WOF</p>
+          <p class="wof-note" id="wof-note">Yardage assumes 42" WOF + 10% buffer</p>
         </div>
 
         <div class="control-card">
           <div class="control-header">
-            <label for="palette-size-slider">Palette Colors</label>
+            <label for="palette-size-slider">Fabric Palette</label>
             <span class="control-value" id="palette-size-value">8 colors</span>
           </div>
           <input
@@ -227,7 +273,7 @@
           />
           <div class="control-meta">
             <span>2</span>
-            <span>Click a swatch to edit · × to remove</span>
+            <span>Tap swatch to edit</span>
             <span>16</span>
           </div>
 
@@ -242,19 +288,36 @@
 
       <section class="preview-panel" aria-label="Live quilt preview">
         <div class="preview-toolbar" id="preview-toolbar">
-          <div class="preview-title">
-            <span class="preview-heading">Quilt Preview</span>
-            <span class="preview-dimensions" id="preview-dimensions"></span>
-          </div>
-          <div class="preview-toolbar-actions">
+          <div class="preview-toolbar-group" role="group" aria-label="Canvas editing tools">
             <button
               type="button"
               class="btn btn-ghost btn-small"
               id="crop-btn"
-              title="Crop the uploaded image"
+              title="Crop or reframe the uploaded image"
             >
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg>
               <span id="crop-btn-label">Crop</span>
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost btn-small"
+              id="paint-toggle-btn"
+              title="Brush half-square triangles or solid squares onto areas of the quilt"
+            >
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3Z"/><path d="M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7"/><path d="M14.5 17.5 4.5 15"/></svg>
+              <span id="paint-btn-label">Paint</span>
+            </button>
+          </div>
+          <div class="preview-toolbar-actions" role="group" aria-label="Preview display options">
+            <button
+              type="button"
+              class="btn btn-ghost btn-small is-toggled"
+              id="seam-lines-btn"
+              aria-pressed="true"
+              title="Show or hide stitched seam lines on preview"
+            >
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 12h18"/><path d="M12 3v18"/></svg>
+              Seams
             </button>
             <button
               type="button"
@@ -263,8 +326,33 @@
               title="Press and hold to compare with your original picture"
             >
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-              Hold to see original
+              Hold for Original
             </button>
+          </div>
+        </div>
+        <div class="paint-toolbar" id="paint-toolbar" hidden>
+          <div class="paint-toolbar-controls">
+            <div class="paint-toolbar-group">
+              <span class="paint-group-label">Brush</span>
+              <div class="segmented" role="radiogroup" aria-label="Shape brush mode">
+                <button type="button" class="segmented-btn is-active" data-paint-brush="hst" role="radio" aria-checked="true" title="Smooth stepped edges in brushed area using Half-Square Triangles (1×1 click flips / ↔ \)">△ Smooth Edges</button>
+                <button type="button" class="segmented-btn" data-paint-brush="square" role="radio" aria-checked="false" title="Force solid squares in brushed area">□ Squares</button>
+                <button type="button" class="segmented-btn" data-paint-brush="auto" role="radio" aria-checked="false" title="Restore brushed area to global settings">↺ Auto</button>
+              </div>
+            </div>
+            <div class="paint-toolbar-group">
+              <span class="paint-group-label">Size</span>
+              <div class="segmented" role="radiogroup" aria-label="Brush size">
+                <button type="button" class="segmented-btn" data-paint-size="1" role="radio" aria-checked="false">1×1</button>
+                <button type="button" class="segmented-btn is-active" data-paint-size="3" role="radio" aria-checked="true">3×3</button>
+                <button type="button" class="segmented-btn" data-paint-size="5" role="radio" aria-checked="false">5×5</button>
+              </div>
+            </div>
+          </div>
+          <div class="paint-toolbar-right">
+            <span class="paint-hint" id="paint-status-label">Brush over edges to smooth with △</span>
+            <button type="button" class="btn btn-subtle btn-small" id="paint-clear-btn" hidden>Clear</button>
+            <button type="button" class="btn btn-primary btn-small" id="paint-done-btn">Done</button>
           </div>
         </div>
         <div class="canvas-frame" id="canvas-frame">
@@ -287,27 +375,34 @@
           </div>
         </div>
         <div class="export-bar" id="export-bar">
-          <div class="export-title-field">
-            <label for="pattern-title-input">Pattern Title</label>
-            <input
-              type="text"
-              id="pattern-title-input"
-              class="pattern-title-input"
-              placeholder="e.g. Garden Sunburst Quilt"
-              maxlength="60"
-            />
+          <div class="export-settings">
+            <div class="export-setting-item">
+              <span class="export-setting-label">Assembly</span>
+              <div class="segmented" role="radiogroup" aria-label="Assembly style" title="Row-by-row strips or 8x8 square blocks">
+                <button type="button" class="segmented-btn is-active" data-assembly="rows" role="radio" aria-checked="true">Rows</button>
+                <button type="button" class="segmented-btn" data-assembly="blocks" role="radio" aria-checked="false">8×8 Blocks</button>
+              </div>
+              <input type="hidden" id="assembly-mode-select" value="rows" />
+            </div>
+            <div class="export-setting-item">
+              <span class="export-setting-label">Paper</span>
+              <div class="segmented" role="radiogroup" aria-label="Paper size">
+                <button type="button" class="segmented-btn" data-page-size="letter" role="radio">Letter</button>
+                <button type="button" class="segmented-btn" data-page-size="a4" role="radio">A4</button>
+              </div>
+              <input type="hidden" id="page-size-select" value="letter" />
+            </div>
           </div>
           <div class="export-actions">
-            <div class="segmented" role="radiogroup" aria-label="Assembly style" title="Row-by-row strips or 8x8 square blocks">
-              <button type="button" class="segmented-btn is-active" data-assembly="rows" role="radio" aria-checked="true">Rows</button>
-              <button type="button" class="segmented-btn" data-assembly="blocks" role="radio" aria-checked="false">8×8 Blocks</button>
-            </div>
-            <input type="hidden" id="assembly-mode-select" value="rows" />
-            <div class="segmented" role="radiogroup" aria-label="Paper size">
-              <button type="button" class="segmented-btn" data-page-size="letter" role="radio">Letter</button>
-              <button type="button" class="segmented-btn" data-page-size="a4" role="radio">A4</button>
-            </div>
-            <input type="hidden" id="page-size-select" value="letter" />
+            <button
+              type="button"
+              class="btn btn-secondary"
+              id="export-sheet-btn"
+              title="Download a 1-page printable color design sheet with quilt dimensions and palette for sharing"
+            >
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+              Design Sheet
+            </button>
             <button
               type="button"
               class="btn btn-primary"
@@ -315,7 +410,7 @@
               title="Download printable multi-page quilt pattern PDF"
             >
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M9 15l3 3 3-3"/></svg>
-              Export PDF Booklet
+              Pattern Booklet
             </button>
           </div>
         </div>
@@ -358,6 +453,6 @@
   </main>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-  <script src="app.js?v=18" defer></script>
+  <script src="app.js?v=29" defer></script>
 </body>
 </html>
