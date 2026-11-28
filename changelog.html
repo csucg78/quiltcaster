@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=JetBrains+Mono:wght@500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=96" />
+  <link rel="stylesheet" href="styles.css?v=101" />
   <style>
     .changelog-shell {
       max-width: 820px;
@@ -125,6 +125,19 @@
     </div>
 
     <div class="release-list">
+      <article class="release-card">
+        <div class="release-meta">
+          <h3 class="release-title">45° HST Smoothing for Generated Patterns, Seamless Grid Resizing &amp; Unsaved-Work Guard</h3>
+          <span class="release-date">Nov 28, 2026</span>
+        </div>
+        <ul class="release-items">
+          <li><strong>Perlin Noise &amp; Fluid Swirl Generator:</strong> Added true 2D gradient Perlin noise under <em>Physics &amp; Organic</em> with 4 styles (<em>Domain-Warped Fluid</em>, <em>fBm Soft Clouds</em>, <em>Marbled Silk / Agate</em>, and <em>Ridged Mountain Veins</em>), live scale/octaves/swirl/seed controls, and infinite pan space.</li>
+          <li><strong>Single-Seam 45° HST Smoothing on Generated &amp; Painted Quilts:</strong> Both <strong>Edge Refinement</strong> and <strong>Mix Ratio</strong> Half-Square Triangle sliders now work live on all generated patterns and painted Blank Canvas quilts—using flanking-diagonal validation and single-side tie-breaking so 45° diagonals meet cleanly tip-to-tip while 90° corners stay sharp.</li>
+          <li><strong>Zero-Blank-Space <code>Chunky ↔ Fine</code> Resizing:</strong> Preserved active generator state across page reloads and <code>.quilt</code> files so resizing always regenerates at full resolution, and added proportional resampling for hand-painted Blank Canvas quilts when expanding the grid or changing quilt dimensions.</li>
+          <li><strong>Unsaved-Work Protection on <code>+ New Quilt</code>:</strong> Clicking <strong>New Quilt</strong> with unsaved changes now prompts <em>"Save before starting a new quilt?"</em> with <strong>Discard</strong>, <strong>Cancel</strong>, and <strong>Save &amp; New</strong> (automatically prompting for a name if still untitled).</li>
+        </ul>
+      </article>
+
       <article class="release-card">
         <div class="release-meta">
           <h3 class="release-title">Miriam's Portrait Logo, Palette Mixer &amp; Curated Sets, Heritage &amp; Fire Generators, Low-Res Monogram Fonts &amp; UX Pass</h3>

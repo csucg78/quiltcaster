@@ -416,6 +416,7 @@
     history: [],
     historyIndex: -1,
     isRestoringHistory: false,
+    isDirty: false,
   };
 
   // --- Color Utilities ---
@@ -2019,6 +2020,89 @@
       });
     }
 
+    // Automatic single-seam 45° diagonal HST smoothing for generated patterns & painted Blank Canvas quilts:
+    // Uses flanking-diagonal validation (preserves crisp 90° box corners) + canonical tie-breaking
+    // (self < other) so adjacent sides never double-bevel into saw-tooth zippers!
+    if (state.isBlankQuilt && state.hstEnabled && K >= 2) {
+      const baseA = new Int32Array(assignmentsA);
+      const baseT = new Uint8Array(cellTypes);
+      const diagCandidates = [];
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const idx = r * cols + c;
+          if (baseT[idx] !== 0) continue; // Keep manually placed or generator-native HSTs intact
+          const self = baseA[idx];
+          const up = r > 0 ? baseA[idx - cols] : self;
+          const down = r + 1 < rows ? baseA[idx + cols] : self;
+          const left = c > 0 ? baseA[idx - 1] : self;
+          const right = c + 1 < cols ? baseA[idx + 1] : self;
+          const upLeft = r > 0 && c > 0 ? baseA[idx - cols - 1] : self;
+          const upRight = r > 0 && c + 1 < cols ? baseA[idx - cols + 1] : self;
+          const downLeft = r + 1 < rows && c > 0 ? baseA[idx + cols - 1] : self;
+          const downRight = r + 1 < rows && c + 1 < cols ? baseA[idx + cols + 1] : self;
+
+          const corners = [];
+          // '/' diagonal (TL + BR): requires flanking continuation along '/' (upRight or downLeft === self)
+          // and canonical tie-break (self < other) so only one side of the stair-step bevels
+          if (up === left && up !== self && self < up && (upRight === self || downLeft === self)) {
+            corners.push({ diag: 1, a: up, b: self, other: up });
+          }
+          if (down === right && down !== self && self < down && (upRight === self || downLeft === self)) {
+            corners.push({ diag: 1, a: self, b: down, other: down });
+          }
+          // '\' diagonal (BL + TR): requires flanking continuation along '\' (upLeft or downRight === self)
+          if (down === left && down !== self && self < down && (upLeft === self || downRight === self)) {
+            corners.push({ diag: 2, a: down, b: self, other: down });
+          }
+          if (up === right && up !== self && self < up && (upLeft === self || downRight === self)) {
+            corners.push({ diag: 2, a: self, b: up, other: up });
+          }
+
+          if (corners.length === 1) {
+            const best = corners[0];
+            const palSelf = palette[self];
+            const palOther = palette[best.other];
+            const score = Math.sqrt(colorDistanceSq(palSelf.r, palSelf.g, palSelf.b, palOther.r, palOther.g, palOther.b));
+            if (score > 0) {
+              smoothableDiag[idx] = best.diag;
+              diagCandidates.push({ idx, diag: best.diag, a: best.a, b: best.b, score });
+            }
+          }
+        }
+      }
+
+      if (state.hstMode === "edges") {
+        // Sensitivity 5% -> only highest-contrast bold edges; 100% -> every staircase diagonal
+        const t = (100 - state.hstEdgeSensitivity) / 100;
+        const minContrast = Math.pow(t, 1.5) * 320;
+        for (let k = 0; k < diagCandidates.length; k++) {
+          const d = diagCandidates[k];
+          if (d.score >= minContrast) {
+            cellTypes[d.idx] = d.diag;
+            assignmentsA[d.idx] = d.a;
+            assignmentsB[d.idx] = d.b;
+            hstCount++;
+          }
+        }
+      } else if (state.hstRatio > 0 && diagCandidates.length > 0) {
+        const targetCnt = Math.min(
+          diagCandidates.length,
+          Math.round(diagCandidates.length * (state.hstRatio / 100))
+        );
+        if (targetCnt > 0) {
+          diagCandidates.sort((a, b) => b.score - a.score);
+          for (let k = 0; k < targetCnt; k++) {
+            const d = diagCandidates[k];
+            cellTypes[d.idx] = d.diag;
+            assignmentsA[d.idx] = d.a;
+            assignmentsB[d.idx] = d.b;
+            hstCount++;
+          }
+        }
+      }
+    }
+
     state.smoothableDiag = smoothableDiag;
     state.paintedCellsCount = effectivePaintedCount;
 
@@ -3504,6 +3588,15 @@
     state.gridLayout = GRID_LAYOUTS[s.gridLayout] ? s.gridLayout : "grid";
     state.isBlankQuilt = Boolean(s.isBlankQuilt);
     deserializeManualCells(s.manualCells);
+    if (saved.activeMathPattern && MATH_PATTERN_SPECS[saved.activeMathPattern]) {
+      state.activeMathPattern = saved.activeMathPattern;
+      state.mathParams = saved.mathParams ? { ...saved.mathParams } : getDefaultMathParams(saved.activeMathPattern);
+      state.mathTransform = saved.mathTransform
+        ? { ...saved.mathTransform }
+        : { offsetX: 0, offsetY: 0, scale: 1.0, rotate: 0 };
+      state.mathReversePalette = Boolean(saved.mathReversePalette);
+      syncMathPropsButton();
+    }
     syncGridLayoutUI();
 
     if (s.pageSize === "a4" || s.pageSize === "letter") {
@@ -3820,6 +3913,7 @@
     lastHistoryCoalesce = { key: null, time: 0 };
     state.history = [{ label: initialLabel, ts: Date.now(), snapshot: captureSnapshot() }];
     state.historyIndex = 0;
+    state.isDirty = false;
     renderHistoryUI();
     scheduleDraftSave();
   }
@@ -3886,6 +3980,7 @@
     }
 
     lastHistoryCoalesce = { key: coalesceKey, time: now };
+    state.isDirty = true;
     renderHistoryUI();
     scheduleDraftSave();
   }
@@ -4002,6 +4097,15 @@
   const saveNameForm = document.getElementById("save-name-form");
   const saveNameInput = document.getElementById("save-name-input");
 
+  const newQuiltModal = document.getElementById("new-quilt-modal");
+  const newQuiltBackdrop = document.getElementById("new-quilt-backdrop");
+  const newQuiltClose = document.getElementById("new-quilt-close");
+  const newQuiltCancel = document.getElementById("new-quilt-cancel");
+  const newQuiltDiscard = document.getElementById("new-quilt-discard");
+  const newQuiltSaveContinue = document.getElementById("new-quilt-save-continue");
+  const newQuiltCopy = document.getElementById("new-quilt-copy");
+  let pendingNewQuiltAfterSave = false;
+
   function isDefaultProjectTitle(title) {
     const clean = String(title || "").trim().toLowerCase();
     return !clean || clean === "untitled quilt" || clean === "custom quilt";
@@ -4009,6 +4113,28 @@
 
   function closeSaveNameModal() {
     if (saveNameModal) saveNameModal.hidden = true;
+    pendingNewQuiltAfterSave = false;
+  }
+
+  function closeNewQuiltModal() {
+    if (newQuiltModal) newQuiltModal.hidden = true;
+  }
+
+  function requestNewQuilt() {
+    if (!state.image) {
+      returnToStartScreen();
+      return;
+    }
+    const hasUnsavedWork = state.isDirty || state.history.length > 1 || state.manualCells.size > 0;
+    if (!hasUnsavedWork || !newQuiltModal) {
+      returnToStartScreen();
+      return;
+    }
+    if (newQuiltCopy) {
+      const title = getCurrentProjectTitle();
+      newQuiltCopy.innerHTML = `Your current quilt <strong>${title.replace(/[<>&"]/g, "")}</strong> has unsaved changes. Save a <code>.quilt</code> file so you can reopen it anytime.`;
+    }
+    newQuiltModal.hidden = false;
   }
 
   function openSaveNameModal() {
@@ -4029,18 +4155,40 @@
   if (saveNameForm) {
     saveNameForm.addEventListener("submit", (e) => {
       e.preventDefault();
+      const continueToNew = pendingNewQuiltAfterSave;
       const entered = saveNameInput ? saveNameInput.value.trim() : "";
       if (entered) {
         syncProjectTitle(entered);
         recordHistory(`Renamed to "${entered}"`);
       }
       closeSaveNameModal();
+      pendingNewQuiltAfterSave = continueToNew;
       savePattern({ skipNamePrompt: true });
     });
   }
+
+  if (newQuiltClose) newQuiltClose.addEventListener("click", closeNewQuiltModal);
+  if (newQuiltCancel) newQuiltCancel.addEventListener("click", closeNewQuiltModal);
+  if (newQuiltBackdrop) newQuiltBackdrop.addEventListener("click", closeNewQuiltModal);
+  if (newQuiltDiscard) {
+    newQuiltDiscard.addEventListener("click", () => {
+      closeNewQuiltModal();
+      state.isDirty = false;
+      returnToStartScreen();
+    });
+  }
+  if (newQuiltSaveContinue) {
+    newQuiltSaveContinue.addEventListener("click", () => {
+      closeNewQuiltModal();
+      pendingNewQuiltAfterSave = true;
+      savePattern();
+    });
+  }
+
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && saveNameModal && !saveNameModal.hidden) {
-      closeSaveNameModal();
+    if (e.key === "Escape") {
+      if (saveNameModal && !saveNameModal.hidden) closeSaveNameModal();
+      if (newQuiltModal && !newQuiltModal.hidden) closeNewQuiltModal();
     }
   });
 
@@ -4083,6 +4231,14 @@
         ? { sourcePalette: state.sourcePalette.map((c) => rgbToHex(c.r, c.g, c.b)) }
         : {}),
       ...(serializePalettePatterns() ? { palettePatterns: serializePalettePatterns() } : {}),
+      ...(state.activeMathPattern
+        ? {
+            activeMathPattern: state.activeMathPattern,
+            mathParams: state.mathParams ? { ...state.mathParams } : {},
+            mathTransform: state.mathTransform ? { ...state.mathTransform } : { offsetX: 0, offsetY: 0, scale: 1.0, rotate: 0 },
+            mathReversePalette: Boolean(state.mathReversePalette),
+          }
+        : {}),
       history: state.history,
       historyIndex: state.historyIndex,
       image: getImageDataUrlForSave(),
@@ -4099,6 +4255,11 @@
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+    state.isDirty = false;
+    if (pendingNewQuiltAfterSave) {
+      pendingNewQuiltAfterSave = false;
+      setTimeout(() => returnToStartScreen(), 180);
+    }
   }
 
   function loadPatternFile(file) {
@@ -4144,7 +4305,7 @@
       fileInput.click();
     }
   });
-  newImageBtn.addEventListener("click", returnToStartScreen);
+  newImageBtn.addEventListener("click", requestNewQuilt);
 
   if (importImageBtn && importImageInput) {
     importImageBtn.addEventListener("click", () => {
@@ -4215,7 +4376,29 @@
   window.addEventListener("drop", (e) => e.preventDefault());
 
   // Sliders & toggles
+  // Proportionally resamples painted cells when resizing a Blank Canvas grid (Chunky <-> Fine)
+  // so expanding the grid never leaves blank space along the right or bottom edges.
+  function resampleManualCellsForGridResize(prevCols, prevRows, nextCols, nextRows) {
+    if (!state.isBlankQuilt || state.activeMathPattern || state.manualCells.size === 0) return;
+    if (prevCols <= 0 || prevRows <= 0 || nextCols <= 0 || nextRows <= 0) return;
+    if (prevCols === nextCols && prevRows === nextRows) return;
+    const oldCells = new Map(state.manualCells);
+    state.manualCells.clear();
+    for (let nr = 0; nr < nextRows; nr++) {
+      const or = Math.min(prevRows - 1, Math.floor((nr / nextRows) * prevRows));
+      for (let nc = 0; nc < nextCols; nc++) {
+        const oc = Math.min(prevCols - 1, Math.floor((nc / nextCols) * prevCols));
+        const src = oldCells.get(`${oc},${or}`);
+        if (src) {
+          state.manualCells.set(`${nc},${nr}`, { ...src });
+        }
+      }
+    }
+  }
+
   squaresSlider.addEventListener("input", () => {
+    const prevCols = state.cols;
+    const prevRows = state.rows;
     state.cols = Number(squaresSlider.value);
     state.targetQuiltSize = null;
     if (quiltPresetSelect) quiltPresetSelect.value = "custom";
@@ -4223,6 +4406,7 @@
     if (state.activeMathPattern) {
       applyMathPattern(state.activeMathPattern, { record: false });
     } else {
+      resampleManualCellsForGridResize(prevCols, prevRows, state.cols, state.rows);
       renderQuilt();
     }
     if (!cropStage.hidden) {
@@ -4300,10 +4484,17 @@
     if (!Number.isNaN(val) && val > 0) {
       state.finishedSquareSize = val;
       if (state.targetQuiltSize && state.image) {
+        const prevCols = state.cols;
+        const prevRows = state.rows;
         const idealCols = Math.round(state.targetQuiltSize.w / val);
         state.cols = syncSliderBoundsForCols(idealCols);
         computeSquareAverages(finishedSizeInput);
-        renderQuilt();
+        if (state.activeMathPattern) {
+          applyMathPattern(state.activeMathPattern, { record: false });
+        } else {
+          resampleManualCellsForGridResize(prevCols, prevRows, state.cols, state.rows);
+          renderQuilt();
+        }
         if (!cropStage.hidden) {
           updateCropLockUI();
           renderCropCanvas();
@@ -4336,6 +4527,8 @@
       cropH = Math.max(0.08, 1 / normRatio);
     }
 
+    const prevCols = state.cols;
+    const prevRows = state.rows;
     const finished = Math.max(0.25, state.finishedSquareSize);
     const idealCols = Math.round(targetW / finished);
     const clampedCols = syncSliderBoundsForCols(idealCols);
@@ -4373,7 +4566,12 @@
 
     rebuildSampleBuffer();
     computeSquareAverages(skipInputEl);
-    renderQuilt();
+    if (state.activeMathPattern) {
+      applyMathPattern(state.activeMathPattern, { record: false });
+    } else {
+      resampleManualCellsForGridResize(prevCols, prevRows, state.cols, state.rows);
+      renderQuilt();
+    }
   }
 
   // Standard quilt size presets (Mini through King)
@@ -8085,6 +8283,27 @@
         { key: "seed", label: "Ember seed", type: "range", min: 1, max: 24, step: 1, def: 7, fmt: (v) => `#${v}` },
       ],
     },
+    perlin: {
+      label: "Perlin Noise & Fluid Swirl",
+      params: [
+        {
+          key: "style",
+          label: "Noise style",
+          type: "select",
+          def: "warped",
+          options: [
+            { value: "warped", label: "Domain-Warped Fluid" },
+            { value: "clouds", label: "fBm Soft Clouds" },
+            { value: "marble", label: "Marbled Silk / Agate" },
+            { value: "ridged", label: "Ridged Mountain Veins" },
+          ],
+        },
+        { key: "scale", label: "Noise scale", type: "range", min: 1.0, max: 8.0, step: 0.25, def: 3.25, fmt: (v) => `${v.toFixed(2)}×` },
+        { key: "octaves", label: "Detail octaves", type: "range", min: 1, max: 6, step: 1, def: 4, fmt: (v) => `${v}` },
+        { key: "warp", label: "Swirl / contrast", type: "range", min: 0.4, max: 2.4, step: 0.1, def: 1.2, fmt: (v) => `${v.toFixed(1)}×` },
+        { key: "seed", label: "Seed", type: "range", min: 1, max: 32, step: 1, def: 11, fmt: (v) => `#${v}` },
+      ],
+    },
     turing: {
       label: "Reaction-Diffusion (Turing)",
       params: [
@@ -8407,7 +8626,7 @@
     },
     {
       label: "Physics & Organic",
-      items: ["fire", "chladni", "turing", "interference", "voronoi"],
+      items: ["perlin", "fire", "chladni", "turing", "interference", "voronoi"],
     },
     {
       label: "Quilt Math & Waves",
@@ -9886,6 +10105,70 @@
         const heat = fireData ? fireData[fy * fireW + fx] : 0;
         // Gamma curve emphasizes luminous flame tongues & embers while keeping cool smoke dark
         const norm = Math.max(0, Math.min(1, Math.pow(heat, 0.78)));
+        state.manualCells.set(key, { t: 0, a: pickGrad(norm), b: -1 });
+      } else if (patternId === "perlin") {
+        // True 2D Gradient Perlin Noise (Ken Perlin 2002 quintic fade 6t^5 - 15t^4 + 10t^3)
+        // with fBm Clouds, Marbled Silk / Agate, Ridged Mountain Veins, and Domain-Warped Fluid Swirl
+        const pStyle = String(getMathParam(patternId, "style") || "warped");
+        const pScale = Math.max(0.5, Number(getMathParam(patternId, "scale")) || 3.25);
+        const octaves = Math.max(1, Math.min(6, Math.round(Number(getMathParam(patternId, "octaves")) || 4)));
+        const warpAmt = Math.max(0.2, Number(getMathParam(patternId, "warp")) || 1.2);
+        const pSeed = Math.round(Number(getMathParam(patternId, "seed")) || 11);
+
+        const gradDot = (ix, iy, dx, dy, seedVal) => {
+          const ang = hash2(ix, iy, seedVal) * Math.PI * 2;
+          return Math.cos(ang) * dx + Math.sin(ang) * dy;
+        };
+        const perlin2 = (x, y, seedVal) => {
+          const x0 = Math.floor(x);
+          const y0 = Math.floor(y);
+          const fx = x - x0;
+          const fy = y - y0;
+          const u = fx * fx * fx * (fx * (fx * 6 - 15) + 10);
+          const v = fy * fy * fy * (fy * (fy * 6 - 15) + 10);
+          const n00 = gradDot(x0, y0, fx, fy, seedVal);
+          const n10 = gradDot(x0 + 1, y0, fx - 1, fy, seedVal);
+          const n01 = gradDot(x0, y0 + 1, fx, fy - 1, seedVal);
+          const n11 = gradDot(x0 + 1, y0 + 1, fx - 1, fy - 1, seedVal);
+          const nx0 = n00 + (n10 - n00) * u;
+          const nx1 = n01 + (n11 - n01) * u;
+          return nx0 + (nx1 - nx0) * v; // ~[-0.7, 0.7]
+        };
+        const fbm = (x, y, oct, seedVal, ridged = false) => {
+          let sum = 0;
+          let amp = 0.55;
+          let freq = 1.0;
+          let maxAmp = 0;
+          for (let o = 0; o < oct; o++) {
+            let n = perlin2(x * freq, y * freq, seedVal + o * 31);
+            if (ridged) n = 1 - Math.abs(n * 1.45);
+            sum += n * amp;
+            maxAmp += amp;
+            freq *= 2.02;
+            amp *= 0.5;
+          }
+          return maxAmp > 0 ? sum / maxAmp : 0;
+        };
+
+        const px = nx * pScale;
+        const py = ny * pScale;
+        let norm = 0.5;
+        if (pStyle === "marble") {
+          const turb = fbm(px, py, octaves, pSeed, false);
+          norm = 0.5 + 0.5 * Math.sin((px * 2.4 + py * 1.1 + turb * 5.2 * warpAmt) * Math.PI);
+        } else if (pStyle === "ridged") {
+          const rVal = fbm(px, py, octaves, pSeed, true);
+          norm = Math.max(0, Math.min(1, Math.pow(Math.max(0, rVal), warpAmt * 1.25)));
+        } else if (pStyle === "warped") {
+          const qx = fbm(px, py, Math.max(1, octaves - 1), pSeed, false);
+          const qy = fbm(px + 5.2, py + 1.3, Math.max(1, octaves - 1), pSeed + 97, false);
+          const wVal = fbm(px + qx * 2.1 * warpAmt, py + qy * 2.1 * warpAmt, octaves, pSeed + 193, false);
+          norm = Math.max(0, Math.min(1, 0.5 + wVal * 0.95));
+        } else {
+          // Classic fBm Soft Clouds
+          const cVal = fbm(px, py, octaves, pSeed, false);
+          norm = Math.max(0, Math.min(1, 0.5 + cVal * 0.85 * warpAmt));
+        }
         state.manualCells.set(key, { t: 0, a: pickGrad(norm), b: -1 });
       } else if (patternId === "william-morris") {
         // Arts & Crafts mirrored S-curve acanthus vines + diamond trellis + rosette blossoms
@@ -12315,13 +12598,6 @@
         restore: draft,
         onError: () => clearActiveDraft(),
       });
-      if (draft.activeMathPattern && MATH_PATTERN_SPECS[draft.activeMathPattern]) {
-        state.activeMathPattern = draft.activeMathPattern;
-        state.mathParams = draft.mathParams || getDefaultMathParams(draft.activeMathPattern);
-        state.mathTransform = draft.mathTransform || { offsetX: 0, offsetY: 0, scale: 1.0, rotate: 0 };
-        state.mathReversePalette = Boolean(draft.mathReversePalette);
-        syncMathPropsButton();
-      }
     } catch {
       // Ignore IndexedDB errors
     }

@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="64x64" href="favicon-v3.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-v3.png" />
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon-v3.png" />
-  <link rel="manifest" href="site.webmanifest?v=96" />
-  <link rel="stylesheet" href="styles.css?v=96" />
+  <link rel="manifest" href="site.webmanifest?v=101" />
+  <link rel="stylesheet" href="styles.css?v=101" />
 </head>
 <body>
   <header class="topbar">
@@ -959,7 +959,29 @@
     </div>
   </div>
 
+  <!-- Confirm Save Before Starting New Quilt Modal -->
+  <div class="changelog-modal" id="new-quilt-modal" role="dialog" aria-modal="true" aria-labelledby="new-quilt-modal-title" hidden>
+    <div class="changelog-modal-backdrop" id="new-quilt-backdrop"></div>
+    <div class="changelog-modal-card save-name-modal-card">
+      <div class="changelog-modal-head">
+        <div>
+          <span class="changelog-modal-eyebrow">Unsaved Design</span>
+          <h2 id="new-quilt-modal-title">Save before starting a new quilt?</h2>
+        </div>
+        <button type="button" class="swatch-popover-close" id="new-quilt-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="save-name-form">
+        <p class="new-quilt-copy" id="new-quilt-copy">Your current quilt has unsaved changes. Save a <code>.quilt</code> file so you can reopen it anytime.</p>
+        <div class="save-name-actions new-quilt-actions">
+          <button type="button" class="btn btn-ghost btn-danger-ghost" id="new-quilt-discard">Discard</button>
+          <button type="button" class="btn btn-secondary" id="new-quilt-cancel">Cancel</button>
+          <button type="button" class="btn btn-primary" id="new-quilt-save-continue">Save &amp; New</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-  <script src="app.js?v=96" defer></script>
+  <script src="app.js?v=101" defer></script>
 </body>
 </html>

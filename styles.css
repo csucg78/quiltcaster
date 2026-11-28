@@ -3266,6 +3266,24 @@ input[type="range"].harmony-hue-slider::-moz-range-thumb {
   gap: 0.5rem;
 }
 
+.new-quilt-copy {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.new-quilt-actions .btn-danger-ghost {
+  margin-right: auto;
+  color: #a63426;
+  border-color: #e7c8c3;
+}
+
+.new-quilt-actions .btn-danger-ghost:hover {
+  background: #fdf2f0;
+  border-color: #d4968c;
+}
+
 /* Tablet / iPad & Mobile responsiveness */
 @media (max-width: 960px) {
   .workspace {
