@@ -41,7 +41,31 @@
   const squaresSlider = document.getElementById("squares-slider");
   const squaresValue = document.getElementById("squares-value");
   const totalSquaresLabel = document.getElementById("total-squares-label");
+  const gridLayoutSelect = document.getElementById("grid-layout-select");
+  const mathMenuBtn = document.getElementById("math-menu-btn");
+  const mathMenuLabel = document.getElementById("math-menu-label");
+  const mathMenuPopover = document.getElementById("math-menu-popover");
+  const mathPropsBtn = document.getElementById("math-props-btn");
+  const shuffleQuiltBtn = document.getElementById("shuffle-quilt-btn");
+  const mathPropsPopover = document.getElementById("math-props-popover");
+  const mathPropsTitle = document.getElementById("math-props-title");
+  const mathPropsClose = document.getElementById("math-props-close");
+  const mathPropsBody = document.getElementById("math-props-body");
+  const mathReversePalette = document.getElementById("math-reverse-palette");
+  const mathPropsReset = document.getElementById("math-props-reset");
+  const mapPopover = document.getElementById("map-popover");
+  const mapPopoverClose = document.getElementById("map-popover-close");
+  const mapForm = document.getElementById("map-form");
+  const mapLocationInput = document.getElementById("map-location-input");
+  const mapStyleSelect = document.getElementById("map-style-select");
+  const mapZoomSlider = document.getElementById("map-zoom-slider");
+  const mapZoomValue = document.getElementById("map-zoom-value");
+  const mapExtractPalette = document.getElementById("map-extract-palette");
+  const mapStatus = document.getElementById("map-status");
+  const mapLoadBtn = document.getElementById("map-load-btn");
+  const mapQuickChips = document.querySelectorAll("[data-map-loc]");
   const seamLinesBtn = document.getElementById("seam-lines-btn");
+  const hstSwitchRow = document.getElementById("hst-switch-row");
   const hstToggle = document.getElementById("hst-toggle");
   const hstControls = document.getElementById("hst-controls");
   const hstModeBtns = document.querySelectorAll("[data-hst-mode]");
@@ -70,8 +94,10 @@
   const quiltWidthInput = document.getElementById("quilt-width-input");
   const quiltHeightInput = document.getElementById("quilt-height-input");
   const dimensionsSummary = document.getElementById("dimensions-summary");
+  const cutSquareLabel = document.getElementById("cut-square-label");
   const cutSquareValue = document.getElementById("cut-square-value");
   const hstCutStat = document.getElementById("hst-cut-stat");
+  const hstCutLabel = document.getElementById("hst-cut-label");
   const hstCutSquareValue = document.getElementById("hst-cut-square-value");
   const wofNote = document.getElementById("wof-note");
   const previewRulerWidth = document.getElementById("preview-ruler-width");
@@ -83,6 +109,8 @@
   const paletteSizeValue = document.getElementById("palette-size-value");
   const paletteGrid = document.getElementById("palette-grid");
   const addColorBtn = document.getElementById("add-color-btn");
+  const harmonyPaletteBtn = document.getElementById("harmony-palette-btn");
+  const snapKonaBtn = document.getElementById("snap-kona-btn");
   const resetPaletteBtn = document.getElementById("reset-palette-btn");
 
   const compareBtn = document.getElementById("compare-btn");
@@ -94,6 +122,8 @@
   const savePatternBtn = document.getElementById("save-pattern-btn");
   const browseImageBtn = document.getElementById("browse-image-btn");
   const blankQuiltBtn = document.getElementById("blank-quilt-btn");
+  const importImageBtn = document.getElementById("import-image-btn");
+  const importImageInput = document.getElementById("import-image-input");
   const openPatternBtn = document.getElementById("open-pattern-btn");
   const openPatternBtnTop = document.getElementById("open-pattern-btn-top");
   const patternInput = document.getElementById("pattern-input");
@@ -115,6 +145,8 @@
   const swatchCutModeBtns = document.querySelectorAll("[data-cut-mode]");
   const swatchUploadPrintBtn = document.getElementById("swatch-upload-print-btn");
   const swatchUploadPrintLabel = document.getElementById("swatch-upload-print-label");
+  const swatchLibraryTabs = document.querySelectorAll("[data-lib-tab]");
+  const swatchLibraryCaption = document.getElementById("swatch-library-caption");
   const swatchLibrarySearch = document.getElementById("swatch-library-search");
   const swatchLibraryGrid = document.getElementById("swatch-library-grid");
 
@@ -285,7 +317,11 @@
     sampleWidth: 0,
     sampleHeight: 0,
     samplePixels: null,
-    // Grid & Half-Square Triangles (HSTs)
+    // Grid, Block Layout & Half-Square Triangles (HSTs)
+    gridLayout: "grid", // "grid" | "staggered" | "brick" | "subway" | "vertical-brick"
+    layoutCells: [], // Array of { idx, c, r, x0, y0, x1, y1, isHalf }
+    layoutCellW: 0, // Last rendered cell width (px) on preview canvas
+    layoutCellH: 0, // Last rendered cell height (px) on preview canvas
     cols: Number(squaresSlider.value),
     rows: 1,
     squareAverages: [], // Array of [r, g, b] for each cell (length = cols * rows)
@@ -304,6 +340,10 @@
     paintSize: 3, // 1 | 3 | 5
     paintFabricIdx: 0, // Active palette index when painting colors/fabrics
     isBlankQuilt: false, // True when started from Paint Blank Quilt (no source photo)
+    activeMathPattern: "", // Currently generated fractal/math pattern id (auto-regenerates on resize/layout change)
+    mathParams: {}, // Live parameter values for the active math/fractal pattern
+    mathTransform: { offsetX: 0, offsetY: 0, scale: 1.0, rotate: 0 }, // Universal pan/zoom/rotate for all generated patterns
+    mathReversePalette: false,
     manualCells: new Map(), // "col,row" -> { t: 0|1|2, a: palIdx, b: palIdx }
     paintedCellsCount: 0,
     hasPaintedMask: false,
@@ -444,6 +484,46 @@
     ["Pine Green", 28, 58, 42, "Kona Spruce", "K001-1346", "Bella Pine (9900-45)"],
   ];
 
+  // Curated Kaffe Fassett (FreeSpirit Classics & Collective) fabric catalog
+  const KAFFE_FASSETT_FABRICS = [
+    { id: "kf-abdot-turq", name: "Aboriginal Dot Turquoise", designer: "Kaffe Fassett", rgb: [42, 162, 174], colors: ["#1f9aa8", "#74dce0", "#f4d458", "#e86488", "#185866"], style: "dots" },
+    { id: "kf-abdot-black", name: "Aboriginal Dot Black", designer: "Kaffe Fassett", rgb: [34, 34, 38], colors: ["#1e1e22", "#e85468", "#48b8c4", "#f0c848", "#88c454"], style: "dots" },
+    { id: "kf-abdot-red", name: "Aboriginal Dot Red", designer: "Kaffe Fassett", rgb: [188, 42, 48], colors: ["#b82830", "#f4a442", "#f6d868", "#e87898", "#6e1620"], style: "dots" },
+    { id: "kf-abdot-lime", name: "Aboriginal Dot Lime", designer: "Kaffe Fassett", rgb: [132, 184, 62], colors: ["#82b83c", "#d8ec68", "#3ea89c", "#f4c842", "#4c7828"], style: "dots" },
+    { id: "kf-abdot-plum", name: "Aboriginal Dot Plum", designer: "Kaffe Fassett", rgb: [108, 46, 98], colors: ["#682c60", "#d864a8", "#5498c8", "#f2b858", "#3e183c"], style: "dots" },
+    { id: "kf-abdot-ochre", name: "Aboriginal Dot Ochre", designer: "Kaffe Fassett", rgb: [204, 148, 48], colors: ["#c8922e", "#f6d668", "#c85238", "#4a8478", "#7c5218"], style: "dots" },
+    { id: "kf-rglass-red", name: "Roman Glass Red", designer: "Kaffe Fassett", rgb: [184, 52, 62], colors: ["#7a1c28", "#c8343e", "#ec7854", "#f4c458", "#94346c"], style: "roman-glass" },
+    { id: "kf-rglass-turq", name: "Roman Glass Turquoise", designer: "Kaffe Fassett", rgb: [44, 148, 162], colors: ["#185868", "#2d96a4", "#7ad8d4", "#4e6cb8", "#d8e488"], style: "roman-glass" },
+    { id: "kf-rglass-purple", name: "Roman Glass Purple", designer: "Kaffe Fassett", rgb: [112, 58, 146], colors: ["#3e1e5e", "#743c9c", "#b874d8", "#4898c8", "#e87ca8"], style: "roman-glass" },
+    { id: "kf-rglass-emerald", name: "Roman Glass Emerald", designer: "Kaffe Fassett", rgb: [46, 134, 86], colors: ["#1c5838", "#328c58", "#88cc68", "#3ca4a8", "#e8d658"], style: "roman-glass" },
+    { id: "kf-rglass-pink", name: "Roman Glass Pink", designer: "Kaffe Fassett", rgb: [216, 102, 138], colors: ["#943258", "#dc668c", "#f4a8c0", "#f2b468", "#7c64b4"], style: "roman-glass" },
+    { id: "kf-paper-jewel", name: "Paperweight Jewel", designer: "Kaffe Fassett", rgb: [98, 56, 132], colors: ["#281c48", "#c83868", "#3ca4b8", "#f2bc44", "#68b858"], style: "paperweight" },
+    { id: "kf-paper-teal", name: "Paperweight Teal", designer: "Kaffe Fassett", rgb: [38, 126, 136], colors: ["#1a4e58", "#2d8c98", "#7ed2cc", "#e89248", "#c84c78"], style: "paperweight" },
+    { id: "kf-paper-pumpkin", name: "Paperweight Pumpkin", designer: "Kaffe Fassett", rgb: [212, 104, 46], colors: ["#7c3018", "#d8682c", "#f4b448", "#4c8878", "#c44458"], style: "paperweight" },
+    { id: "kf-paper-purple", name: "Paperweight Purple", designer: "Kaffe Fassett", rgb: [122, 68, 152], colors: ["#3c2058", "#7e44a2", "#c484dc", "#4cb4a8", "#f0b858"], style: "paperweight" },
+    { id: "kf-stripe-bright", name: "Artisan Stripe Brights", designer: "Kaffe Fassett", rgb: [172, 86, 98], colors: ["#c83848", "#3288a8", "#e8b438", "#5c9e54", "#7a3e8c"], style: "stripe" },
+  ];
+
+  // Curated Brandon Mably (Kaffe Fassett Collective / FreeSpirit) graphic & geometric fabric catalog
+  const BRANDON_MABLY_FABRICS = [
+    { id: "bm-game-magenta", name: "Gameboard Magenta", designer: "Brandon Mably", rgb: [178, 48, 114], colors: ["#b62e72", "#e86aa8", "#3888b8", "#f2c448", "#2c1e38"], style: "gameboard" },
+    { id: "bm-game-black", name: "Gameboard Black", designer: "Brandon Mably", rgb: [42, 42, 48], colors: ["#222228", "#e85448", "#48b4a8", "#f2c844", "#f0ece4"], style: "gameboard" },
+    { id: "bm-game-purple", name: "Gameboard Purple", designer: "Brandon Mably", rgb: [108, 62, 148], colors: ["#6c3e94", "#a874d4", "#48a898", "#e88454", "#2e1c48"], style: "gameboard" },
+    { id: "bm-bubble-aqua", name: "Bubble Stripe Aqua", designer: "Brandon Mably", rgb: [66, 174, 182], colors: ["#3caab4", "#98e2e4", "#f2cc48", "#e86888", "#246474"], style: "bubble-stripe" },
+    { id: "bm-bubble-yellow", name: "Bubble Stripe Yellow", designer: "Brandon Mably", rgb: [228, 182, 54], colors: ["#e6b834", "#fae078", "#d85842", "#4898a8", "#946418"], style: "bubble-stripe" },
+    { id: "bm-bubble-red", name: "Bubble Stripe Red", designer: "Brandon Mably", rgb: [194, 52, 58], colors: ["#c4343a", "#f07c68", "#f6ce58", "#3e8898", "#741a24"], style: "bubble-stripe" },
+    { id: "bm-gingham-coral", name: "Gingham Coral", designer: "Brandon Mably", rgb: [224, 112, 96], colors: ["#e06c5c", "#f4a898", "#fbf2ee", "#c44238", "#f4cc78"], style: "gingham" },
+    { id: "bm-gingham-purple", name: "Gingham Purple", designer: "Brandon Mably", rgb: [126, 78, 158], colors: ["#7c4c9e", "#b890d4", "#f2eaf8", "#4c286c", "#68b4b8"], style: "gingham" },
+    { id: "bm-gingham-aqua", name: "Gingham Aqua", designer: "Brandon Mably", rgb: [72, 168, 176], colors: ["#46a6b0", "#98d8dc", "#eef8f8", "#226c78", "#e8c458"], style: "gingham" },
+    { id: "bm-wobble-blue", name: "Wobble Blue", designer: "Brandon Mably", rgb: [48, 94, 164], colors: ["#1e4484", "#3668b8", "#7eb4e4", "#e8f0f8", "#288898"], style: "wobble" },
+    { id: "bm-wobble-red", name: "Wobble Red", designer: "Brandon Mably", rgb: [188, 52, 62], colors: ["#7e1c24", "#c4343e", "#ec7e68", "#f6d078", "#a43868"], style: "wobble" },
+    { id: "bm-wobble-green", name: "Wobble Green", designer: "Brandon Mably", rgb: [68, 146, 86], colors: ["#286438", "#469458", "#96cc78", "#e4e482", "#2e8488"], style: "wobble" },
+    { id: "bm-comb-teal", name: "Comb Stripe Teal", designer: "Brandon Mably", rgb: [38, 128, 134], colors: ["#1a5c64", "#2c8c94", "#78c8c4", "#e88448", "#f2cc58"], style: "stripe" },
+    { id: "bm-comb-rust", name: "Comb Stripe Rust", designer: "Brandon Mably", rgb: [176, 84, 48], colors: ["#7c3018", "#b8542e", "#e49654", "#488488", "#e8d488"], style: "stripe" },
+    { id: "bm-fronds-turq", name: "Fronds Turquoise", designer: "Brandon Mably", rgb: [46, 152, 164], colors: ["#1c6874", "#329ca8", "#88dcd8", "#c8e068", "#e87888"], style: "chrysanthemum" },
+    { id: "bm-checkmate-blue", name: "Checkmate Blue", designer: "Brandon Mably", rgb: [44, 78, 138], colors: ["#1e3868", "#345ea4", "#84b4e0", "#f0ece4", "#d87448"], style: "gameboard" },
+  ];
+
   // Curated Philip Jacobs / Kaffe Fassett Collective (FreeSpirit) patterned fabric catalog
   // Modeled on My Favorite Quilt Store's Philip Jacobs collection (myfavoritequiltstore.com)
   const PHILIP_JACOBS_FABRICS = [
@@ -496,6 +576,140 @@
     // Rich painted background
     ctx.fillStyle = pal[0];
     ctx.fillRect(0, 0, size, size);
+
+    // Kaffe Fassett & Brandon Mably dedicated graphic/dot/glass/weave motif renderers
+    if (fabric.style === "dots") {
+      // Kaffe Fassett Aboriginal Dot: organic multi-sized colorful dot field
+      const step = 16;
+      for (let gy = 0; gy < size; gy += step) {
+        for (let gx = 0; gx < size; gx += step) {
+          const jx = (rand() - 0.5) * 6;
+          const jy = (rand() - 0.5) * 6;
+          const r = 2.6 + rand() * 3.8;
+          ctx.fillStyle = pal[1 + Math.floor(rand() * (pal.length - 1))];
+          ctx.beginPath();
+          ctx.arc((gx + 8 + jx + size) % size, (gy + 8 + jy + size) % size, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      const dataUrl = c.toDataURL("image/jpeg", 0.88);
+      pjSwatchCache.set(fabric.id, dataUrl);
+      return dataUrl;
+    }
+
+    if (fabric.style === "roman-glass") {
+      // Kaffe Fassett Roman Glass: concentric mottled blown-glass rings & flecks
+      for (let i = 0; i < 24; i++) {
+        const cx = rand() * size;
+        const cy = rand() * size;
+        const r = 10 + rand() * 20;
+        for (let ox = -size; ox <= size; ox += size) {
+          for (let oy = -size; oy <= size; oy += size) {
+            const x = cx + ox;
+            const y = cy + oy;
+            if (x + r < 0 || x - r > size || y + r < 0 || y - r > size) continue;
+            ctx.fillStyle = pal[1 + (i % (pal.length - 1))];
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = pal[(i + 2) % pal.length];
+            ctx.beginPath();
+            ctx.arc(x, y, r * 0.58, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = pal[(i + 3) % pal.length];
+            ctx.beginPath();
+            ctx.arc(x, y, r * 0.25, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+      const dataUrl = c.toDataURL("image/jpeg", 0.88);
+      pjSwatchCache.set(fabric.id, dataUrl);
+      return dataUrl;
+    }
+
+    if (fabric.style === "paperweight") {
+      // Kaffe Fassett Paperweight: bold layered concentric glass medallions
+      for (let i = 0; i < 9; i++) {
+        const cx = rand() * size;
+        const cy = rand() * size;
+        const r = 24 + rand() * 22;
+        for (let ox = -size; ox <= size; ox += size) {
+          for (let oy = -size; oy <= size; oy += size) {
+            const x = cx + ox;
+            const y = cy + oy;
+            if (x + r < 0 || x - r > size || y + r < 0 || y - r > size) continue;
+            for (let ring = 4; ring >= 1; ring--) {
+              ctx.fillStyle = pal[(i + ring) % pal.length];
+              ctx.beginPath();
+              ctx.arc(x, y, (r * ring) / 4, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        }
+      }
+      const dataUrl = c.toDataURL("image/jpeg", 0.88);
+      pjSwatchCache.set(fabric.id, dataUrl);
+      return dataUrl;
+    }
+
+    if (fabric.style === "stripe" || fabric.style === "bubble-stripe") {
+      const cols = 8;
+      const bw = size / cols;
+      for (let i = 0; i < cols; i++) {
+        ctx.fillStyle = pal[i % pal.length];
+        ctx.fillRect(i * bw, 0, bw + 1, size);
+        if (fabric.style === "bubble-stripe") {
+          ctx.fillStyle = pal[(i + 2) % pal.length];
+          for (let y = 10; y < size; y += 20) {
+            ctx.beginPath();
+            ctx.arc(i * bw + bw * 0.5, y + (i % 2) * 8, bw * 0.28, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+      const dataUrl = c.toDataURL("image/jpeg", 0.88);
+      pjSwatchCache.set(fabric.id, dataUrl);
+      return dataUrl;
+    }
+
+    if (fabric.style === "gameboard" || fabric.style === "gingham") {
+      const n = fabric.style === "gingham" ? 6 : 8;
+      const sq = size / n;
+      for (let r = 0; r < n; r++) {
+        for (let col = 0; col < n; col++) {
+          if (fabric.style === "gingham") {
+            const idx = (r % 2) + (col % 2);
+            ctx.fillStyle = pal[idx % pal.length];
+          } else {
+            ctx.fillStyle = pal[(r * 3 + col * 5 + Math.floor(rand() * 2)) % pal.length];
+          }
+          ctx.fillRect(col * sq, r * sq, sq + 0.5, sq + 0.5);
+        }
+      }
+      const dataUrl = c.toDataURL("image/jpeg", 0.88);
+      pjSwatchCache.set(fabric.id, dataUrl);
+      return dataUrl;
+    }
+
+    if (fabric.style === "wobble") {
+      const bands = 10;
+      const bh = size / bands;
+      for (let b = 0; b < bands; b++) {
+        ctx.strokeStyle = pal[b % pal.length];
+        ctx.lineWidth = bh * 0.72;
+        ctx.beginPath();
+        for (let x = 0; x <= size; x += 6) {
+          const y = (b + 0.5) * bh + Math.sin((x / size) * Math.PI * 4 + b * 0.9) * 7;
+          if (x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+      const dataUrl = c.toDataURL("image/jpeg", 0.88);
+      pjSwatchCache.set(fabric.id, dataUrl);
+      return dataUrl;
+    }
 
     // Subtle painterly background wash
     for (let i = 0; i < 18; i++) {
@@ -781,24 +995,177 @@
 
   // --- Square Decomposition ---
 
+  // Supported quilt block layouts (Square Grid + Staggered / Brick / Subway / Half-Drop)
+  const GRID_LAYOUTS = {
+    grid: { id: "grid", label: "Square Grid", aspect: 1.0, stagger: "none", supportsHst: true, unitName: "square" },
+    staggered: { id: "staggered", label: "Staggered Squares", aspect: 1.0, stagger: "row", supportsHst: false, unitName: "square" },
+    brick: { id: "brick", label: "Brick (Running Bond)", aspect: 1.5, stagger: "row", supportsHst: false, unitName: "brick" },
+    subway: { id: "subway", label: "Subway Tile", aspect: 2.0, stagger: "row", supportsHst: false, unitName: "tile" },
+    "vertical-brick": { id: "vertical-brick", label: "Vertical Brick", aspect: 2 / 3, stagger: "col", supportsHst: false, unitName: "brick" },
+  };
+
+  function getLayoutConfig(layoutId = state.gridLayout) {
+    return GRID_LAYOUTS[layoutId] || GRID_LAYOUTS.grid;
+  }
+
+  function getUnitFinishedDims(finished = state.finishedSquareSize, layoutId = state.gridLayout) {
+    const cfg = getLayoutConfig(layoutId);
+    const base = Math.max(0.1, finished);
+    if (cfg.aspect >= 1) {
+      return { w: base * cfg.aspect, h: base };
+    }
+    return { w: base, h: base / cfg.aspect };
+  }
+
+  function buildLayoutCells(cols, rows, layoutId = state.gridLayout) {
+    const cfg = getLayoutConfig(layoutId);
+    const cells = [];
+    if (cfg.stagger === "row") {
+      for (let r = 0; r < rows; r++) {
+        if (r % 2 === 0) {
+          for (let c = 0; c < cols; c++) {
+            cells.push({ idx: cells.length, c, r, x0: c, y0: r, x1: c + 1, y1: r + 1, isHalf: false });
+          }
+        } else {
+          cells.push({ idx: cells.length, c: 0, r, x0: 0, y0: r, x1: 0.5, y1: r + 1, isHalf: true });
+          for (let c = 1; c < cols; c++) {
+            cells.push({ idx: cells.length, c, r, x0: c - 0.5, y0: r, x1: c + 0.5, y1: r + 1, isHalf: false });
+          }
+          cells.push({ idx: cells.length, c: cols, r, x0: cols - 0.5, y0: r, x1: cols, y1: r + 1, isHalf: true });
+        }
+      }
+    } else if (cfg.stagger === "col") {
+      for (let c = 0; c < cols; c++) {
+        if (c % 2 === 0) {
+          for (let r = 0; r < rows; r++) {
+            cells.push({ idx: cells.length, c, r, x0: c, y0: r, x1: c + 1, y1: r + 1, isHalf: false });
+          }
+        } else {
+          cells.push({ idx: cells.length, c, r: 0, x0: c, y0: 0, x1: c + 1, y1: 0.5, isHalf: true });
+          for (let r = 1; r < rows; r++) {
+            cells.push({ idx: cells.length, c, r, x0: c, y0: r - 0.5, x1: c + 1, y1: r + 0.5, isHalf: false });
+          }
+          cells.push({ idx: cells.length, c, r: rows, x0: c, y0: rows - 0.5, x1: c + 1, y1: rows, isHalf: true });
+        }
+      }
+    } else {
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          cells.push({ idx: cells.length, c, r, x0: c, y0: r, x1: c + 1, y1: r + 1, isHalf: false });
+        }
+      }
+    }
+    return cells;
+  }
+
+  function lookupLayoutCellIndex(fx, fy, cols, rows, layoutId = state.gridLayout) {
+    const cfg = getLayoutConfig(layoutId);
+    if (cfg.stagger === "row") {
+      const r = Math.max(0, Math.min(rows - 1, Math.floor(fy)));
+      const evenBefore = Math.ceil(r / 2);
+      const oddBefore = Math.floor(r / 2);
+      const rowStart = evenBefore * cols + oddBefore * (cols + 1);
+      if (r % 2 === 0) {
+        const c = Math.max(0, Math.min(cols - 1, Math.floor(fx)));
+        return rowStart + c;
+      }
+      if (fx < 0.5) return rowStart;
+      if (fx >= cols - 0.5) return rowStart + cols;
+      const c = Math.max(1, Math.min(cols - 1, Math.floor(fx + 0.5)));
+      return rowStart + c;
+    }
+    if (cfg.stagger === "col") {
+      const c = Math.max(0, Math.min(cols - 1, Math.floor(fx)));
+      const evenBefore = Math.ceil(c / 2);
+      const oddBefore = Math.floor(c / 2);
+      const colStart = evenBefore * rows + oddBefore * (rows + 1);
+      if (c % 2 === 0) {
+        const r = Math.max(0, Math.min(rows - 1, Math.floor(fy)));
+        return colStart + r;
+      }
+      if (fy < 0.5) return colStart;
+      if (fy >= rows - 0.5) return colStart + rows;
+      const r = Math.max(1, Math.min(rows - 1, Math.floor(fy + 0.5)));
+      return colStart + r;
+    }
+    const r = Math.max(0, Math.min(rows - 1, Math.floor(fy)));
+    const c = Math.max(0, Math.min(cols - 1, Math.floor(fx)));
+    return r * cols + c;
+  }
+
+  function syncGridLayoutUI() {
+    const cfg = getLayoutConfig();
+    if (gridLayoutSelect && gridLayoutSelect.value !== cfg.id) {
+      gridLayoutSelect.value = cfg.id;
+    }
+    const hstAllowed = cfg.supportsHst;
+    if (hstSwitchRow) hstSwitchRow.hidden = !hstAllowed;
+    if (hstControls) hstControls.hidden = !hstAllowed || !state.hstEnabled;
+    // Hide HST paint brushes when in staggered rectangular layouts
+    document.querySelectorAll('[data-paint-brush="hst-slash"], [data-paint-brush="hst-back"], [data-paint-brush="hst"]').forEach((el) => {
+      if (el.dataset.photoOnly === "true" && state.isBlankQuilt) {
+        el.hidden = true;
+      } else {
+        el.hidden = !hstAllowed;
+      }
+    });
+    if (!hstAllowed && (state.paintBrush === "hst-slash" || state.paintBrush === "hst-back" || state.paintBrush === "hst")) {
+      setPaintBrush("color");
+    }
+  }
+
   function computeSquareAverages(skipInputEl = null) {
     if (!state.samplePixels) return;
 
     const w = state.sampleWidth;
     const h = state.sampleHeight;
     const cols = state.cols;
-    // Keep cells genuinely square based on the image aspect ratio
-    const rows = Math.max(1, Math.round((cols * h) / w));
+    const cfg = getLayoutConfig();
+    // Preserve exact image aspect ratio using the layout's unit aspect (cellW / cellH)
+    const rows = Math.max(1, Math.round((cols * cfg.aspect * h) / w));
     state.rows = rows;
+    state.layoutCells = buildLayoutCells(cols, rows, cfg.id);
 
-    const cellCount = cols * rows;
+    const cellCount = state.layoutCells.length;
     const sumR = new Float64Array(cellCount);
     const sumG = new Float64Array(cellCount);
     const sumB = new Float64Array(cellCount);
     const sumSq = new Float64Array(cellCount);
     const counts = new Int32Array(cellCount);
 
-    // Triangle accumulators for '/' (TL + BR) and '\' (BL + TR) Half-Square Triangles
+    const isSquareGrid = cfg.stagger === "none";
+    const data = state.samplePixels;
+
+    if (!isSquareGrid) {
+      // Exact pixel-footprint averaging for Staggered Squares, Brick, Subway Tile, and Vertical Brick
+      for (let y = 0; y < h; y++) {
+        const fy = ((y + 0.5) * rows) / h;
+        for (let x = 0; x < w; x++) {
+          const fx = ((x + 0.5) * cols) / w;
+          const cIdx = lookupLayoutCellIndex(fx, fy, cols, rows, cfg.id);
+          const pIdx = (y * w + x) * 4;
+          sumR[cIdx] += data[pIdx];
+          sumG[cIdx] += data[pIdx + 1];
+          sumB[cIdx] += data[pIdx + 2];
+          counts[cIdx]++;
+        }
+      }
+      const averages = new Array(cellCount);
+      for (let i = 0; i < cellCount; i++) {
+        const n = counts[i] || 1;
+        averages[i] = [sumR[i] / n, sumG[i] / n, sumB[i] / n];
+      }
+      state.squareAverages = averages;
+      state.hstSlashAverages = [];
+      state.hstBackslashAverages = [];
+      state.cellDiagStats = [];
+      squaresValue.textContent = `${cols} × ${rows}`;
+      updateUnitBreakdownLabels();
+      updateQuiltDimensions(skipInputEl);
+      return;
+    }
+
+    // Triangle accumulators for '/' (TL + BR) and '\' (BL + TR) Half-Square Triangles (Square Grid only)
     const tlR = new Float64Array(cellCount);
     const tlG = new Float64Array(cellCount);
     const tlB = new Float64Array(cellCount);
@@ -833,7 +1200,6 @@
     const topSq = new Float64Array(cellCount);
     const topN = new Int32Array(cellCount);
 
-    const data = state.samplePixels;
     for (let y = 0; y < h; y++) {
       const fy = ((y + 0.5) * rows) / h;
       const row = Math.min(rows - 1, Math.floor(fy));
@@ -976,13 +1342,24 @@
   }
 
   function updateUnitBreakdownLabels() {
-    const total = state.cols * state.rows;
-    const hsts = state.hstEnabled ? state.hstCount : 0;
-    const solids = Math.max(0, total - hsts);
-    if (state.hstEnabled && hsts > 0) {
-      totalSquaresLabel.textContent = `${solids.toLocaleString()} sq · ${hsts.toLocaleString()} HSTs`;
+    const cfg = getLayoutConfig();
+    if (cfg.stagger !== "none" && state.layoutCells.length > 0) {
+      let fullCnt = 0;
+      let halfCnt = 0;
+      for (let i = 0; i < state.layoutCells.length; i++) {
+        if (state.layoutCells[i].isHalf) halfCnt++;
+        else fullCnt++;
+      }
+      totalSquaresLabel.textContent = `${fullCnt.toLocaleString()} ${cfg.unitName}s · ${halfCnt} halves`;
     } else {
-      totalSquaresLabel.textContent = `${total.toLocaleString()} squares`;
+      const total = state.cols * state.rows;
+      const hsts = state.hstEnabled ? state.hstCount : 0;
+      const solids = Math.max(0, total - hsts);
+      if (state.hstEnabled && hsts > 0) {
+        totalSquaresLabel.textContent = `${solids.toLocaleString()} sq · ${hsts.toLocaleString()} HSTs`;
+      } else {
+        totalSquaresLabel.textContent = `${total.toLocaleString()} squares`;
+      }
     }
     if (hstEdgeValue) {
       hstEdgeValue.textContent = `${state.hstEdgeSensitivity}%`;
@@ -1121,22 +1498,40 @@
 
   function updateQuiltDimensions(skipInputEl = null) {
     const unit = state.unit;
+    const cfg = getLayoutConfig();
     const finished = Math.max(0.1, state.finishedSquareSize);
     const seam = Math.max(0, state.seamAllowance);
+    const uDims = getUnitFinishedDims(finished, cfg.id);
 
-    // Cut square adds seam allowance on both left/right and top/bottom edges
-    const cutSize = finished + 2 * seam;
-    cutSquareValue.textContent = state.hstEnabled
-      ? formatMeasure(cutSize, unit)
-      : `${formatMeasure(cutSize, unit)} × ${formatMeasure(cutSize, unit)}`;
+    // Cut unit adds seam allowance on both left/right and top/bottom edges
+    const cutW = uDims.w + 2 * seam;
+    const cutH = uDims.h + 2 * seam;
+    const isStaggered = cfg.stagger !== "none";
 
-    const hstCutSize = getHstCutSize();
-    if (hstCutStat) hstCutStat.hidden = !state.hstEnabled;
-    if (dimensionsSummary) dimensionsSummary.classList.toggle("has-hst", state.hstEnabled);
-    if (hstCutSquareValue) hstCutSquareValue.textContent = formatMeasure(hstCutSize, unit);
+    if (isStaggered) {
+      const halfCutW = cfg.stagger === "row" ? uDims.w * 0.5 + 2 * seam : cutW;
+      const halfCutH = cfg.stagger === "col" ? uDims.h * 0.5 + 2 * seam : cutH;
+      if (cutSquareLabel) cutSquareLabel.textContent = `Cut ${cfg.unitName}`;
+      cutSquareValue.textContent = `${formatMeasure(cutW, unit)} × ${formatMeasure(cutH, unit)}`;
+      if (hstCutLabel) hstCutLabel.textContent = "Edge half";
+      if (hstCutStat) hstCutStat.hidden = false;
+      if (dimensionsSummary) dimensionsSummary.classList.add("has-hst");
+      if (hstCutSquareValue) hstCutSquareValue.textContent = `${formatMeasure(halfCutW, unit)} × ${formatMeasure(halfCutH, unit)}`;
+    } else {
+      const cutSize = finished + 2 * seam;
+      if (cutSquareLabel) cutSquareLabel.textContent = "Cut square";
+      cutSquareValue.textContent = state.hstEnabled
+        ? formatMeasure(cutSize, unit)
+        : `${formatMeasure(cutSize, unit)} × ${formatMeasure(cutSize, unit)}`;
+      if (hstCutLabel) hstCutLabel.textContent = "HST starter";
+      const hstCutSize = getHstCutSize();
+      if (hstCutStat) hstCutStat.hidden = !state.hstEnabled;
+      if (dimensionsSummary) dimensionsSummary.classList.toggle("has-hst", state.hstEnabled);
+      if (hstCutSquareValue) hstCutSquareValue.textContent = formatMeasure(hstCutSize, unit);
+    }
 
-    const quiltW = state.cols * finished;
-    const quiltH = state.rows * finished;
+    const quiltW = state.cols * uDims.w;
+    const quiltH = state.rows * uDims.h;
 
     if (finishedSizeInput && skipInputEl !== finishedSizeInput) {
       finishedSizeInput.value = formatNumericInput(finished);
@@ -1255,13 +1650,68 @@
   function assignGridCells() {
     const cols = state.cols;
     const rows = state.rows;
-    const totalCells = cols * rows;
+    const cfg = getLayoutConfig();
+    const isStaggered = cfg.stagger !== "none";
+    if (!state.layoutCells || state.layoutCells.length === 0) {
+      state.layoutCells = buildLayoutCells(cols, rows, cfg.id);
+    }
+    const totalCells = isStaggered ? state.layoutCells.length : cols * rows;
     const palette = state.palette;
     const K = palette.length;
 
     const cellTypes = new Uint8Array(totalCells);
     const assignmentsA = new Int32Array(totalCells);
     const assignmentsB = new Int32Array(totalCells).fill(-1);
+
+    if (isStaggered) {
+      if (!state.isBlankQuilt) {
+        for (let i = 0; i < totalCells; i++) {
+          const avg = state.squareAverages[i] || [244, 239, 230];
+          let bestIdx = 0;
+          let bestDist = Infinity;
+          for (let p = 0; p < K; p++) {
+            const pal = palette[p];
+            const d = colorDistanceSq(avg[0], avg[1], avg[2], pal.r, pal.g, pal.b);
+            if (d < bestDist) {
+              bestDist = d;
+              bestIdx = p;
+            }
+          }
+          assignmentsA[i] = bestIdx;
+        }
+      }
+      let effectivePaintedCount = 0;
+      if (state.manualCells.size > 0) {
+        for (let i = 0; i < totalCells; i++) {
+          const cell = state.layoutCells[i];
+          const manual = state.manualCells.get(`${cell.c},${cell.r}`);
+          if (manual) {
+            assignmentsA[i] = Math.max(0, Math.min(K - 1, manual.a));
+            effectivePaintedCount++;
+          }
+        }
+      }
+      const solidCounts = new Int32Array(K);
+      const hstHalfCounts = new Int32Array(K);
+      const hstStarterCounts = new Int32Array(K);
+      for (let i = 0; i < totalCells; i++) {
+        solidCounts[assignmentsA[i]]++;
+      }
+      const usageCounts = new Int32Array(solidCounts);
+      state.hasPaintedMask = state.manualCells.size > 0;
+      state.smoothableDiag = new Uint8Array(0);
+      state.paintedCellsCount = effectivePaintedCount;
+      state.hstCount = 0;
+      state.cellTypes = cellTypes;
+      state.gridAssignments = assignmentsA;
+      state.gridAssignmentsB = assignmentsB;
+      state.solidCounts = solidCounts;
+      state.hstHalfCounts = hstHalfCounts;
+      state.hstStarterCounts = hstStarterCounts;
+      state.usageCounts = usageCounts;
+      return;
+    }
+
     const sqBest = new Int32Array(totalCells);
     const sqErrors = new Float64Array(totalCells);
     const cellPrefs = new Uint8Array(totalCells);
@@ -1571,8 +2021,16 @@
     return getColorName(color.r, color.g, color.b);
   }
 
-  function drawQuiltCellsToContext(ctx, cols, rows, squarePx, { grayscale = false, showSeams = false } = {}) {
+  function drawQuiltCellsToContext(
+    ctx,
+    cols,
+    rows,
+    squarePx,
+    { grayscale = false, showSeams = false, cellW = squarePx, cellH = squarePx } = {}
+  ) {
     const palette = state.palette;
+    const cfg = getLayoutConfig();
+    const isStaggered = cfg.stagger !== "none";
     const colorCss = palette.map((pal) => {
       if (grayscale) {
         const lum = Math.round(luminance(pal.r, pal.g, pal.b));
@@ -1625,14 +2083,56 @@
           return { tile, maxSx, maxSy, centerSx, centerSy, cropSide, cutMode };
         });
 
-    const drawPatternInRect = (pIdx, x, y, r, c, salt) => {
+    const drawPatternInBox = (pIdx, x, y, rw, rh, r, c, salt) => {
       const info = cellTiles ? cellTiles[pIdx] : null;
       if (!info) return false;
-      const sx = info.cutMode === "varied" ? cellHash(r, c, salt + pIdx * 13) * info.maxSx : info.centerSx;
-      const sy = info.cutMode === "varied" ? cellHash(r, c, salt + 7 + pIdx * 29) * info.maxSy : info.centerSy;
-      ctx.drawImage(info.tile, sx, sy, info.cropSide, info.cropSide, x, y, squarePx, squarePx);
+      const boxAspect = rw / Math.max(1, rh);
+      const cropW = Math.min(info.tile.width, boxAspect >= 1 ? info.cropSide * boxAspect : info.cropSide);
+      const cropH = Math.min(info.tile.height, boxAspect >= 1 ? info.cropSide : info.cropSide / boxAspect);
+      const maxX = Math.max(0, info.tile.width - cropW);
+      const maxY = Math.max(0, info.tile.height - cropH);
+      const sx = info.cutMode === "varied" ? cellHash(r, c, salt + pIdx * 13) * maxX : maxX / 2;
+      const sy = info.cutMode === "varied" ? cellHash(r, c, salt + 7 + pIdx * 29) * maxY : maxY / 2;
+      ctx.drawImage(info.tile, sx, sy, cropW, cropH, x, y, rw, rh);
       return true;
     };
+
+    const drawPatternInRect = (pIdx, x, y, r, c, salt) => drawPatternInBox(pIdx, x, y, squarePx, squarePx, r, c, salt);
+
+    if (isStaggered) {
+      const cells = state.layoutCells;
+      for (let i = 0; i < cells.length; i++) {
+        const cell = cells[i];
+        const x = Math.round(cell.x0 * cellW);
+        const y = Math.round(cell.y0 * cellH);
+        const x2 = Math.round(cell.x1 * cellW);
+        const y2 = Math.round(cell.y1 * cellH);
+        const rw = Math.max(1, x2 - x);
+        const rh = Math.max(1, y2 - y);
+        const pA = state.gridAssignments[i] ?? 0;
+        if (!drawPatternInBox(pA, x, y, rw, rh, cell.r, cell.c, 1)) {
+          ctx.fillStyle = colorCss[pA];
+          ctx.fillRect(x, y, rw, rh);
+        }
+      }
+      if (showSeams && Math.min(cellW, cellH) >= 6) {
+        ctx.save();
+        ctx.strokeStyle = grayscale ? "rgba(0, 0, 0, 0.16)" : "rgba(25, 22, 18, 0.18)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = 0; i < cells.length; i++) {
+          const cell = cells[i];
+          const x = Math.round(cell.x0 * cellW) + 0.5;
+          const y = Math.round(cell.y0 * cellH) + 0.5;
+          const x2 = Math.round(cell.x1 * cellW) + 0.5;
+          const y2 = Math.round(cell.y1 * cellH) + 0.5;
+          ctx.rect(x, y, Math.max(1, x2 - x), Math.max(1, y2 - y));
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+      return;
+    }
 
     for (let r = 0; r < rows; r++) {
       const y = r * squarePx;
@@ -1741,17 +2241,32 @@
     }
   }
 
+  function getCanvasUnitPixels(cols, rows, maxDim) {
+    const cfg = getLayoutConfig();
+    if (cfg.aspect >= 1) {
+      const cellH = Math.max(5, Math.floor(maxDim / Math.max(cols * cfg.aspect, rows)));
+      const cellW = Math.max(5, Math.round(cellH * cfg.aspect));
+      return { cellW, cellH };
+    }
+    const cellW = Math.max(5, Math.floor(maxDim / Math.max(cols, rows / cfg.aspect)));
+    const cellH = Math.max(5, Math.round(cellW / cfg.aspect));
+    return { cellW, cellH };
+  }
+
   function renderQuilt() {
     if (!state.image || state.palette.length === 0) return;
 
     const cols = state.cols;
     const rows = state.rows;
 
-    // Pick a crisp display square size so canvas stays sharp even for dense King-sized grids
+    // Pick a crisp display unit size so canvas stays sharp even for dense King-sized grids
     const maxDim = Math.max(cols, rows) > 120 ? 1200 : 960;
-    const squarePx = Math.max(5, Math.floor(maxDim / Math.max(cols, rows)));
-    const canvasW = cols * squarePx;
-    const canvasH = rows * squarePx;
+    const { cellW, cellH } = getCanvasUnitPixels(cols, rows, maxDim);
+    const squarePx = Math.min(cellW, cellH);
+    state.layoutCellW = cellW;
+    state.layoutCellH = cellH;
+    const canvasW = cols * cellW;
+    const canvasH = rows * cellH;
 
     if (quiltCanvas.width !== canvasW || quiltCanvas.height !== canvasH) {
       quiltCanvas.width = canvasW;
@@ -1773,6 +2288,8 @@
     drawQuiltCellsToContext(quiltCtx, cols, rows, squarePx, {
       grayscale: false,
       showSeams: state.showSeamLines,
+      cellW,
+      cellH,
     });
     drawPaintCursorOverlay(squarePx);
   }
@@ -2030,22 +2547,97 @@
     });
   }
 
+  let activeSwatchLibraryTab = "kona"; // "kona" | "pj"
+
+  function applyKonaSolidToSwatch(entryRow, color, code) {
+    if (!entryRow || !color) return;
+    color.r = entryRow[1];
+    color.g = entryRow[2];
+    color.b = entryRow[3];
+    color.patternDataUrl = null;
+    color.patternImg = null;
+    color.patternName = null;
+    color.patternAvgRgb = null;
+    color.libraryId = null;
+    renderPaletteSwatches();
+    renderQuilt();
+    syncSwatchPopover();
+    recordHistory(`Set Fabric ${code} to ${entryRow[4]}`);
+  }
+
   function renderSwatchLibrary(activeColor) {
     if (!swatchLibraryGrid || !activeColor) return;
     const q = (swatchLibrarySearch ? swatchLibrarySearch.value : "").trim().toLowerCase();
-    const sorted = PHILIP_JACOBS_FABRICS.filter((f) => !q || f.name.toLowerCase().includes(q)).sort((a, b) => {
+    swatchLibraryGrid.innerHTML = "";
+
+    if (activeSwatchLibraryTab === "kona") {
+      if (swatchLibraryCaption) swatchLibraryCaption.textContent = "Closest Kona Solids";
+      const sortedKona = NAMED_FABRIC_COLORS.filter(
+        (row) =>
+          !q ||
+          row[0].toLowerCase().includes(q) ||
+          row[4].toLowerCase().includes(q) ||
+          row[5].toLowerCase().includes(q)
+      ).sort((a, b) => {
+        const da = colorDistanceSq(activeColor.r, activeColor.g, activeColor.b, a[1], a[2], a[3]);
+        const db = colorDistanceSq(activeColor.r, activeColor.g, activeColor.b, b[1], b[2], b[3]);
+        return da - db;
+      });
+
+      sortedKona.forEach((row) => {
+        const shadeShort = row[4].replace(/^Kona\s+/i, "");
+        const isExact =
+          !activeColor.patternDataUrl &&
+          activeColor.r === row[1] &&
+          activeColor.g === row[2] &&
+          activeColor.b === row[3];
+
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "swatch-library-item";
+        if (isExact) btn.classList.add("is-selected");
+        btn.title = `${row[4]} (${row[5]}) — click to apply`;
+        btn.setAttribute("role", "option");
+
+        const chip = document.createElement("span");
+        chip.className = "swatch-library-chip";
+        chip.style.backgroundColor = rgbToHex(row[1], row[2], row[3]);
+
+        const lbl = document.createElement("span");
+        lbl.className = "swatch-library-label";
+        lbl.textContent = shadeShort;
+
+        btn.addEventListener("click", () => {
+          const entry = getActiveSwatchEntry();
+          if (entry) applyKonaSolidToSwatch(row, entry.color, getFabricCode(entry.idx));
+        });
+
+        btn.appendChild(chip);
+        btn.appendChild(lbl);
+        swatchLibraryGrid.appendChild(btn);
+      });
+      return;
+    }
+
+    const catalogMap = {
+      kaffe: { label: "Kaffe Fassett", list: KAFFE_FASSETT_FABRICS },
+      brandon: { label: "Brandon Mably", list: BRANDON_MABLY_FABRICS },
+      pj: { label: "Philip Jacobs", list: PHILIP_JACOBS_FABRICS },
+    };
+    const activeCat = catalogMap[activeSwatchLibraryTab] || catalogMap.pj;
+    if (swatchLibraryCaption) swatchLibraryCaption.textContent = `Closest ${activeCat.label}`;
+    const sorted = activeCat.list.filter((f) => !q || f.name.toLowerCase().includes(q)).sort((a, b) => {
       const da = colorDistanceSq(activeColor.r, activeColor.g, activeColor.b, a.rgb[0], a.rgb[1], a.rgb[2]);
       const db = colorDistanceSq(activeColor.r, activeColor.g, activeColor.b, b.rgb[0], b.rgb[1], b.rgb[2]);
       return da - db;
     });
 
-    swatchLibraryGrid.innerHTML = "";
     sorted.forEach((fabric) => {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "swatch-library-item";
       if (activeColor.patternName === fabric.name) btn.classList.add("is-selected");
-      btn.title = `Philip Jacobs: ${fabric.name} — click to apply`;
+      btn.title = `${activeCat.label}: ${fabric.name} — click to apply`;
       btn.setAttribute("role", "option");
 
       const img = document.createElement("img");
@@ -2069,6 +2661,20 @@
       swatchLibraryGrid.appendChild(btn);
     });
   }
+
+  swatchLibraryTabs.forEach((tabBtn) => {
+    tabBtn.addEventListener("click", () => {
+      const next = tabBtn.dataset.libTab;
+      activeSwatchLibraryTab = next === "kaffe" || next === "brandon" || next === "pj" ? next : "kona";
+      swatchLibraryTabs.forEach((b) => {
+        const active = b.dataset.libTab === activeSwatchLibraryTab;
+        b.classList.toggle("is-active", active);
+        b.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      const entry = getActiveSwatchEntry();
+      if (entry) renderSwatchLibrary(entry.color);
+    });
+  });
 
   if (swatchLibrarySearch) {
     swatchLibrarySearch.addEventListener("input", () => {
@@ -2437,8 +3043,13 @@
       state.crop = { x: 0, y: 0, w: 1, h: 1 };
       state.paintMask.fill(0);
       state.manualCells.clear();
+      state.activeMathPattern = "";
+      syncMathPropsButton();
+      state.gridLayout =
+        restore && restore.settings && GRID_LAYOUTS[restore.settings.gridLayout] ? restore.settings.gridLayout : "grid";
       state.isBlankQuilt = Boolean(restore && restore.settings && restore.settings.isBlankQuilt);
       setPaintMode(false);
+      syncGridLayoutUI();
       state.targetQuiltSize = null;
       if (quiltPresetSelect) quiltPresetSelect.value = "custom";
 
@@ -2486,12 +3097,65 @@
 
   function syncBlankQuiltUI() {
     const blank = Boolean(state.isBlankQuilt);
+    if (importImageBtn) importImageBtn.hidden = !blank;
     if (cropBtn) cropBtn.hidden = blank;
     if (compareBtn) compareBtn.hidden = blank;
     if (resetPaletteBtn) resetPaletteBtn.hidden = blank;
     document.querySelectorAll('[data-photo-only="true"]').forEach((el) => {
       el.hidden = blank;
     });
+  }
+
+  function returnToStartScreen() {
+    closeHistoryPopover();
+    closeSwatchPopover();
+    closeMathPropsPopover();
+    closeCropStage();
+    setPaintMode(false);
+    workspace.hidden = true;
+    topbarActions.hidden = true;
+    dropStage.hidden = false;
+    document.title = "Miriam's Quiltcaster";
+  }
+
+  function importImageIntoCurrentDesign(file) {
+    clearError();
+    if (!file || !file.type.startsWith("image/")) {
+      showError("Please select a valid image file (PNG, JPG, WebP, or GIF).");
+      return;
+    }
+    if (state.objectUrl) {
+      URL.revokeObjectURL(state.objectUrl);
+      state.objectUrl = null;
+    }
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      state.image = img;
+      state.objectUrl = url;
+      state.fileName = file.name;
+      state.isBlankQuilt = false;
+      state.activeMathPattern = "";
+      syncMathPropsButton();
+      state.crop = { x: 0, y: 0, w: 1, h: 1 };
+      state.paintMask.fill(0);
+      if (getCurrentProjectTitle() === "Custom Quilt") {
+        syncProjectTitle(derivePatternTitle(file.name));
+      }
+      closeCropStage();
+      rebuildSampleBuffer();
+      syncBlankQuiltUI();
+      syncGridLayoutUI();
+      computeSquareAverages();
+      renderPaletteSwatches();
+      renderQuilt();
+      recordHistory(`Imported image (${derivePatternTitle(file.name)})`);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      showError("Could not decode that image file. Please try another one.");
+    };
+    img.src = url;
   }
 
   function startBlankQuilt() {
@@ -2516,14 +3180,18 @@
       state.crop = { x: 0, y: 0, w: 1, h: 1 };
       state.paintMask.fill(0);
       state.manualCells.clear();
+      state.activeMathPattern = "";
+      syncMathPropsButton();
       state.targetQuiltSize = null;
       if (quiltPresetSelect) quiltPresetSelect.value = "custom";
       syncProjectTitle("Custom Quilt");
 
       state.cols = syncSliderBoundsForCols(16);
+      state.gridLayout = "grid";
       state.hstEnabled = false;
       if (hstToggle) hstToggle.checked = false;
       if (hstControls) hstControls.hidden = true;
+      syncGridLayoutUI();
 
       // Curated starter palette: warm linen background + solids + 2 Philip Jacobs floral prints
       const pjBlue = PHILIP_JACOBS_FABRICS[0];
@@ -2712,8 +3380,10 @@
     if (hstEdgeSlider) hstEdgeSlider.value = String(state.hstEdgeSensitivity);
     if (hstRatioSlider) hstRatioSlider.value = String(state.hstRatio);
     decodePaintMaskRle(s.paintMaskRle);
+    state.gridLayout = GRID_LAYOUTS[s.gridLayout] ? s.gridLayout : "grid";
     state.isBlankQuilt = Boolean(s.isBlankQuilt);
     deserializeManualCells(s.manualCells);
+    syncGridLayoutUI();
 
     if (s.pageSize === "a4" || s.pageSize === "letter") {
       setPageSize(s.pageSize);
@@ -2837,6 +3507,7 @@
     return {
       title: getCurrentProjectTitle(),
       cols: state.cols,
+      gridLayout: state.gridLayout,
       showSeamLines: state.showSeamLines,
       hstEnabled: state.hstEnabled,
       hstMode: state.hstMode,
@@ -2892,6 +3563,7 @@
     return {
       title: typeof raw.title === "string" ? raw.title.slice(0, 60) : getCurrentProjectTitle(),
       cols: Math.round(clampNumber(raw.cols, MIN_COLS, HARD_MAX_COLS, state.cols)),
+      gridLayout: GRID_LAYOUTS[raw.gridLayout] ? raw.gridLayout : "grid",
       showSeamLines: raw.showSeamLines !== false,
       hstEnabled: Boolean(raw.hstEnabled),
       hstMode: raw.hstMode === "ratio" ? "ratio" : "edges",
@@ -2933,6 +3605,7 @@
       }
 
       state.cols = syncSliderBoundsForCols(snap.cols);
+      state.gridLayout = GRID_LAYOUTS[snap.gridLayout] ? snap.gridLayout : "grid";
       setSeamLinesVisible(snap.showSeamLines);
       state.hstEnabled = snap.hstEnabled;
       setHstPlacementMode(snap.hstMode);
@@ -2946,6 +3619,7 @@
       state.isBlankQuilt = Boolean(snap.isBlankQuilt);
       deserializeManualCells(snap.manualCells);
       syncBlankQuiltUI();
+      syncGridLayoutUI();
 
       state.unit = snap.unit;
       state.finishedSquareSize = snap.finishedSquareSize;
@@ -3180,6 +3854,7 @@
       patternTitle: currentTitle,
       settings: {
         cols: state.cols,
+        gridLayout: state.gridLayout,
         showSeamLines: state.showSeamLines,
         hstEnabled: state.hstEnabled,
         hstMode: state.hstMode,
@@ -3259,7 +3934,19 @@
       fileInput.click();
     }
   });
-  newImageBtn.addEventListener("click", () => fileInput.click());
+  newImageBtn.addEventListener("click", returnToStartScreen);
+
+  if (importImageBtn && importImageInput) {
+    importImageBtn.addEventListener("click", () => {
+      importImageInput.value = "";
+      importImageInput.click();
+    });
+    importImageInput.addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      if (file) importImageIntoCurrentDesign(file);
+      importImageInput.value = "";
+    });
+  }
 
   fileInput.addEventListener("change", (e) => {
     const file = e.target.files?.[0];
@@ -3323,7 +4010,11 @@
     state.targetQuiltSize = null;
     if (quiltPresetSelect) quiltPresetSelect.value = "custom";
     computeSquareAverages();
-    renderQuilt();
+    if (state.activeMathPattern) {
+      applyMathPattern(state.activeMathPattern, { record: false });
+    } else {
+      renderQuilt();
+    }
     if (!cropStage.hidden) {
       updateCropLockUI();
       renderCropCanvas();
@@ -3585,6 +4276,38 @@
     e.stopPropagation();
     addNewFabricAndEdit();
   });
+
+  if (snapKonaBtn) {
+    snapKonaBtn.addEventListener("click", () => {
+      if (!state.palette || state.palette.length === 0) return;
+      let changed = 0;
+      state.palette.forEach((color) => {
+        if (color.patternDataUrl) return; // Keep custom/Philip Jacobs patterned fabrics intact
+        let best = NAMED_FABRIC_COLORS[0];
+        let bestDist = Infinity;
+        for (let i = 0; i < NAMED_FABRIC_COLORS.length; i++) {
+          const row = NAMED_FABRIC_COLORS[i];
+          const d = colorDistanceSq(color.r, color.g, color.b, row[1], row[2], row[3]);
+          if (d < bestDist) {
+            bestDist = d;
+            best = row;
+          }
+        }
+        if (color.r !== best[1] || color.g !== best[2] || color.b !== best[3]) {
+          color.r = best[1];
+          color.g = best[2];
+          color.b = best[3];
+          changed++;
+        }
+      });
+      if (changed > 0) {
+        renderPaletteSwatches();
+        renderQuilt();
+        syncSwatchPopover();
+        recordHistory("Snapped palette to Kona Solids");
+      }
+    });
+  }
 
   // --- Boutique Printable PDF Pattern Booklet Export ---
 
@@ -3970,15 +4693,18 @@
     const cols = state.cols;
     const rows = state.rows;
     const maxDim = grayscale ? 420 : 960;
-    const sq = Math.max(4, Math.floor(maxDim / Math.max(cols, rows)));
+    const { cellW, cellH } = getCanvasUnitPixels(cols, rows, maxDim);
+    const sq = Math.min(cellW, cellH);
     const off = document.createElement("canvas");
-    off.width = cols * sq;
-    off.height = rows * sq;
+    off.width = cols * cellW;
+    off.height = rows * cellH;
     const ctx = off.getContext("2d");
 
     drawQuiltCellsToContext(ctx, cols, rows, sq, {
       grayscale,
       showSeams: sq >= 6,
+      cellW,
+      cellH,
     });
 
     return {
@@ -5920,9 +6646,17 @@
     const isTyping = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || document.activeElement?.isContentEditable;
 
     if (e.key === "Escape") {
-      const hadPopover = (historyPopover && !historyPopover.hidden) || (swatchPopover && !swatchPopover.hidden);
+      const hadPopover =
+        (historyPopover && !historyPopover.hidden) ||
+        (swatchPopover && !swatchPopover.hidden) ||
+        (mathPropsPopover && !mathPropsPopover.hidden) ||
+        (mathMenuPopover && !mathMenuPopover.hidden) ||
+        (mapPopover && !mapPopover.hidden);
       closeHistoryPopover();
       closeSwatchPopover();
+      closeMathPropsPopover();
+      closeMathMenuPopover();
+      closeMapPopover();
       if (!hadPopover && state.paintMode && !isTyping) {
         setPaintMode(false);
       }
@@ -6752,20 +7486,1896 @@
     }
   }
 
+  // --- Mathematical, Programmatic & Fractal Quilt Pattern Generators + Live Properties ---
+  const MATH_PATTERN_SPECS = {
+    "lone-star": {
+      label: "Lone Star Radiant",
+      params: [
+        { key: "points", label: "Star points", type: "range", min: 4, max: 12, step: 2, def: 8, fmt: (v) => `${v}-pt` },
+        { key: "rings", label: "Color bands", type: "range", min: 1, max: 5, step: 0.5, def: 2.0, fmt: (v) => `${v.toFixed(1)}×` },
+      ],
+    },
+    "tumbling-blocks": {
+      label: "Tumbling Blocks (3D)",
+      params: [
+        { key: "density", label: "Cube density", type: "range", min: 2, max: 10, step: 1, def: 5, fmt: (v) => `${v}×` },
+      ],
+    },
+    chevron: {
+      label: "Chevron / Herringbone",
+      params: [
+        { key: "peaks", label: "Zigzag peaks", type: "range", min: 1, max: 8, step: 1, def: 3, fmt: (v) => `${v}` },
+        { key: "bands", label: "Band repeat", type: "range", min: 1, max: 4, step: 0.5, def: 1.5, fmt: (v) => `${v.toFixed(1)}×` },
+      ],
+    },
+    tartan: {
+      label: "Woven Tartan Plaid",
+      params: [
+        { key: "density", label: "Stripe density", type: "range", min: 2, max: 10, step: 1, def: 4, fmt: (v) => `${v}×` },
+        { key: "seed", label: "Weave pattern", type: "range", min: 1, max: 16, step: 1, def: 3, fmt: (v) => `#${v}` },
+      ],
+    },
+    "topo-map": {
+      label: "Topographic Contour Map",
+      params: [
+        { key: "terrain", label: "Terrain scale", type: "range", min: 1.5, max: 7.0, step: 0.5, def: 3.5, fmt: (v) => `${v.toFixed(1)}×` },
+        { key: "contours", label: "Contour bands", type: "range", min: 1, max: 3, step: 0.25, def: 1.25, fmt: (v) => `${v.toFixed(2)}×` },
+        { key: "seed", label: "Island seed", type: "range", min: 1, max: 24, step: 1, def: 7, fmt: (v) => `#${v}` },
+      ],
+    },
+    sunburst: {
+      label: "Sunburst / Compass Rays",
+      params: [
+        { key: "rays", label: "Ray count", type: "range", min: 6, max: 28, step: 2, def: 14, fmt: (v) => `${v}` },
+        { key: "rings", label: "Concentric rings", type: "range", min: 0, max: 6, step: 1, def: 2, fmt: (v) => `${v}` },
+      ],
+    },
+    "orchid-macro": {
+      label: "Orchid Macro Close-Up",
+      params: [
+        { key: "zoom", label: "Bloom zoom", type: "range", min: 0.7, max: 2.0, step: 0.1, def: 1.0, fmt: (v) => `${v.toFixed(1)}×` },
+        { key: "veins", label: "Petal veins", type: "range", min: 0, max: 1, step: 0.1, def: 0.5, fmt: (v) => `${Math.round(v * 100)}%` },
+        { key: "speckles", label: "Throat speckles", type: "range", min: 0, max: 1, step: 0.1, def: 0.6, fmt: (v) => `${Math.round(v * 100)}%` },
+      ],
+    },
+    "dahlia-macro": {
+      label: "Dahlia / Mum Macro",
+      params: [
+        { key: "petals", label: "Petals per ring", type: "range", min: 8, max: 24, step: 2, def: 14, fmt: (v) => `${v}` },
+        { key: "layers", label: "Petal layers", type: "range", min: 3, max: 8, step: 1, def: 5, fmt: (v) => `${v}` },
+        { key: "zoom", label: "Bloom zoom", type: "range", min: 0.7, max: 1.8, step: 0.1, def: 1.0, fmt: (v) => `${v.toFixed(1)}×` },
+      ],
+    },
+    "peony-macro": {
+      label: "Peony / Rose Close-Up",
+      params: [
+        { key: "ruffle", label: "Petal ruffle", type: "range", min: 1, max: 6, step: 1, def: 3, fmt: (v) => `${v}` },
+        { key: "unfurl", label: "Spiral layers", type: "range", min: 2, max: 7, step: 1, def: 4, fmt: (v) => `${v}` },
+        { key: "zoom", label: "Bloom zoom", type: "range", min: 0.7, max: 1.8, step: 0.1, def: 1.0, fmt: (v) => `${v.toFixed(1)}×` },
+      ],
+    },
+    "sunflower-macro": {
+      label: "Sunflower Phyllotaxis",
+      params: [
+        { key: "heart", label: "Seed heart size", type: "range", min: 0.25, max: 0.65, step: 0.05, def: 0.42, fmt: (v) => `${Math.round(v * 100)}%` },
+        { key: "petals", label: "Outer petals", type: "range", min: 10, max: 28, step: 2, def: 18, fmt: (v) => `${v}` },
+        { key: "zoom", label: "Bloom zoom", type: "range", min: 0.7, max: 1.8, step: 0.1, def: 1.0, fmt: (v) => `${v.toFixed(1)}×` },
+      ],
+    },
+    mandelbrot: {
+      label: "Mandelbrot Set",
+      params: [
+        { key: "zoom", label: "Zoom", type: "range", min: 0.6, max: 6, step: 0.1, def: 1.0, fmt: (v) => `${v.toFixed(1)}×` },
+        { key: "panX", label: "Center X", type: "range", min: -1.8, max: 0.5, step: 0.05, def: -0.65, fmt: (v) => v.toFixed(2) },
+        { key: "panY", label: "Center Y", type: "range", min: -1.0, max: 1.0, step: 0.05, def: 0.0, fmt: (v) => v.toFixed(2) },
+        { key: "cycles", label: "Color bands", type: "range", min: 1, max: 4, step: 0.25, def: 1.0, fmt: (v) => `${v.toFixed(2)}×` },
+      ],
+    },
+    "burning-ship": {
+      label: "Burning Ship Fractal",
+      params: [
+        { key: "zoom", label: "Zoom", type: "range", min: 0.6, max: 8, step: 0.1, def: 1.0, fmt: (v) => `${v.toFixed(1)}×` },
+        { key: "panX", label: "Center X", type: "range", min: -2.0, max: 0.6, step: 0.05, def: -0.45, fmt: (v) => v.toFixed(2) },
+        { key: "panY", label: "Center Y", type: "range", min: -1.2, max: 0.8, step: 0.05, def: -0.45, fmt: (v) => v.toFixed(2) },
+      ],
+    },
+    julia: {
+      label: "Julia Set Spiral",
+      params: [
+        { key: "cr", label: "Real (c.r)", type: "range", min: -1.2, max: 0.5, step: 0.02, def: -0.72, fmt: (v) => v.toFixed(2) },
+        { key: "ci", label: "Imag (c.i)", type: "range", min: -0.9, max: 0.9, step: 0.02, def: 0.19, fmt: (v) => v.toFixed(2) },
+        { key: "zoom", label: "Zoom", type: "range", min: 0.6, max: 3.5, step: 0.1, def: 1.0, fmt: (v) => `${v.toFixed(1)}×` },
+      ],
+    },
+    newton: {
+      label: "Newton Symmetry Fractal",
+      params: [
+        { key: "order", label: "Symmetry petals", type: "range", min: 3, max: 8, step: 1, def: 3, fmt: (v) => `${v}-fold` },
+        { key: "zoom", label: "Zoom", type: "range", min: 0.5, max: 4.0, step: 0.1, def: 1.0, fmt: (v) => `${v.toFixed(1)}×` },
+      ],
+    },
+    "sierpinski-carpet": {
+      label: "Sierpinski Carpet",
+      params: [
+        { key: "scale", label: "Recursion scale", type: "range", min: 1, max: 3, step: 1, def: 2, fmt: (v) => `3^${v + 1}` },
+      ],
+    },
+    "sierpinski-triangle": {
+      label: "Sierpinski Triangle",
+      params: [
+        { key: "bandDepth", label: "Color banding", type: "range", min: 1, max: 4, step: 1, def: 1, fmt: (v) => `${v}×` },
+      ],
+    },
+    chladni: {
+      label: "Chladni Acoustic Mandala",
+      params: [
+        { key: "n", label: "Mode N", type: "range", min: 1, max: 9, step: 1, def: 2, fmt: (v) => String(v) },
+        { key: "m", label: "Mode M", type: "range", min: 1, max: 9, step: 1, def: 5, fmt: (v) => String(v) },
+        { key: "mix", label: "Resonance mix", type: "range", min: -1, max: 1, step: 0.1, def: 1.0, fmt: (v) => v.toFixed(1) },
+      ],
+    },
+    turing: {
+      label: "Reaction-Diffusion (Turing)",
+      params: [
+        {
+          key: "preset",
+          label: "Morphology",
+          type: "select",
+          def: "coral",
+          options: [
+            { value: "coral", label: "Coral Labyrinth" },
+            { value: "spots", label: "Leopard Spots" },
+            { value: "stripes", label: "Zebra Stripes" },
+            { value: "mitosis", label: "Dividing Cells" },
+          ],
+        },
+        { key: "steps", label: "Growth steps", type: "range", min: 80, max: 420, step: 20, def: 220, fmt: (v) => `${v}` },
+        { key: "seed", label: "Seed", type: "range", min: 1, max: 20, step: 1, def: 3, fmt: (v) => `#${v}` },
+      ],
+    },
+    interference: {
+      label: "Moiré Wave Interference",
+      params: [
+        { key: "freq", label: "Wave frequency", type: "range", min: 6, max: 36, step: 2, def: 18, fmt: (v) => `${v}` },
+        { key: "spread", label: "Source spread", type: "range", min: 0.08, max: 0.45, step: 0.02, def: 0.22, fmt: (v) => v.toFixed(2) },
+      ],
+    },
+    voronoi: {
+      label: "Voronoi Stained Glass",
+      params: [
+        { key: "sites", label: "Cell count", type: "range", min: 6, max: 48, step: 2, def: 20, fmt: (v) => `${v}` },
+        { key: "seed", label: "Seed", type: "range", min: 1, max: 25, step: 1, def: 1, fmt: (v) => `#${v}` },
+      ],
+    },
+    kaleidoscope: {
+      label: "Kaleidoscope Medallion",
+      params: [
+        { key: "folds", label: "Mirror folds", type: "range", min: 4, max: 12, step: 2, def: 8, fmt: (v) => `${v}-fold` },
+        { key: "detail", label: "Facet detail", type: "range", min: 1, max: 6, step: 1, def: 3, fmt: (v) => `${v}` },
+        { key: "twist", label: "Mirror twist", type: "range", min: -3, max: 3, step: 0.25, def: 0, fmt: (v) => v.toFixed(2) },
+        { key: "seed", label: "Pattern seed", type: "range", min: 1, max: 24, step: 1, def: 4, fmt: (v) => `#${v}` },
+      ],
+    },
+    "kaleidoscope-hst": {
+      label: "Kaleidoscope Star (HST)",
+      params: [
+        { key: "rings", label: "Star complexity", type: "range", min: 1, max: 5, step: 1, def: 3, fmt: (v) => `${v}` },
+        { key: "seed", label: "Pattern seed", type: "range", min: 1, max: 24, step: 1, def: 5, fmt: (v) => `#${v}` },
+      ],
+    },
+    "bargello-wave": {
+      label: "Bargello Sine Wave",
+      params: [
+        { key: "freq", label: "Wave frequency", type: "range", min: 0.5, max: 4.0, step: 0.25, def: 1.25, fmt: (v) => `${v.toFixed(2)}×` },
+        { key: "amp", label: "Wave height", type: "range", min: 0.05, max: 0.5, step: 0.05, def: 0.25, fmt: (v) => `${Math.round(v * 100)}%` },
+        { key: "repeat", label: "Band repeat", type: "range", min: 0.6, max: 3.0, step: 0.2, def: 1.4, fmt: (v) => `${v.toFixed(1)}×` },
+      ],
+    },
+    "fibonacci-spiral": {
+      label: "Fibonacci Golden Spiral",
+      params: [
+        { key: "arms", label: "Spiral arms", type: "range", min: 2, max: 13, step: 1, def: 5, fmt: (v) => `${v}` },
+        { key: "twist", label: "Spiral twist", type: "range", min: 0.5, max: 5.0, step: 0.25, def: 2.25, fmt: (v) => v.toFixed(2) },
+      ],
+    },
+    truchet: {
+      label: "Truchet Labyrinth",
+      params: [
+        { key: "seed", label: "Weave variation", type: "range", min: 1, max: 16, step: 1, def: 3, fmt: (v) => `#${v}` },
+        { key: "bands", label: "Color zones", type: "range", min: 1, max: 4, step: 1, def: 1, fmt: (v) => `${v}×` },
+      ],
+    },
+    "log-cabin": {
+      label: "Log Cabin Concentric",
+      params: [
+        { key: "ringWidth", label: "Ring width", type: "range", min: 1, max: 4, step: 1, def: 1, fmt: (v) => `${v} sq` },
+      ],
+    },
+    "xor-mosaic": {
+      label: "Bitwise XOR Mosaic",
+      params: [
+        { key: "mod", label: "Modulo", type: "range", min: 3, max: 23, step: 1, def: 9, fmt: (v) => `mod ${v}` },
+        { key: "zoom", label: "Scale", type: "range", min: 1, max: 4, step: 1, def: 1, fmt: (v) => `${v}×` },
+        {
+          key: "mirror",
+          label: "Symmetry",
+          type: "select",
+          def: "quad",
+          options: [
+            { value: "quad", label: "4-Way Quilt Medallion" },
+            { value: "corner", label: "Corner Cascade" },
+          ],
+        },
+      ],
+    },
+    "ulam-spiral": {
+      label: "Ulam Prime Spiral",
+      params: [
+        { key: "start", label: "Start integer", type: "range", min: 1, max: 41, step: 1, def: 1, fmt: (v) => `${v}` },
+        {
+          key: "mode",
+          label: "Coloring",
+          type: "select",
+          def: "primes",
+          options: [
+            { value: "primes", label: "Prime Diagonals" },
+            { value: "divisors", label: "Divisor Richness" },
+          ],
+        },
+      ],
+    },
+    "cellular-rule90": {
+      label: "Wolfram Cellular Automaton",
+      params: [
+        {
+          key: "rule",
+          label: "Wolfram Rule",
+          type: "select",
+          def: "90",
+          options: [
+            { value: "90", label: "Rule 90 (Sierpinski Lace)" },
+            { value: "30", label: "Rule 30 (Chaotic Cone)" },
+            { value: "110", label: "Rule 110 (Turing Complete)" },
+            { value: "150", label: "Rule 150 (Diamond Weave)" },
+            { value: "184", label: "Rule 184 (Diagonal Flow)" },
+          ],
+        },
+      ],
+    },
+    hilbert: {
+      label: "Hilbert Space-Filling Curve",
+      params: [
+        { key: "cycles", label: "Color cycles", type: "range", min: 1, max: 4, step: 0.5, def: 1, fmt: (v) => `${v.toFixed(1)}×` },
+      ],
+    },
+  };
+
+  function getDefaultMathParams(patternId) {
+    const spec = MATH_PATTERN_SPECS[patternId];
+    const out = {};
+    if (spec && Array.isArray(spec.params)) {
+      spec.params.forEach((p) => {
+        out[p.key] = p.def;
+      });
+    }
+    return out;
+  }
+
+  function getMathParam(patternId, key) {
+    if (state.mathParams && state.mathParams[key] !== undefined) return state.mathParams[key];
+    const spec = MATH_PATTERN_SPECS[patternId];
+    const defParam = spec?.params?.find((p) => p.key === key);
+    return defParam ? defParam.def : 0;
+  }
+
+  function isPrimeNum(n) {
+    if (n < 2) return false;
+    if (n === 2 || n === 3) return true;
+    if (n % 2 === 0 || n % 3 === 0) return false;
+    for (let i = 5; i * i <= n; i += 6) {
+      if (n % i === 0 || n % (i + 2) === 0) return false;
+    }
+    return true;
+  }
+
+  function countDivisorsNum(n) {
+    if (n <= 1) return 1;
+    let cnt = 0;
+    const lim = Math.floor(Math.sqrt(n));
+    for (let i = 1; i <= lim; i++) {
+      if (n % i === 0) cnt += i * i === n ? 1 : 2;
+    }
+    return cnt;
+  }
+
+  // Exact integer value at (dx, dy) on an Ulam spiral starting at `start` in the center
+  function ulamSpiralValue(dx, dy, start = 1) {
+    const k = Math.max(Math.abs(dx), Math.abs(dy));
+    if (k === 0) return start;
+    const maxVal = (2 * k + 1) * (2 * k + 1);
+    let offset = 0;
+    if (dy === k) offset = k - dx;
+    else if (dx === -k) offset = 2 * k + (k - dy);
+    else if (dy === -k) offset = 4 * k + (dx + k);
+    else offset = 6 * k + (dy + k);
+    return start + (maxVal - 1 - offset);
+  }
+
+  // Compact Gray-Scott Reaction-Diffusion solver (returns Float32Array of B-chemical values 0..1)
+  function computeTuringGrid(gw, gh, preset, steps, seedNum) {
+    const presets = {
+      coral: { f: 0.0545, k: 0.062 },
+      spots: { f: 0.035, k: 0.065 },
+      stripes: { f: 0.042, k: 0.059 },
+      mitosis: { f: 0.028, k: 0.062 },
+    };
+    const { f, k } = presets[preset] || presets.coral;
+    const N = gw * gh;
+    let a = new Float32Array(N).fill(1);
+    let b = new Float32Array(N);
+    let nextA = new Float32Array(N);
+    let nextB = new Float32Array(N);
+
+    // Deterministic seeds
+    let s = (seedNum * 2654435761) | 0;
+    const rand = () => {
+      s = (Math.imul(s, 1664525) + 1013904223) | 0;
+      return ((s >>> 0) % 10000) / 10000;
+    };
+    const patchCount = Math.max(6, Math.min(18, Math.round((gw * gh) / 90)));
+    for (let p = 0; p < patchCount; p++) {
+      const cx = Math.floor(rand() * gw);
+      const cy = Math.floor(rand() * gh);
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const x = (cx + dx + gw) % gw;
+          const y = (cy + dy + gh) % gh;
+          b[y * gw + x] = 1;
+        }
+      }
+    }
+
+    const dA = 1.0;
+    const dB = 0.5;
+    for (let step = 0; step < steps; step++) {
+      for (let y = 0; y < gh; y++) {
+        const yUp = ((y - 1 + gh) % gh) * gw;
+        const yMid = y * gw;
+        const yDn = ((y + 1) % gh) * gw;
+        for (let x = 0; x < gw; x++) {
+          const xL = (x - 1 + gw) % gw;
+          const xR = (x + 1) % gw;
+          const i = yMid + x;
+          const ca = a[i];
+          const cb = b[i];
+          const lapA =
+            a[yUp + x] * 0.2 +
+            a[yDn + x] * 0.2 +
+            a[yMid + xL] * 0.2 +
+            a[yMid + xR] * 0.2 +
+            a[yUp + xL] * 0.05 +
+            a[yUp + xR] * 0.05 +
+            a[yDn + xL] * 0.05 +
+            a[yDn + xR] * 0.05 -
+            ca;
+          const lapB =
+            b[yUp + x] * 0.2 +
+            b[yDn + x] * 0.2 +
+            b[yMid + xL] * 0.2 +
+            b[yMid + xR] * 0.2 +
+            b[yUp + xL] * 0.05 +
+            b[yUp + xR] * 0.05 +
+            b[yDn + xL] * 0.05 +
+            b[yDn + xR] * 0.05 -
+            cb;
+          const abb = ca * cb * cb;
+          nextA[i] = Math.max(0, Math.min(1, ca + (dA * lapA - abb + f * (1 - ca))));
+          nextB[i] = Math.max(0, Math.min(1, cb + (dB * lapB + abb - (k + f) * cb)));
+        }
+      }
+      const tmpA = a;
+      a = nextA;
+      nextA = tmpA;
+      const tmpB = b;
+      b = nextB;
+      nextB = tmpB;
+    }
+    return b;
+  }
+
+  // Convert (x, y) in an n x n (power-of-2) grid to 1D Hilbert curve distance d
+  function hilbertXy2d(n, x, y) {
+    let d = 0;
+    let rx;
+    let ry;
+    let cx = x;
+    let cy = y;
+    for (let s = n >> 1; s > 0; s >>= 1) {
+      rx = (cx & s) > 0 ? 1 : 0;
+      ry = (cy & s) > 0 ? 1 : 0;
+      d += s * s * ((3 * rx) ^ ry);
+      if (ry === 0) {
+        if (rx === 1) {
+          cx = s - 1 - cx;
+          cy = s - 1 - cy;
+        }
+        const tmp = cx;
+        cx = cy;
+        cy = tmp;
+      }
+    }
+    return d;
+  }
+
+  const MATH_PATTERN_CATEGORIES = [
+    {
+      label: "Map & Satellite",
+      isMapCategory: true,
+      items: [
+        { id: "map:satellite", label: "Satellite Imagery…" },
+        { id: "map:voyager", label: "Clean Street Map…" },
+        { id: "map:topo", label: "Topographic Map…" },
+        { id: "map:relief", label: "Shaded Terrain & Coast…" },
+      ],
+    },
+    {
+      label: "Classic & Modern Quilt",
+      items: ["lone-star", "tumbling-blocks", "chevron", "tartan", "topo-map", "sunburst"],
+    },
+    {
+      label: "Botanical Close-Ups",
+      items: ["orchid-macro", "dahlia-macro", "peony-macro", "sunflower-macro"],
+    },
+    {
+      label: "Fractals",
+      items: ["mandelbrot", "burning-ship", "julia", "newton", "sierpinski-carpet", "sierpinski-triangle"],
+    },
+    {
+      label: "Physics & Organic",
+      items: ["chladni", "turing", "interference", "voronoi"],
+    },
+    {
+      label: "Quilt Math & Waves",
+      items: ["kaleidoscope", "kaleidoscope-hst", "bargello-wave", "fibonacci-spiral", "truchet", "log-cabin"],
+    },
+    {
+      label: "Algorithmic & Primes",
+      items: ["xor-mosaic", "ulam-spiral", "cellular-rule90", "hilbert"],
+    },
+  ];
+
+  function syncMathMenuLabel() {
+    if (!mathMenuLabel) return;
+    const spec = state.activeMathPattern ? MATH_PATTERN_SPECS[state.activeMathPattern] : null;
+    mathMenuLabel.textContent = spec ? spec.label : "Generate";
+    if (mathMenuBtn) mathMenuBtn.classList.toggle("has-pattern", Boolean(spec));
+  }
+
+  function closeMathMenuPopover() {
+    if (!mathMenuPopover) return;
+    mathMenuPopover.hidden = true;
+    if (mathMenuBtn) mathMenuBtn.setAttribute("aria-expanded", "false");
+  }
+
+  function renderMathMenuPopover() {
+    if (!mathMenuPopover) return;
+    mathMenuPopover.innerHTML = "";
+    MATH_PATTERN_CATEGORIES.forEach((cat) => {
+      const row = document.createElement("div");
+      row.className = "math-cat-row";
+      const hasActiveChild = cat.items.includes(state.activeMathPattern);
+      if (hasActiveChild) row.classList.add("is-open");
+
+      const catBtn = document.createElement("button");
+      catBtn.type = "button";
+      catBtn.className = "math-cat-btn";
+      catBtn.innerHTML = `<span>${cat.label}</span><span class="math-cat-chevron" aria-hidden="true">▸</span>`;
+
+      const sub = document.createElement("div");
+      sub.className = "math-submenu";
+      sub.setAttribute("role", "menu");
+
+      cat.items.forEach((entryItem) => {
+        const isMapItem = typeof entryItem === "object" && entryItem.id?.startsWith("map:");
+        const id = isMapItem ? entryItem.id : entryItem;
+        const label = isMapItem ? entryItem.label : MATH_PATTERN_SPECS[id]?.label;
+        if (!label) return;
+        const itemBtn = document.createElement("button");
+        itemBtn.type = "button";
+        itemBtn.className = "math-sub-btn";
+        itemBtn.dataset.mathPattern = id;
+        itemBtn.setAttribute("role", "menuitem");
+        if (!isMapItem && state.activeMathPattern === id) itemBtn.classList.add("is-active");
+        itemBtn.innerHTML = `<span>${label}</span>${!isMapItem && state.activeMathPattern === id ? '<span aria-hidden="true">✓</span>' : ""}`;
+        itemBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          closeMathMenuPopover();
+          if (isMapItem) {
+            const styleId = id.slice(4);
+            openMapPopover(styleId);
+            return;
+          }
+          state.mathParams = getDefaultMathParams(id);
+          state.mathTransform = { offsetX: 0, offsetY: 0, scale: 1.0, rotate: 0 };
+          applyMathPattern(id, { record: true });
+          if (mathPropsPopover && !mathPropsPopover.hidden) {
+            renderMathPropsControls();
+          }
+        });
+        sub.appendChild(itemBtn);
+      });
+
+      const openRow = () => {
+        mathMenuPopover.querySelectorAll(".math-cat-row.is-open").forEach((el) => {
+          if (el !== row) el.classList.remove("is-open");
+        });
+        row.classList.add("is-open");
+      };
+      row.addEventListener("mouseenter", openRow);
+      catBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (row.classList.contains("is-open")) {
+          row.classList.remove("is-open");
+        } else {
+          openRow();
+        }
+      });
+
+      row.appendChild(catBtn);
+      row.appendChild(sub);
+      mathMenuPopover.appendChild(row);
+    });
+  }
+
+  function openMathMenuPopover() {
+    if (!mathMenuPopover || !mathMenuBtn) return;
+    if (!mathMenuPopover.hidden) {
+      closeMathMenuPopover();
+      return;
+    }
+    closeHistoryPopover();
+    closeSwatchPopover();
+    closeMathPropsPopover();
+    renderMathMenuPopover();
+    mathMenuPopover.hidden = false;
+    mathMenuBtn.setAttribute("aria-expanded", "true");
+
+    const rect = mathMenuBtn.getBoundingClientRect();
+    const popRect = mathMenuPopover.getBoundingClientRect();
+    const margin = 10;
+    let left = rect.left;
+    if (left + popRect.width > window.innerWidth - margin) {
+      left = Math.max(margin, window.innerWidth - popRect.width - margin);
+    }
+    let top = rect.bottom + 6;
+    if (top + popRect.height > window.innerHeight - margin) {
+      top = Math.max(margin, rect.top - popRect.height - 6);
+    }
+    mathMenuPopover.style.left = `${Math.round(left)}px`;
+    mathMenuPopover.style.top = `${Math.round(top)}px`;
+  }
+
+  if (mathMenuBtn) {
+    mathMenuBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openMathMenuPopover();
+    });
+  }
+  document.addEventListener("click", (e) => {
+    if (!mathMenuPopover || mathMenuPopover.hidden) return;
+    if (mathMenuPopover.contains(e.target)) return;
+    if (e.target === mathMenuBtn || (e.target.closest && e.target.closest("#math-menu-btn"))) return;
+    closeMathMenuPopover();
+  });
+
+  function syncMathPropsButton() {
+    syncMathMenuLabel();
+    if (!mathPropsBtn) return;
+    const hasActive = Boolean(state.activeMathPattern && MATH_PATTERN_SPECS[state.activeMathPattern]);
+    mathPropsBtn.hidden = !hasActive;
+    mathPropsBtn.classList.toggle("is-open", hasActive && mathPropsPopover && !mathPropsPopover.hidden);
+  }
+
+  function closeMathPropsPopover() {
+    if (!mathPropsPopover) return;
+    mathPropsPopover.hidden = true;
+    syncMathPropsButton();
+  }
+
+  function renderMathPropsControls() {
+    if (!mathPropsBody || !state.activeMathPattern) return;
+    const spec = MATH_PATTERN_SPECS[state.activeMathPattern];
+    if (!spec) return;
+    if (mathPropsTitle) mathPropsTitle.textContent = spec.label;
+    if (mathReversePalette) mathReversePalette.checked = Boolean(state.mathReversePalette);
+
+    mathPropsBody.innerHTML = "";
+    spec.params.forEach((p) => {
+      const wrap = document.createElement("div");
+      wrap.className = "math-prop-control";
+
+      const head = document.createElement("div");
+      head.className = "math-prop-head";
+      const lbl = document.createElement("label");
+      lbl.textContent = p.label;
+      head.appendChild(lbl);
+
+      const curVal = getMathParam(state.activeMathPattern, p.key);
+
+      if (p.type === "select") {
+        const sel = document.createElement("select");
+        sel.className = "math-prop-select";
+        p.options.forEach((opt) => {
+          const o = document.createElement("option");
+          o.value = opt.value;
+          o.textContent = opt.label;
+          if (String(curVal) === String(opt.value)) o.selected = true;
+          sel.appendChild(o);
+        });
+        sel.addEventListener("change", () => {
+          state.mathParams[p.key] = sel.value;
+          applyMathPattern(state.activeMathPattern, { record: true, coalesceKey: `math-${p.key}` });
+        });
+        wrap.appendChild(head);
+        wrap.appendChild(sel);
+      } else {
+        const valSpan = document.createElement("span");
+        valSpan.className = "control-value";
+        valSpan.textContent = p.fmt ? p.fmt(Number(curVal)) : String(curVal);
+        head.appendChild(valSpan);
+
+        const inp = document.createElement("input");
+        inp.type = "range";
+        inp.min = String(p.min);
+        inp.max = String(p.max);
+        inp.step = String(p.step);
+        inp.value = String(curVal);
+        inp.addEventListener("input", () => {
+          const num = Number(inp.value);
+          state.mathParams[p.key] = num;
+          valSpan.textContent = p.fmt ? p.fmt(num) : String(num);
+          applyMathPattern(state.activeMathPattern, { record: true, coalesceKey: `math-${p.key}` });
+        });
+        wrap.appendChild(head);
+        wrap.appendChild(inp);
+      }
+      mathPropsBody.appendChild(wrap);
+    });
+
+    // Universal Position, Scale & Rotation controls (apply to EVERY generated pattern!)
+    const div = document.createElement("div");
+    div.className = "math-props-divider";
+    div.textContent = "Position & Transform";
+    mathPropsBody.appendChild(div);
+
+    const tGrid = document.createElement("div");
+    tGrid.className = "math-transform-grid";
+    const tSpecs = [
+      { key: "offsetX", label: "Move X", min: -0.5, max: 0.5, step: 0.02, fmt: (v) => `${Math.round(v * 100)}%` },
+      { key: "offsetY", label: "Move Y", min: -0.5, max: 0.5, step: 0.02, fmt: (v) => `${Math.round(v * 100)}%` },
+      { key: "scale", label: "Scale", min: 0.4, max: 2.5, step: 0.05, fmt: (v) => `${v.toFixed(2)}×` },
+      { key: "rotate", label: "Rotate", min: 0, max: 345, step: 15, fmt: (v) => `${Math.round(v)}°` },
+    ];
+    tSpecs.forEach((tp) => {
+      const cell = document.createElement("div");
+      cell.className = "math-prop-control";
+      const head = document.createElement("div");
+      head.className = "math-prop-head";
+      const lbl = document.createElement("label");
+      lbl.textContent = tp.label;
+      const valSpan = document.createElement("span");
+      valSpan.className = "control-value";
+      const cur = Number(state.mathTransform[tp.key]) || (tp.key === "scale" ? 1 : 0);
+      valSpan.textContent = tp.fmt(cur);
+      head.appendChild(lbl);
+      head.appendChild(valSpan);
+
+      const inp = document.createElement("input");
+      inp.type = "range";
+      inp.min = String(tp.min);
+      inp.max = String(tp.max);
+      inp.step = String(tp.step);
+      inp.value = String(cur);
+      inp.addEventListener("input", () => {
+        const num = Number(inp.value);
+        state.mathTransform[tp.key] = num;
+        valSpan.textContent = tp.fmt(num);
+        applyMathPattern(state.activeMathPattern, { record: true, coalesceKey: `math-t-${tp.key}` });
+      });
+      cell.appendChild(head);
+      cell.appendChild(inp);
+      tGrid.appendChild(cell);
+    });
+    mathPropsBody.appendChild(tGrid);
+  }
+
+  function openMathPropsPopover() {
+    if (!mathPropsPopover || !state.activeMathPattern) return;
+    if (!mathPropsPopover.hidden) {
+      closeMathPropsPopover();
+      return;
+    }
+    closeHistoryPopover();
+    closeSwatchPopover();
+    renderMathPropsControls();
+    mathPropsPopover.hidden = false;
+    syncMathPropsButton();
+
+    const anchor = mathPropsBtn || mathMenuBtn;
+    if (anchor) {
+      const rect = anchor.getBoundingClientRect();
+      const popRect = mathPropsPopover.getBoundingClientRect();
+      const margin = 12;
+      let left = rect.left;
+      if (left + popRect.width > window.innerWidth - margin) {
+        left = Math.max(margin, window.innerWidth - popRect.width - margin);
+      }
+      let top = rect.bottom + 8;
+      if (top + popRect.height > window.innerHeight - margin) {
+        top = Math.max(margin, rect.top - popRect.height - 8);
+      }
+      mathPropsPopover.style.left = `${Math.round(left)}px`;
+      mathPropsPopover.style.top = `${Math.round(top)}px`;
+    }
+  }
+
+  if (mathPropsBtn) {
+    mathPropsBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openMathPropsPopover();
+    });
+  }
+  if (mathPropsClose) {
+    mathPropsClose.addEventListener("click", closeMathPropsPopover);
+  }
+  if (mathReversePalette) {
+    mathReversePalette.addEventListener("change", () => {
+      state.mathReversePalette = mathReversePalette.checked;
+      if (state.activeMathPattern) {
+        applyMathPattern(state.activeMathPattern, { record: true, coalesceKey: "math-rev" });
+      }
+    });
+  }
+  if (mathPropsReset) {
+    mathPropsReset.addEventListener("click", () => {
+      if (!state.activeMathPattern) return;
+      state.mathParams = getDefaultMathParams(state.activeMathPattern);
+      state.mathTransform = { offsetX: 0, offsetY: 0, scale: 1.0, rotate: 0 };
+      state.mathReversePalette = false;
+      renderMathPropsControls();
+      applyMathPattern(state.activeMathPattern, { record: true });
+    });
+  }
+  document.addEventListener("click", (e) => {
+    if (!mathPropsPopover || mathPropsPopover.hidden) return;
+    if (mathPropsPopover.contains(e.target)) return;
+    if (e.target === mathPropsBtn || (e.target.closest && e.target.closest("#math-props-btn"))) return;
+    closeMathPropsPopover();
+  });
+
+  function applyMathPattern(patternId, { record = true, coalesceKey = null } = {}) {
+    const spec = MATH_PATTERN_SPECS[patternId];
+    if (!patternId || !spec || !state.image || state.palette.length === 0) return;
+
+    const K = state.palette.length;
+    const lumOrder = state.palette
+      .map((c, idx) => ({ idx, lum: luminance(c.r, c.g, c.b) }))
+      .sort((a, b) => a.lum - b.lum)
+      .map((o) => o.idx);
+    if (state.mathReversePalette) lumOrder.reverse();
+
+    const pickGrad = (t) => {
+      const clamped = Math.max(0, Math.min(0.999999, t));
+      return lumOrder[Math.floor(clamped * K)];
+    };
+    const pickCycle = (n) => lumOrder[((Math.floor(n) % K) + K) % K];
+
+    state.activeMathPattern = patternId;
+    state.isBlankQuilt = true;
+    state.paintMask.fill(0);
+    state.manualCells.clear();
+    syncBlankQuiltUI();
+    syncGridLayoutUI();
+    syncMathPropsButton();
+
+    const cols = state.cols;
+    const rows = state.rows;
+    const cfg = getLayoutConfig();
+    const isSquareGrid = cfg.stagger === "none";
+    if (!state.layoutCells || state.layoutCells.length === 0) {
+      state.layoutCells = buildLayoutCells(cols, rows, cfg.id);
+    }
+    const cells = state.layoutCells;
+
+    // Precompute Wolfram elementary cellular automaton rows if needed
+    let caGrid = null;
+    if (patternId === "cellular-rule90") {
+      const ruleNum = Math.max(0, Math.min(255, Number(getMathParam(patternId, "rule")) || 90));
+      const wGrid = cols + 1;
+      caGrid = Array.from({ length: rows + 1 }, () => new Uint8Array(wGrid));
+      caGrid[0][Math.floor(cols / 2)] = 1;
+      if (ruleNum === 184) {
+        for (let c = 0; c < wGrid; c++) caGrid[0][c] = (c * 7 + 3) % 3 === 0 ? 1 : 0;
+      }
+      for (let r = 1; r <= rows; r++) {
+        for (let c = 0; c < wGrid; c++) {
+          const left = c > 0 ? caGrid[r - 1][c - 1] : 0;
+          const mid = caGrid[r - 1][c];
+          const right = c + 1 < wGrid ? caGrid[r - 1][c + 1] : 0;
+          const bits = (left << 2) | (mid << 1) | right;
+          caGrid[r][c] = (ruleNum >> bits) & 1;
+        }
+      }
+    }
+
+    // Precompute Turing Reaction-Diffusion grid if needed
+    let turingData = null;
+    let turingW = 0;
+    let turingH = 0;
+    if (patternId === "turing") {
+      turingW = Math.max(20, Math.min(52, cols));
+      turingH = Math.max(20, Math.min(52, rows));
+      const preset = String(getMathParam(patternId, "preset") || "coral");
+      const steps = Math.round(Number(getMathParam(patternId, "steps")) || 220);
+      const seed = Math.round(Number(getMathParam(patternId, "seed")) || 3);
+      turingData = computeTuringGrid(turingW, turingH, preset, steps, seed);
+    }
+
+    // Precompute Golden-Ratio Voronoi seeds if needed
+    let voronoiSeeds = null;
+    if (patternId === "voronoi") {
+      const seedCount = Math.max(6, Math.min(48, Math.round(Number(getMathParam(patternId, "sites")) || 20)));
+      const seedShift = (Number(getMathParam(patternId, "seed")) || 1) * 0.137;
+      const phi = 0.61803398875;
+      voronoiSeeds = [];
+      for (let i = 0; i < seedCount; i++) {
+        const sx = ((i * phi + seedShift) % 1 + 1) % 1;
+        const sy = ((i + 0.5) / seedCount + seedShift * 0.37) % 1;
+        voronoiSeeds.push({ x: sx, y: sy, pal: lumOrder[i % K] });
+      }
+    }
+
+    let hilbertN = 1;
+    while (hilbertN < Math.max(cols, rows)) hilbertN <<= 1;
+
+    // Smooth 2D value-noise helper for Topographic Contour Map
+    const hash2 = (ix, iy, seedVal) => {
+      let h = (ix * 374761393 + iy * 668265263 + seedVal * 1442695041) | 0;
+      h = Math.imul(h ^ (h >>> 13), 1274126177);
+      return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+    };
+    const smoothNoise2D = (px, py, seedVal) => {
+      const ix = Math.floor(px);
+      const iy = Math.floor(py);
+      const fx = px - ix;
+      const fy = py - iy;
+      const ux = fx * fx * (3 - 2 * fx);
+      const uy = fy * fy * (3 - 2 * fy);
+      const a = hash2(ix, iy, seedVal);
+      const b = hash2(ix + 1, iy, seedVal);
+      const c = hash2(ix, iy + 1, seedVal);
+      const d = hash2(ix + 1, iy + 1, seedVal);
+      return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy;
+    };
+
+    const tOffX = Number(state.mathTransform?.offsetX) || 0;
+    const tOffY = Number(state.mathTransform?.offsetY) || 0;
+    const tScale = Math.max(0.25, Number(state.mathTransform?.scale) || 1.0);
+    const tRotRad = ((Number(state.mathTransform?.rotate) || 0) * Math.PI) / 180;
+    const cosR = Math.cos(-tRotRad);
+    const sinR = Math.sin(-tRotRad);
+
+    for (let i = 0; i < cells.length; i++) {
+      const cell = cells[i];
+      const cx = (cell.x0 + cell.x1) * 0.5;
+      const cy = (cell.y0 + cell.y1) * 0.5;
+      const rawNx = cx / Math.max(1, cols);
+      const rawNy = cy / Math.max(1, rows);
+      // Apply universal pan, scale & rotation around quilt center
+      const dtx = (rawNx - 0.5 - tOffX) / tScale;
+      const dty = (rawNy - 0.5 - tOffY) / tScale;
+      const nx = 0.5 + dtx * cosR - dty * sinR;
+      const ny = 0.5 + dtx * sinR + dty * cosR;
+      const key = `${cell.c},${cell.r}`;
+
+      if (patternId === "lone-star") {
+        const pts = Math.max(4, Math.round(Number(getMathParam(patternId, "points")) || 8));
+        const rings = Number(getMathParam(patternId, "rings")) || 2.0;
+        const dx = nx - 0.5;
+        const dy = ny - 0.5;
+        const r = Math.hypot(dx, dy) * 2.0;
+        const theta = Math.atan2(dy, dx);
+        const sector = (Math.PI * 2) / pts;
+        let localA = ((theta % sector) + sector) % sector;
+        if (localA > sector * 0.5) localA = sector - localA;
+        // Star diamond distance: points extend to r=1, valleys dip inward
+        const starDist = r * (Math.cos(localA) + Math.sin(localA) * 1.45);
+        if (starDist <= 1.02) {
+          const band = (starDist * rings) % 1;
+          state.manualCells.set(key, { t: 0, a: pickGrad(band), b: -1 });
+        } else {
+          state.manualCells.set(key, { t: 0, a: lumOrder[K - 1], b: -1 });
+        }
+      } else if (patternId === "tumbling-blocks") {
+        // 3D isometric cube illusion (top, left-dark, right-mid faces)
+        const density = Math.max(2, Number(getMathParam(patternId, "density")) || 5);
+        const px = nx * density;
+        const py = ny * density * 1.1547; // 2/sqrt(3) isometric ratio
+        const u = px + py * 0.5;
+        const v = py * 0.5 - px;
+        const fu = ((u % 1) + 1) % 1;
+        const fv = ((v % 1) + 1) % 1;
+        const iu = Math.floor(u);
+        const iv = Math.floor(v);
+        const cubeBand = ((iu + iv) % Math.max(1, Math.floor(K / 3)) + Math.max(1, Math.floor(K / 3))) % Math.max(1, Math.floor(K / 3));
+        let faceTone;
+        if (fu + fv < 1) {
+          faceTone = 0.88 - cubeBand * 0.1; // Top lit face
+        } else if (fu > fv) {
+          faceTone = 0.5 - cubeBand * 0.08; // Right midtone face
+        } else {
+          faceTone = 0.12 + cubeBand * 0.08; // Left shadow face
+        }
+        state.manualCells.set(key, { t: 0, a: pickGrad(Math.max(0, Math.min(1, faceTone))), b: -1 });
+      } else if (patternId === "chevron") {
+        const peaks = Math.max(1, Number(getMathParam(patternId, "peaks")) || 3);
+        const bands = Number(getMathParam(patternId, "bands")) || 1.5;
+        const zig = Math.abs((((nx * peaks * 2) % 2) + 2) % 2 - 1); // 0..1..0 triangle wave
+        const val = ((ny * bands + zig * 0.38) % 1 + 1) % 1;
+        state.manualCells.set(key, { t: 0, a: pickGrad(val), b: -1 });
+      } else if (patternId === "tartan") {
+        const density = Math.max(2, Number(getMathParam(patternId, "density")) || 4);
+        const seed = Math.max(1, Math.round(Number(getMathParam(patternId, "seed")) || 3));
+        const wx = Math.floor((((nx * density * 8) % 16) + 16) % 16);
+        const wy = Math.floor((((ny * density * 8) % 16) + 16) % 16);
+        const stripeVal = (idx) => {
+          const m = (idx + seed) % 16;
+          if (m < 5) return 0.1;
+          if (m === 5 || m === 15) return 0.92;
+          if (m < 10) return 0.48;
+          if (m === 10 || m === 11) return 0.72;
+          return 0.28;
+        };
+        const warp = stripeVal(wx);
+        const weft = stripeVal(wy);
+        // Classic 2x2 twill weave alternation
+        const twill = (cell.c + cell.r) % 2 === 0 ? warp * 0.65 + weft * 0.35 : warp * 0.35 + weft * 0.65;
+        state.manualCells.set(key, { t: 0, a: pickGrad(twill), b: -1 });
+      } else if (patternId === "topo-map") {
+        const terrain = Number(getMathParam(patternId, "terrain")) || 3.5;
+        const contours = Number(getMathParam(patternId, "contours")) || 1.25;
+        const seed = Math.round(Number(getMathParam(patternId, "seed")) || 7);
+        const e1 = smoothNoise2D(nx * terrain, ny * terrain, seed);
+        const e2 = smoothNoise2D(nx * terrain * 2.1, ny * terrain * 2.1, seed + 19) * 0.45;
+        const e3 = smoothNoise2D(nx * terrain * 4.3, ny * terrain * 4.3, seed + 47) * 0.2;
+        const elev = (e1 + e2 + e3) / 1.65;
+        const band = (elev * contours) % 1;
+        state.manualCells.set(key, { t: 0, a: pickGrad(band), b: -1 });
+      } else if (patternId === "sunburst") {
+        const rays = Math.max(6, Math.round(Number(getMathParam(patternId, "rays")) || 14));
+        const rings = Math.max(0, Math.round(Number(getMathParam(patternId, "rings")) || 2));
+        const dx = nx - 0.5;
+        const dy = ny - 0.5;
+        const r = Math.hypot(dx, dy);
+        const theta = Math.atan2(dy, dx);
+        const rayIdx = Math.floor(((theta / (Math.PI * 2) + 1) * rays)) % rays;
+        const ringIdx = rings > 0 ? Math.floor(r * (rings + 1) * 1.4) : 0;
+        const idx = rayIdx + ringIdx * 2;
+        state.manualCells.set(key, { t: 0, a: pickCycle(idx), b: -1 });
+      } else if (patternId === "orchid-macro") {
+        // Bilaterally symmetric Phalaenopsis/Cattleya orchid macro close-up
+        const zoom = Number(getMathParam(patternId, "zoom")) || 1.0;
+        const veinAmt = Number(getMathParam(patternId, "veins"));
+        const speckAmt = Number(getMathParam(patternId, "speckles"));
+        const x = ((nx - 0.5) * 2.1) / zoom; // -1..1
+        const y = ((ny - 0.52) * 2.1) / zoom; // slightly lowered center for dorsal sepal
+        const ax = Math.abs(x);
+
+        // Helper for rotated elliptical petal distance (<= 1 inside petal)
+        const ellipseDist = (px, py, cx0, cy0, rx, ry, rot) => {
+          const dx0 = px - cx0;
+          const dy0 = py - cy0;
+          const cr = Math.cos(rot);
+          const sr = Math.sin(rot);
+          const u = (dx0 * cr + dy0 * sr) / rx;
+          const v = (-dx0 * sr + dy0 * cr) / ry;
+          return Math.hypot(u, v);
+        };
+
+        // 1. Dorsal sepal (top center) & 2 lower lateral sepals
+        const dDorsal = ellipseDist(ax, y, 0, -0.44, 0.34, 0.52, 0);
+        const dLowerSepal = ellipseDist(ax, y, 0.3, 0.46, 0.28, 0.46, -0.48);
+        // 2. Two broad sweeping lateral wing petals
+        const dWing = ellipseDist(ax, y, 0.48, -0.06, 0.56, 0.42, 0.22);
+        // 3. Sculpted central lip (labellum) + golden throat column
+        const dLip = ellipseDist(ax, y, 0, 0.22, 0.22, 0.32, 0);
+        const dColumn = Math.hypot(ax / 0.14, (y - 0.04) / 0.14);
+
+        const rCenter = Math.hypot(x, y);
+        const ang = Math.atan2(y, x);
+        const veins = Math.sin(ang * 18) * 0.5 + 0.5;
+        const speck = cellHash(cell.r, cell.c, 91);
+
+        let tone = 0.06; // Deep background foliage shadow
+        if (dColumn < 1.0) {
+          // Bright luminous orchid heart/column
+          tone = 0.96 - dColumn * 0.16;
+        } else if (dLip < 1.0) {
+          // Sculpted contrasting lip with speckled throat
+          const throat = 1.0 - dLip;
+          tone = 0.22 + throat * 0.36;
+          if (speck < (Number.isFinite(speckAmt) ? speckAmt : 0.6) * 0.35 && dLip < 0.78) {
+            tone = 0.05;
+          }
+        } else if (dWing < 1.0) {
+          // Broad lateral wing petals with radial gradient + subtle venation
+          const base = 0.88 - dWing * 0.36;
+          const vDrop = (Number.isFinite(veinAmt) ? veinAmt : 0.5) * 0.18 * veins * (1 - dWing * 0.4);
+          tone = Math.max(0.28, Math.min(0.95, base - vDrop));
+        } else if (dDorsal < 1.0 || dLowerSepal < 1.0) {
+          const dS = Math.min(dDorsal, dLowerSepal);
+          const base = 0.76 - dS * 0.34;
+          const vDrop = (Number.isFinite(veinAmt) ? veinAmt : 0.5) * 0.14 * veins;
+          tone = Math.max(0.2, Math.min(0.88, base - vDrop));
+        } else {
+          // Soft dark botanical vignette around the macro bloom
+          tone = Math.max(0.02, 0.16 - rCenter * 0.08);
+        }
+        state.manualCells.set(key, { t: 0, a: pickGrad(tone), b: -1 });
+      } else if (patternId === "dahlia-macro") {
+        // Concentric layered dahlia / chrysanthemum petals radiating from golden heart
+        const petals = Math.max(8, Math.round(Number(getMathParam(patternId, "petals")) || 14));
+        const layers = Math.max(3, Math.round(Number(getMathParam(patternId, "layers")) || 5));
+        const zoom = Number(getMathParam(patternId, "zoom")) || 1.0;
+        const dx = ((nx - 0.5) * 2.0) / zoom;
+        const dy = ((ny - 0.5) * 2.0) / zoom;
+        const r = Math.hypot(dx, dy);
+        const theta = Math.atan2(dy, dx);
+        if (r < 0.16) {
+          // Warm central florets
+          const heart = 0.92 - (r / 0.16) * 0.25 + Math.sin(theta * 12) * 0.06;
+          state.manualCells.set(key, { t: 0, a: pickGrad(heart), b: -1 });
+        } else {
+          const ringF = r * layers;
+          const ringIdx = Math.floor(ringF);
+          const ringFrac = ringF - ringIdx;
+          // Stagger alternate petal rings by half a petal width
+          const phase = theta * petals + (ringIdx % 2) * Math.PI;
+          const petalWave = Math.pow(Math.cos(phase) * 0.5 + 0.5, 0.75);
+          // Pointed petal silhouette shading + depth darkening toward outer edge
+          const shading = petalWave * 0.52 + (1 - ringFrac) * 0.26 + Math.max(0, 1 - r * 0.65) * 0.22;
+          state.manualCells.set(key, { t: 0, a: pickGrad(shading), b: -1 });
+        }
+      } else if (patternId === "peony-macro") {
+        // Soft, ruffled rose/peony macro petals unfurling in a logarithmic spiral
+        const ruffle = Math.max(1, Number(getMathParam(patternId, "ruffle")) || 3);
+        const unfurl = Math.max(2, Number(getMathParam(patternId, "unfurl")) || 4);
+        const zoom = Number(getMathParam(patternId, "zoom")) || 1.0;
+        const dx = ((nx - 0.5) * 2.0) / zoom;
+        const dy = ((ny - 0.5) * 2.0) / zoom;
+        const r = Math.hypot(dx, dy);
+        const theta = Math.atan2(dy, dx);
+        const spiral = Math.log(r + 0.08) * unfurl + theta / (Math.PI * 2);
+        const ruffleWave = Math.sin(theta * (ruffle * 2 + 3) + r * 5.0) * 0.16;
+        const petalEdge = ((spiral + ruffleWave + 10) % 1);
+        // Deep rose-heart shadow transitioning to luminous ruffled petal tips
+        const cupLight = Math.pow(petalEdge, 0.85) * 0.68 + Math.min(1, r * 0.75) * 0.32;
+        state.manualCells.set(key, { t: 0, a: pickGrad(cupLight), b: -1 });
+      } else if (patternId === "sunflower-macro") {
+        // Golden-angle sunflower seed head + dramatic radiating outer petals
+        const heartR = Number(getMathParam(patternId, "heart")) || 0.42;
+        const petals = Math.max(10, Math.round(Number(getMathParam(patternId, "petals")) || 18));
+        const zoom = Number(getMathParam(patternId, "zoom")) || 1.0;
+        const dx = ((nx - 0.5) * 2.0) / zoom;
+        const dy = ((ny - 0.5) * 2.0) / zoom;
+        const r = Math.hypot(dx, dy);
+        const theta = Math.atan2(dy, dx);
+        if (r <= heartR) {
+          // Cross-spiral Fibonacci seed texture inside the dark center disc
+          const s1 = Math.sin(r * 34 + theta * 13);
+          const s2 = Math.sin(r * 34 - theta * 21);
+          const seedTex = (s1 * s2) * 0.14 + 0.16 + (r / heartR) * 0.18;
+          state.manualCells.set(key, { t: 0, a: pickGrad(seedTex), b: -1 });
+        } else {
+          // Radiating double layer of sunflower petals
+          const pOuter = Math.pow(Math.abs(Math.cos(theta * petals * 0.5)), 0.65);
+          const pInner = Math.pow(Math.abs(Math.sin(theta * petals * 0.5)), 0.65);
+          const petalReach = heartR + 0.15 + Math.max(pOuter * 0.58, pInner * 0.46);
+          if (r <= petalReach) {
+            const distAlong = (r - heartR) / Math.max(0.05, petalReach - heartR);
+            const tone = 0.94 - distAlong * 0.32 - (1 - Math.max(pOuter, pInner)) * 0.18;
+            state.manualCells.set(key, { t: 0, a: pickGrad(tone), b: -1 });
+          } else {
+            state.manualCells.set(key, { t: 0, a: lumOrder[0], b: -1 });
+          }
+        }
+      } else if (patternId === "mandelbrot") {
+        const zoom = Number(getMathParam(patternId, "zoom")) || 1.0;
+        const panX = Number(getMathParam(patternId, "panX"));
+        const panY = Number(getMathParam(patternId, "panY"));
+        const cycles = Number(getMathParam(patternId, "cycles")) || 1.0;
+        const cr = (Number.isFinite(panX) ? panX : -0.65) + ((nx - 0.5) * 2.85) / zoom;
+        const ci = (Number.isFinite(panY) ? panY : 0.0) + ((ny - 0.5) * 2.5) / zoom;
+        let zr = 0;
+        let zi = 0;
+        const maxIter = 56;
+        let iter = 0;
+        while (zr * zr + zi * zi <= 4 && iter < maxIter) {
+          const nr = zr * zr - zi * zi + cr;
+          zi = 2 * zr * zi + ci;
+          zr = nr;
+          iter++;
+        }
+        const palIdx =
+          iter === maxIter ? lumOrder[0] : lumOrder[1 + (Math.floor(iter * cycles) % Math.max(1, K - 1))];
+        state.manualCells.set(key, { t: 0, a: palIdx, b: -1 });
+      } else if (patternId === "burning-ship") {
+        const zoom = Number(getMathParam(patternId, "zoom")) || 1.0;
+        const panX = Number(getMathParam(patternId, "panX"));
+        const panY = Number(getMathParam(patternId, "panY"));
+        const cr = (Number.isFinite(panX) ? panX : -0.45) + ((nx - 0.5) * 3.2) / zoom;
+        const ci = (Number.isFinite(panY) ? panY : -0.45) + ((ny - 0.5) * 2.8) / zoom;
+        let zr = 0;
+        let zi = 0;
+        const maxIter = 52;
+        let iter = 0;
+        while (zr * zr + zi * zi <= 4 && iter < maxIter) {
+          const ar = Math.abs(zr);
+          const ai = Math.abs(zi);
+          const nr = ar * ar - ai * ai + cr;
+          zi = 2 * ar * ai + ci;
+          zr = nr;
+          iter++;
+        }
+        const palIdx = iter === maxIter ? lumOrder[0] : lumOrder[1 + (iter % Math.max(1, K - 1))];
+        state.manualCells.set(key, { t: 0, a: palIdx, b: -1 });
+      } else if (patternId === "julia") {
+        const cr = Number(getMathParam(patternId, "cr"));
+        const ci = Number(getMathParam(patternId, "ci"));
+        const zoom = Number(getMathParam(patternId, "zoom")) || 1.0;
+        let zr = ((nx - 0.5) * 3.1) / zoom;
+        let zi = ((ny - 0.5) * 2.5) / zoom;
+        const maxIter = 52;
+        let iter = 0;
+        while (zr * zr + zi * zi <= 4 && iter < maxIter) {
+          const nr = zr * zr - zi * zi + (Number.isFinite(cr) ? cr : -0.72);
+          zi = 2 * zr * zi + (Number.isFinite(ci) ? ci : 0.19);
+          zr = nr;
+          iter++;
+        }
+        const palIdx = iter === maxIter ? lumOrder[0] : pickGrad(Math.sqrt(iter / maxIter));
+        state.manualCells.set(key, { t: 0, a: palIdx, b: -1 });
+      } else if (patternId === "newton") {
+        const order = Math.max(3, Math.min(8, Math.round(Number(getMathParam(patternId, "order")) || 3)));
+        const zoom = Number(getMathParam(patternId, "zoom")) || 1.0;
+        let zr = ((nx - 0.5) * 3.0) / zoom;
+        let zi = ((ny - 0.5) * 3.0) / zoom;
+        if (Math.abs(zr) < 1e-4 && Math.abs(zi) < 1e-4) zr = 1e-3;
+        for (let it = 0; it < 24; it++) {
+          // Compute z^(n-1) and z^n in polar form
+          const r = Math.hypot(zr, zi);
+          if (r < 1e-6) break;
+          const th = Math.atan2(zi, zr);
+          const rn1 = Math.pow(r, order - 1);
+          const rn = rn1 * r;
+          const fR = rn * Math.cos(order * th) - 1;
+          const fI = rn * Math.sin(order * th);
+          const dfR = order * rn1 * Math.cos((order - 1) * th);
+          const dfI = order * rn1 * Math.sin((order - 1) * th);
+          const denom = dfR * dfR + dfI * dfI + 1e-9;
+          zr -= (fR * dfR + fI * dfI) / denom;
+          zi -= (fI * dfR - fR * dfI) / denom;
+        }
+        const angle = (Math.atan2(zi, zr) + Math.PI) / (Math.PI * 2);
+        const rootIdx = Math.floor(angle * order) % order;
+        state.manualCells.set(key, { t: 0, a: pickCycle(rootIdx), b: -1 });
+      } else if (patternId === "sierpinski-carpet") {
+        const sc = Math.max(1, Math.min(3, Math.round(Number(getMathParam(patternId, "scale")) || 2)));
+        const dim = Math.pow(3, sc + 1);
+        let x = Math.floor(nx * dim);
+        let y = Math.floor(ny * dim);
+        let holeLevel = 0;
+        let level = 1;
+        while (x > 0 || y > 0) {
+          if (x % 3 === 1 && y % 3 === 1) {
+            holeLevel = level;
+            break;
+          }
+          x = Math.floor(x / 3);
+          y = Math.floor(y / 3);
+          level++;
+        }
+        const palIdx =
+          holeLevel === 0 ? lumOrder[0] : lumOrder[Math.min(K - 1, K - 1 - ((holeLevel - 1) % Math.max(1, K - 1)))];
+        state.manualCells.set(key, { t: 0, a: palIdx, b: -1 });
+      } else if (patternId === "sierpinski-triangle") {
+        const bandDepth = Math.max(1, Math.round(Number(getMathParam(patternId, "bandDepth")) || 1));
+        const sc = cell.c;
+        const sr = cell.r;
+        const filled = (sc & sr) === 0;
+        if (isSquareGrid && K >= 2) {
+          const depth = Math.floor(Math.log2(Math.max(1, sr + 1)) * bandDepth);
+          const accent = lumOrder[depth % Math.max(1, K - 1)];
+          const bg = lumOrder[K - 1];
+          if (filled) {
+            const rightFilled = ((sc + 1) & sr) === 0;
+            state.manualCells.set(key, !rightFilled ? { t: 2, a: accent, b: bg } : { t: 0, a: accent, b: -1 });
+          } else {
+            state.manualCells.set(key, { t: 0, a: bg, b: -1 });
+          }
+        } else {
+          const palIdx = filled ? pickCycle(Math.floor(sr / 2) * bandDepth) : lumOrder[K - 1];
+          state.manualCells.set(key, { t: 0, a: palIdx, b: -1 });
+        }
+      } else if (patternId === "chladni") {
+        const nMode = Number(getMathParam(patternId, "n")) || 2;
+        const mMode = Number(getMathParam(patternId, "m")) || 5;
+        const mix = Number(getMathParam(patternId, "mix"));
+        const x = nx * 2 - 1;
+        const y = ny * 2 - 1;
+        const val =
+          Math.cos(nMode * Math.PI * x) * Math.cos(mMode * Math.PI * y) +
+          (Number.isFinite(mix) ? mix : 1) * Math.cos(mMode * Math.PI * x) * Math.cos(nMode * Math.PI * y);
+        const norm = Math.min(1, Math.abs(val) / (1 + Math.abs(Number.isFinite(mix) ? mix : 1) + 1e-4));
+        state.manualCells.set(key, { t: 0, a: pickGrad(norm), b: -1 });
+      } else if (patternId === "turing") {
+        const tx = Math.min(turingW - 1, Math.floor(nx * turingW));
+        const ty = Math.min(turingH - 1, Math.floor(ny * turingH));
+        const v = turingData[ty * turingW + tx];
+        const norm = Math.max(0, Math.min(1, v * 2.4));
+        state.manualCells.set(key, { t: 0, a: pickGrad(norm), b: -1 });
+      } else if (patternId === "kaleidoscope") {
+        // N-fold dihedral mirror symmetry (D_n): fold angle into [0, PI/folds] mirrored wedge
+        const folds = Math.max(4, Math.round(Number(getMathParam(patternId, "folds")) || 8));
+        const detail = Math.max(1, Number(getMathParam(patternId, "detail")) || 3);
+        const twist = Number(getMathParam(patternId, "twist")) || 0;
+        const seed = Number(getMathParam(patternId, "seed")) || 4;
+        const dx = nx - 0.5;
+        const dy = ny - 0.5;
+        const r = Math.hypot(dx, dy) * 2.0; // 0 at center, ~1.41 at corners
+        let theta = Math.atan2(dy, dx) + r * twist;
+        const sector = (Math.PI * 2) / folds;
+        theta = ((theta % sector) + sector) % sector;
+        if (theta > sector * 0.5) theta = sector - theta; // Mirror reflection!
+        const wx = r * Math.cos(theta);
+        const wy = r * Math.sin(theta);
+        // Layered faceted kaleidoscope interference inside the mirrored wedge
+        const f1 = Math.sin(wx * Math.PI * detail + seed * 1.13);
+        const f2 = Math.cos(wy * Math.PI * (detail + 1.5) - seed * 0.77);
+        const f3 = Math.sin((r * detail * 2.2 - theta * folds * 0.5) * Math.PI + seed * 0.51);
+        const norm = (f1 * 0.4 + f2 * 0.35 + f3 * 0.25) * 0.5 + 0.5;
+        state.manualCells.set(key, { t: 0, a: pickGrad(norm), b: -1 });
+      } else if (patternId === "kaleidoscope-hst") {
+        // 8-way dihedral symmetry (D_4) heirloom kaleidoscope star with diagonal HSTs
+        const rings = Math.max(1, Number(getMathParam(patternId, "rings")) || 3);
+        const seed = Math.max(1, Math.round(Number(getMathParam(patternId, "seed")) || 5));
+        const dx = cx - cols * 0.5;
+        const dy = cy - rows * 0.5;
+        const ax = Math.abs(dx);
+        const ay = Math.abs(dy);
+        // Fold into fundamental octant (u >= v >= 0) for crisp 8-way mirror symmetry
+        const u = Math.max(ax, ay) / Math.max(1, Math.max(cols, rows) * 0.5);
+        const v = Math.min(ax, ay) / Math.max(1, Math.max(cols, rows) * 0.5);
+        const octVal =
+          Math.sin(u * Math.PI * rings + seed * 0.9) * 0.45 +
+          Math.cos((u - v) * Math.PI * (rings + 1) + seed * 1.3) * 0.35 +
+          Math.sin((u + v) * Math.PI * rings * 0.8 + seed * 0.4) * 0.2;
+        const norm = octVal * 0.5 + 0.5;
+        const pA = pickGrad(norm);
+        const pB = pickGrad((norm + 0.38) % 1);
+        if (isSquareGrid && K >= 2) {
+          // Mirror HST diagonal across all 4 quadrants so star points radiate symmetrically
+          const sameSign = (dx >= 0) === (dy >= 0);
+          const diag = sameSign ? 2 : 1; // '\' in TL/BR quadrants, '/' in TR/BL quadrants
+          const isHstBand = Math.floor((u + v) * (rings * 2 + 2) + seed) % 2 === 0;
+          if (isHstBand && pA !== pB) {
+            // Keep inner/outer halves consistently oriented across quadrants
+            const swap = dy < 0;
+            state.manualCells.set(key, { t: diag, a: swap ? pB : pA, b: swap ? pA : pB });
+          } else {
+            state.manualCells.set(key, { t: 0, a: pA, b: -1 });
+          }
+        } else {
+          state.manualCells.set(key, { t: 0, a: pA, b: -1 });
+        }
+      } else if (patternId === "bargello-wave") {
+        const freq = Number(getMathParam(patternId, "freq")) || 1.25;
+        const amp = Number(getMathParam(patternId, "amp")) || 0.25;
+        const repeat = Number(getMathParam(patternId, "repeat")) || 1.4;
+        const wave = Math.sin(nx * Math.PI * 2 * freq) * amp + Math.cos(nx * Math.PI * 4 * freq) * (amp * 0.28);
+        const band = ((ny + wave) * K * repeat + K * 10) % K;
+        state.manualCells.set(key, { t: 0, a: lumOrder[Math.floor(band) % K], b: -1 });
+      } else if (patternId === "fibonacci-spiral") {
+        const arms = Math.max(2, Math.round(Number(getMathParam(patternId, "arms")) || 5));
+        const twist = Number(getMathParam(patternId, "twist")) || 2.25;
+        const dx = nx - 0.5;
+        const dy = ny - 0.5;
+        const rad = Math.hypot(dx, dy);
+        const angle = Math.atan2(dy, dx);
+        const spiral = (angle / (Math.PI * 2) + 0.5) * arms + Math.log(rad + 0.04) * twist;
+        const idx = Math.floor((spiral + 100) * (K / 2.2));
+        state.manualCells.set(key, { t: 0, a: pickCycle(idx), b: -1 });
+      } else if (patternId === "truchet") {
+        const seed = Math.max(1, Math.round(Number(getMathParam(patternId, "seed")) || 3));
+        const bands = Math.max(1, Math.round(Number(getMathParam(patternId, "bands")) || 1));
+        const diag = ((cell.c ^ cell.r) + Math.floor((cell.c * seed + cell.r) / (seed + 1))) % 2 === 0 ? 1 : 2;
+        const band = Math.floor(((nx + ny) * 0.5) * bands * Math.max(1, K - 1));
+        const pA = lumOrder[band % Math.max(1, K - 1)];
+        const pB = lumOrder[K - 1 - (band % Math.max(1, K - 1))];
+        if (isSquareGrid && K >= 2) {
+          state.manualCells.set(key, { t: diag, a: pA, b: pB });
+        } else {
+          state.manualCells.set(key, { t: 0, a: diag === 1 ? pA : pB, b: -1 });
+        }
+      } else if (patternId === "log-cabin") {
+        const ringW = Math.max(1, Math.round(Number(getMathParam(patternId, "ringWidth")) || 1));
+        const dx = cx - cols * 0.5;
+        const dy = cy - rows * 0.5;
+        const ring = Math.floor(Math.max(Math.abs(dx), Math.abs(dy)) / ringW);
+        const isLightHalf = dx + dy >= 0;
+        const halfK = Math.max(1, Math.floor(K / 2));
+        const palIdx = isLightHalf
+          ? lumOrder[Math.min(K - 1, halfK + (ring % Math.max(1, K - halfK)))]
+          : lumOrder[ring % halfK];
+        state.manualCells.set(key, { t: 0, a: palIdx, b: -1 });
+      } else if (patternId === "xor-mosaic") {
+        const mod = Math.max(3, Math.round(Number(getMathParam(patternId, "mod")) || 9));
+        const zoom = Math.max(1, Math.round(Number(getMathParam(patternId, "zoom")) || 1));
+        const mirror = String(getMathParam(patternId, "mirror") || "quad");
+        const ux = mirror === "quad" ? Math.floor(Math.abs(cx - cols * 0.5) * zoom) : Math.floor(cell.c * zoom);
+        const uy = mirror === "quad" ? Math.floor(Math.abs(cy - rows * 0.5) * zoom) : Math.floor(cell.r * zoom);
+        const v = (ux ^ uy) % mod;
+        state.manualCells.set(key, { t: 0, a: pickGrad(v / Math.max(1, mod - 1)), b: -1 });
+      } else if (patternId === "ulam-spiral") {
+        const startInt = Math.max(1, Math.round(Number(getMathParam(patternId, "start")) || 1));
+        const mode = String(getMathParam(patternId, "mode") || "primes");
+        const dx = Math.round(cx - cols * 0.5);
+        const dy = Math.round(cy - rows * 0.5);
+        const val = ulamSpiralValue(dx, dy, startInt);
+        let palIdx;
+        if (mode === "divisors") {
+          const divs = countDivisorsNum(val);
+          palIdx = pickGrad(Math.min(1, (divs - 1) / 10));
+        } else {
+          palIdx = isPrimeNum(val)
+            ? lumOrder[0]
+            : lumOrder[Math.min(K - 1, 1 + (Math.max(Math.abs(dx), Math.abs(dy)) % Math.max(1, K - 1)))];
+        }
+        state.manualCells.set(key, { t: 0, a: palIdx, b: -1 });
+      } else if (patternId === "hilbert") {
+        const cycles = Number(getMathParam(patternId, "cycles")) || 1;
+        const hx = Math.min(hilbertN - 1, Math.floor(nx * hilbertN));
+        const hy = Math.min(hilbertN - 1, Math.floor(ny * hilbertN));
+        const d = hilbertXy2d(hilbertN, hx, hy);
+        const normD = ((d / Math.max(1, hilbertN * hilbertN - 1)) * cycles) % 1;
+        state.manualCells.set(key, { t: 0, a: pickGrad(normD), b: -1 });
+      } else if (patternId === "cellular-rule90") {
+        const rr = Math.min(rows, cell.r);
+        const cc = Math.min(cols, cell.c);
+        const alive = caGrid[rr][cc] === 1;
+        const palIdx = alive ? lumOrder[Math.floor((rr / Math.max(1, rows)) * Math.max(1, K - 1))] : lumOrder[K - 1];
+        state.manualCells.set(key, { t: 0, a: palIdx, b: -1 });
+      } else if (patternId === "interference") {
+        const freq = Number(getMathParam(patternId, "freq")) || 18;
+        const spread = Number(getMathParam(patternId, "spread")) || 0.22;
+        const d1 = Math.hypot(nx - (0.5 - spread), ny - (0.5 - spread * 0.7)) * freq;
+        const d2 = Math.hypot(nx - (0.5 + spread), ny - (0.5 + spread * 0.7)) * freq;
+        const wave = (Math.sin(d1) + Math.sin(d2)) * 0.25 + 0.5;
+        state.manualCells.set(key, { t: 0, a: pickGrad(wave), b: -1 });
+      } else if (patternId === "voronoi") {
+        let bestD = Infinity;
+        let bestPal = lumOrder[0];
+        for (let s = 0; s < voronoiSeeds.length; s++) {
+          const sd = voronoiSeeds[s];
+          const d = (nx - sd.x) * (nx - sd.x) + (ny - sd.y) * (ny - sd.y);
+          if (d < bestD) {
+            bestD = d;
+            bestPal = sd.pal;
+          }
+        }
+        state.manualCells.set(key, { t: 0, a: bestPal, b: -1 });
+      }
+    }
+
+    renderQuilt();
+    if (record) {
+      recordHistory(`Generated ${spec.label}`, coalesceKey);
+    }
+  }
+
+  // --- Color-Wheel Harmony Math & Shuffle Engine ---
+  function hslToRgb(hDeg, sPct, lPct) {
+    const h = (((hDeg % 360) + 360) % 360) / 360;
+    const s = Math.max(0, Math.min(1, sPct / 100));
+    const l = Math.max(0, Math.min(1, lPct / 100));
+    if (s === 0) {
+      const v = Math.round(l * 255);
+      return [v, v, v];
+    }
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    const hue2rgb = (t) => {
+      let tt = t;
+      if (tt < 0) tt += 1;
+      if (tt > 1) tt -= 1;
+      if (tt < 1 / 6) return p + (q - p) * 6 * tt;
+      if (tt < 1 / 2) return q;
+      if (tt < 2 / 3) return p + (q - p) * (2 / 3 - tt) * 6;
+      return p;
+    };
+    return [Math.round(hue2rgb(h + 1 / 3) * 255), Math.round(hue2rgb(h) * 255), Math.round(hue2rgb(h - 1 / 3) * 255)];
+  }
+
+  const HARMONY_RULES = [
+    { id: "analogous", label: "Analogous", offsets: [-32, -16, 0, 16, 32] },
+    { id: "complementary", label: "Complementary", offsets: [0, 8, 180, 188] },
+    { id: "split-comp", label: "Split-Complementary", offsets: [0, 150, 210] },
+    { id: "triadic", label: "Triadic", offsets: [0, 120, 240] },
+    { id: "tetradic", label: "Tetradic", offsets: [0, 60, 180, 240] },
+    { id: "monochrome", label: "Monochrome Value", offsets: [-6, 0, 6] },
+  ];
+
+  // Builds a K-fabric harmonious palette using HSL color-wheel geometry + quilt value staircase,
+  // snapping solids to distinct Kona Cotton shades and pairing 1-3 color-matched designer prints.
+  function generateHarmoniousPalette(count = state.palette.length || 8, { includePrints = true } = {}) {
+    const K = Math.max(2, Math.min(16, count));
+    const rule = HARMONY_RULES[Math.floor(Math.random() * HARMONY_RULES.length)];
+    const baseHue = Math.floor(Math.random() * 360);
+    const baseSat = 46 + Math.random() * 28; // Rich quilting cotton saturation (46% - 74%)
+
+    const allDesignerPrints = [...KAFFE_FASSETT_FABRICS, ...BRANDON_MABLY_FABRICS, ...PHILIP_JACOBS_FABRICS];
+    const usedKona = new Set();
+    const usedPrints = new Set();
+    const printSlots = new Set();
+    if (includePrints && K >= 4) {
+      const printCount = Math.min(3, Math.max(1, Math.floor(K / 3)));
+      // Place prints in midtone/accent slots so light highlight & dark anchor stay crisp solids
+      for (let p = 0; p < printCount; p++) {
+        const slot = Math.min(K - 2, Math.max(1, Math.round(((p + 1) / (printCount + 1)) * (K - 1))));
+        printSlots.add(slot);
+      }
+    }
+
+    const palette = [];
+    for (let i = 0; i < K; i++) {
+      // Smooth perceptual value staircase from deep anchor (18%) to luminous highlight (90%)
+      const t = K === 1 ? 0.5 : i / (K - 1);
+      const lightness = 17 + t * 73;
+      // Subtle hue-temperature shift: darks shift slightly cool, lights slightly warm
+      const tempShift = (t - 0.5) * 14;
+      const hueOffset = rule.offsets[i % rule.offsets.length];
+      const hue = baseHue + hueOffset + tempShift;
+      // Keep deepest & lightest values slightly softer in saturation for authentic cotton feel
+      const sat = t < 0.12 || t > 0.88 ? Math.max(14, baseSat * 0.48) : baseSat;
+      const [tr, tg, tb] = hslToRgb(hue, sat, lightness);
+
+      if (printSlots.has(i)) {
+        // Pick the closest unused Kaffe / Brandon / Philip print to this harmonious target color
+        let bestPrint = null;
+        let bestDist = Infinity;
+        for (let j = 0; j < allDesignerPrints.length; j++) {
+          const f = allDesignerPrints[j];
+          if (usedPrints.has(f.id)) continue;
+          const d = colorDistanceSq(tr, tg, tb, f.rgb[0], f.rgb[1], f.rgb[2]);
+          if (d < bestDist) {
+            bestDist = d;
+            bestPrint = f;
+          }
+        }
+        if (bestPrint) {
+          usedPrints.add(bestPrint.id);
+          palette.push({
+            id: state.nextColorId++,
+            r: bestPrint.rgb[0],
+            g: bestPrint.rgb[1],
+            b: bestPrint.rgb[2],
+            patternDataUrl: getPhilipJacobsDataUrl(bestPrint),
+            patternName: bestPrint.name,
+            patternAvgRgb: [...bestPrint.rgb],
+            patternScale: 1.0,
+            patternCutMode: "repeat",
+            libraryId: bestPrint.id,
+          });
+          continue;
+        }
+      }
+
+      // Snap solid to closest unused Robert Kaufman Kona Cotton solid
+      let bestKona = NAMED_FABRIC_COLORS[0];
+      let bestDist = Infinity;
+      for (let j = 0; j < NAMED_FABRIC_COLORS.length; j++) {
+        const row = NAMED_FABRIC_COLORS[j];
+        if (usedKona.has(row[5])) continue;
+        const d = colorDistanceSq(tr, tg, tb, row[1], row[2], row[3]);
+        if (d < bestDist) {
+          bestDist = d;
+          bestKona = row;
+        }
+      }
+      usedKona.add(bestKona[5]);
+      palette.push({
+        id: state.nextColorId++,
+        r: bestKona[1],
+        g: bestKona[2],
+        b: bestKona[3],
+      });
+    }
+
+    return { palette, ruleLabel: rule.label };
+  }
+
+  function shuffleQuiltDesign() {
+    if (!state.image) return;
+    closeHistoryPopover();
+    closeSwatchPopover();
+    closeMathMenuPopover();
+
+    // 1. Pick a fresh harmonious palette (preserving current palette size, or 6-10 fabrics)
+    const targetCount = Math.max(5, Math.min(10, state.palette.length || 8));
+    const { palette, ruleLabel } = generateHarmoniousPalette(targetCount, { includePrints: true });
+    state.palette = palette;
+    if (paletteSizeSlider) paletteSizeSlider.value = String(palette.length);
+    rehydratePalettePatterns();
+
+    // 2. Pick a different random pattern from all 30 generators
+    const allIds = Object.keys(MATH_PATTERN_SPECS);
+    const pool = allIds.filter((id) => id !== state.activeMathPattern);
+    const nextId = pool[Math.floor(Math.random() * pool.length)] || allIds[0];
+
+    // 3. Gently randomize that pattern's parameters within tasteful ranges
+    const spec = MATH_PATTERN_SPECS[nextId];
+    const params = getDefaultMathParams(nextId);
+    if (spec && Array.isArray(spec.params)) {
+      spec.params.forEach((p) => {
+        if (p.type === "select" && Array.isArray(p.options) && p.options.length > 0) {
+          params[p.key] = p.options[Math.floor(Math.random() * p.options.length)].value;
+        } else if (p.type === "range" && p.key !== "panX" && p.key !== "panY") {
+          const steps = Math.max(1, Math.round((p.max - p.min) / p.step));
+          // Keep zoom near 0.9x - 1.5x so the pattern frames nicely
+          if (p.key === "zoom") {
+            params[p.key] = Math.round((0.85 + Math.random() * 0.65) * 10) / 10;
+          } else {
+            const pick = Math.floor(Math.random() * (steps + 1));
+            params[p.key] = Number((p.min + pick * p.step).toFixed(3));
+          }
+        }
+      });
+    }
+    state.mathParams = params;
+    state.mathTransform = { offsetX: 0, offsetY: 0, scale: 1.0, rotate: 0 };
+    state.mathReversePalette = Math.random() < 0.35;
+
+    // Ensure crisp resolution for rich patterns if currently very chunky
+    if (state.cols < 20) {
+      state.cols = syncSliderBoundsForCols(28);
+      computeSquareAverages();
+    }
+
+    renderPaletteSwatches();
+    applyMathPattern(nextId, { record: false });
+    if (mathPropsPopover && !mathPropsPopover.hidden) {
+      renderMathPropsControls();
+    }
+    recordHistory(`Shuffled: ${spec.label} (${ruleLabel})`);
+  }
+
+  if (shuffleQuiltBtn) {
+    shuffleQuiltBtn.addEventListener("click", shuffleQuiltDesign);
+  }
+
+  if (harmonyPaletteBtn) {
+    harmonyPaletteBtn.addEventListener("click", () => {
+      if (!state.image) return;
+      const { palette, ruleLabel } = generateHarmoniousPalette(state.palette.length || 8, { includePrints: true });
+      state.palette = palette;
+      rehydratePalettePatterns();
+      renderPaletteSwatches();
+      if (state.activeMathPattern) {
+        applyMathPattern(state.activeMathPattern, { record: false });
+      } else {
+        renderQuilt();
+      }
+      recordHistory(`Harmony palette: ${ruleLabel}`);
+    });
+  }
+
+  // --- Map & Satellite Quilt Generator (Nominatim Geocoding + CORS Tile Stitcher) ---
+  const MAP_KNOWN_COORDS = {
+    "samish island, wa": { lat: 48.5795, lon: -122.5364, label: "Samish Island, WA" },
+    "venice, italy": { lat: 45.4371, lon: 12.3326, label: "Venice, Italy" },
+    "grand canyon, az": { lat: 36.1069, lon: -112.1129, label: "Grand Canyon, AZ" },
+    "mount rainier, wa": { lat: 46.8523, lon: -121.7603, label: "Mount Rainier, WA" },
+  };
+
+  function getMapTileUrl(style, z, x, y) {
+    if (style === "voyager") {
+      return `https://a.basemaps.cartocdn.com/rastertiles/voyager_nolabels/${z}/${x}/${y}.png`;
+    }
+    if (style === "topo") {
+      return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/${z}/${y}/${x}`;
+    }
+    if (style === "relief") {
+      return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/${z}/${y}/${x}`;
+    }
+    return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
+  }
+
+  function latLonToFracTile(lat, lon, zoom) {
+    const n = Math.pow(2, zoom);
+    const latRad = (lat * Math.PI) / 180;
+    const fx = ((lon + 180) / 360) * n;
+    const fy = ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n;
+    return { fx, fy, n };
+  }
+
+  function setMapStatus(msg, isError = false) {
+    if (!mapStatus) return;
+    mapStatus.textContent = msg || "";
+    mapStatus.hidden = !msg;
+    mapStatus.classList.toggle("is-error", Boolean(isError));
+  }
+
+  function closeMapPopover() {
+    if (!mapPopover) return;
+    mapPopover.hidden = true;
+  }
+
+  function openMapPopover(initialStyle = null) {
+    if (!mapPopover) return;
+    closeHistoryPopover();
+    closeSwatchPopover();
+    closeMathPropsPopover();
+    closeMathMenuPopover();
+    if (initialStyle && mapStyleSelect) {
+      mapStyleSelect.value = initialStyle;
+    }
+    setMapStatus("");
+    mapPopover.hidden = false;
+
+    const anchor = mathMenuBtn || previewToolbar;
+    if (anchor) {
+      const rect = anchor.getBoundingClientRect();
+      const popRect = mapPopover.getBoundingClientRect();
+      const margin = 12;
+      let left = rect.left;
+      if (left + popRect.width > window.innerWidth - margin) {
+        left = Math.max(margin, window.innerWidth - popRect.width - margin);
+      }
+      let top = rect.bottom + 8;
+      if (top + popRect.height > window.innerHeight - margin) {
+        top = Math.max(margin, window.innerHeight - popRect.height - margin);
+      }
+      mapPopover.style.left = `${Math.round(left)}px`;
+      mapPopover.style.top = `${Math.round(top)}px`;
+    }
+    if (mapLocationInput) {
+      mapLocationInput.focus();
+      mapLocationInput.select();
+    }
+  }
+
+  async function geocodeLocation(query) {
+    const clean = String(query || "").trim();
+    if (!clean) throw new Error("Please enter a location.");
+
+    // Direct lat, lon input (e.g., "48.58, -122.54")
+    const coordMatch = clean.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
+    if (coordMatch) {
+      const lat = Number(coordMatch[1]);
+      const lon = Number(coordMatch[2]);
+      if (lat >= -85 && lat <= 85 && lon >= -180 && lon <= 180) {
+        return { lat, lon, label: `${lat.toFixed(3)}, ${lon.toFixed(3)}` };
+      }
+    }
+
+    const known = MAP_KNOWN_COORDS[clean.toLowerCase()];
+    if (known) return known;
+
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(clean)}`;
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!res.ok) throw new Error("Location lookup failed. Try entering lat, lon coordinates.");
+    const rows = await res.json();
+    if (!Array.isArray(rows) || rows.length === 0) {
+      throw new Error(`Could not find "${clean}". Try adding a state or country.`);
+    }
+    const first = rows[0];
+    const shortName = String(first.display_name || clean).split(",").slice(0, 2).join(",").trim();
+    return { lat: Number(first.lat), lon: Number(first.lon), label: shortName || clean };
+  }
+
+  function loadTileImage(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Map tile failed to load"));
+      img.src = url;
+    });
+  }
+
+  async function generateMapQuilt(query, style, zoom, extractColors) {
+    if (mapLoadBtn) mapLoadBtn.disabled = true;
+    try {
+      setMapStatus("Finding location…");
+      const loc = await geocodeLocation(query);
+
+      setMapStatus("Loading map tiles…");
+      const z = Math.max(6, Math.min(16, Math.round(Number(zoom) || 13)));
+      const { fx, fy, n } = latLonToFracTile(loc.lat, loc.lon, z);
+      const centerTileX = Math.floor(fx);
+      const centerTileY = Math.floor(fy);
+
+      // Stitch a 3x3 grid of 256px tiles and crop a centered 512x512 square around (lat, lon)
+      const stitch = document.createElement("canvas");
+      stitch.width = 768;
+      stitch.height = 768;
+      const sctx = stitch.getContext("2d");
+
+      const jobs = [];
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const tx = ((centerTileX + dx) % n + n) % n;
+          const ty = Math.max(0, Math.min(n - 1, centerTileY + dy));
+          const url = getMapTileUrl(style, z, tx, ty);
+          jobs.push(
+            loadTileImage(url).then((tileImg) => {
+              sctx.drawImage(tileImg, (dx + 1) * 256, (dy + 1) * 256, 256, 256);
+            })
+          );
+        }
+      }
+      await Promise.all(jobs);
+
+      const offsetPxX = Math.round((fx - centerTileX) * 256);
+      const offsetPxY = Math.round((fy - centerTileY) * 256);
+      const cropX = Math.max(0, Math.min(256, 256 + offsetPxX - 256));
+      const cropY = Math.max(0, Math.min(256, 256 + offsetPxY - 256));
+
+      const out = document.createElement("canvas");
+      out.width = 512;
+      out.height = 512;
+      out.getContext("2d").drawImage(stitch, cropX, cropY, 512, 512, 0, 0, 512, 512);
+      const mapDataUrl = out.toDataURL("image/jpeg", 0.92);
+
+      await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          state.image = img;
+          state.fileName = `${loc.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.jpg`;
+          state.isBlankQuilt = false;
+          state.activeMathPattern = "";
+          state.crop = { x: 0, y: 0, w: 1, h: 1 };
+          state.paintMask.fill(0);
+          state.manualCells.clear();
+          syncProjectTitle(loc.label);
+          closeCropStage();
+          rebuildSampleBuffer();
+          if (extractColors) {
+            const targetColors = Number(paletteSizeSlider.value) || 8;
+            state.palette = extractPalette(state.samplePixels, targetColors);
+          }
+          if (state.cols < 20) {
+            state.cols = syncSliderBoundsForCols(28);
+          }
+          syncBlankQuiltUI();
+          syncGridLayoutUI();
+          syncMathPropsButton();
+          computeSquareAverages();
+          renderPaletteSwatches();
+          renderQuilt();
+          const styleNames = { satellite: "Satellite", voyager: "Map", topo: "Topo Map", relief: "Terrain" };
+          recordHistory(`Map (${styleNames[style] || "Satellite"}): ${loc.label}`);
+          resolve();
+        };
+        img.onerror = () => reject(new Error("Could not render stitched map image"));
+        img.src = mapDataUrl;
+      });
+
+      setMapStatus("");
+      closeMapPopover();
+    } catch (err) {
+      setMapStatus(err?.message || "Could not load map tiles.", true);
+    } finally {
+      if (mapLoadBtn) mapLoadBtn.disabled = false;
+    }
+  }
+
+  if (mapPopoverClose) {
+    mapPopoverClose.addEventListener("click", closeMapPopover);
+  }
+  if (mapZoomSlider && mapZoomValue) {
+    mapZoomSlider.addEventListener("input", () => {
+      mapZoomValue.textContent = mapZoomSlider.value;
+    });
+  }
+  mapQuickChips.forEach((chip) => {
+    chip.addEventListener("click", () => {
+      if (mapLocationInput) mapLocationInput.value = chip.dataset.mapLoc || "";
+      if (mapZoomSlider && chip.dataset.mapZoom) {
+        mapZoomSlider.value = chip.dataset.mapZoom;
+        if (mapZoomValue) mapZoomValue.textContent = chip.dataset.mapZoom;
+      }
+    });
+  });
+  if (mapForm) {
+    mapForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      generateMapQuilt(
+        mapLocationInput ? mapLocationInput.value : "",
+        mapStyleSelect ? mapStyleSelect.value : "satellite",
+        mapZoomSlider ? mapZoomSlider.value : 13,
+        mapExtractPalette ? mapExtractPalette.checked : true
+      );
+    });
+  }
+  document.addEventListener("click", (e) => {
+    if (!mapPopover || mapPopover.hidden) return;
+    if (mapPopover.contains(e.target)) return;
+    if (e.target === mathMenuBtn || (e.target.closest && e.target.closest("#math-menu-btn"))) return;
+    closeMapPopover();
+  });
+
+  if (gridLayoutSelect) {
+    gridLayoutSelect.addEventListener("change", () => {
+      const nextLayout = GRID_LAYOUTS[gridLayoutSelect.value] ? gridLayoutSelect.value : "grid";
+      if (nextLayout === state.gridLayout) return;
+      state.gridLayout = nextLayout;
+      syncGridLayoutUI();
+      if (state.image) {
+        computeSquareAverages();
+        if (state.activeMathPattern) {
+          applyMathPattern(state.activeMathPattern, { record: false });
+        } else {
+          renderQuilt();
+        }
+        recordHistory(`Layout: ${getLayoutConfig(nextLayout).label}`);
+      }
+    });
+  }
+
   function redrawPreviewWithOverlayOnly() {
     if (!state.image || state.palette.length === 0 || state.showingOriginal) return;
     const cols = state.cols;
     const rows = state.rows;
-    const squarePx = Math.round(quiltCanvas.width / Math.max(1, cols));
+    const cellW = state.layoutCellW || Math.round(quiltCanvas.width / Math.max(1, cols));
+    const cellH = state.layoutCellH || Math.round(quiltCanvas.height / Math.max(1, rows));
+    const squarePx = Math.min(cellW, cellH);
     drawQuiltCellsToContext(quiltCtx, cols, rows, squarePx, {
       grayscale: false,
       showSeams: state.showSeamLines,
+      cellW,
+      cellH,
     });
     drawPaintCursorOverlay(squarePx);
   }
 
   function drawPaintCursorOverlay(squarePx) {
     if (!state.paintMode || !paintHoverCell || squarePx <= 0) return;
+    const cfg = getLayoutConfig();
+    if (cfg.stagger !== "none" && state.layoutCells.length > 0) {
+      const cellW = state.layoutCellW || squarePx;
+      const cellH = state.layoutCellH || squarePx;
+      const hovered =
+        paintHoverCell.cellIdx != null
+          ? state.layoutCells[paintHoverCell.cellIdx]
+          : state.layoutCells.find((item) => item.c === paintHoverCell.col && item.r === paintHoverCell.row);
+      if (!hovered) return;
+      const bx = Math.round(hovered.x0 * cellW);
+      const by = Math.round(hovered.y0 * cellH);
+      const bw = Math.max(2, Math.round(hovered.x1 * cellW) - bx);
+      const bh = Math.max(2, Math.round(hovered.y1 * cellH) - by);
+      quiltCtx.save();
+      quiltCtx.fillStyle = "rgba(184, 77, 44, 0.18)";
+      quiltCtx.fillRect(bx, by, bw, bh);
+      quiltCtx.strokeStyle = "rgba(255, 255, 255, 0.92)";
+      quiltCtx.lineWidth = 3;
+      quiltCtx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+      quiltCtx.strokeStyle = "#b84d2c";
+      quiltCtx.lineWidth = 1.6;
+      quiltCtx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+      quiltCtx.restore();
+      return;
+    }
     const cols = state.cols;
     const rows = state.rows;
     const half = Math.floor(state.paintSize / 2);
@@ -6857,9 +9467,22 @@
     if (fx < 0 || fx > 1 || fy < 0 || fy > 1) return null;
     const gx = fx * state.cols;
     const gy = fy * state.rows;
+    const cfg = getLayoutConfig();
+    if (cfg.stagger !== "none" && state.layoutCells.length > 0) {
+      const cellIdx = lookupLayoutCellIndex(gx, gy, state.cols, state.rows, cfg.id);
+      const cell = state.layoutCells[cellIdx];
+      if (!cell) return null;
+      return {
+        col: cell.c,
+        row: cell.r,
+        cellIdx,
+        localX: (gx - cell.x0) / Math.max(1e-4, cell.x1 - cell.x0),
+        localY: (gy - cell.y0) / Math.max(1e-4, cell.y1 - cell.y0),
+      };
+    }
     const col = Math.max(0, Math.min(state.cols - 1, Math.floor(gx)));
     const row = Math.max(0, Math.min(state.rows - 1, Math.floor(gy)));
-    return { col, row, localX: gx - col, localY: gy - row };
+    return { col, row, cellIdx: row * state.cols + col, localX: gx - col, localY: gy - row };
   }
 
   function ensureHstEnabledForTrianglePaint() {
@@ -6877,7 +9500,43 @@
   function applyFloodFill(startCol, startRow) {
     const cols = state.cols;
     const rows = state.rows;
+    const cfg = getLayoutConfig();
     const targetIdx = Math.max(0, Math.min(state.palette.length - 1, state.paintFabricIdx));
+
+    if (cfg.stagger !== "none" && state.layoutCells.length > 0) {
+      const cells = state.layoutCells;
+      const startCell = cells.find((item) => item.c === startCol && item.r === startRow);
+      if (!startCell) return false;
+      const startA = state.gridAssignments[startCell.idx] ?? 0;
+      if (startA === targetIdx) return false;
+
+      const visited = new Uint8Array(cells.length);
+      const queue = [startCell];
+      visited[startCell.idx] = 1;
+      let changed = false;
+
+      while (queue.length > 0) {
+        const cur = queue.shift();
+        if ((state.gridAssignments[cur.idx] ?? 0) !== startA) continue;
+        state.manualCells.set(`${cur.c},${cur.r}`, { t: 0, a: targetIdx, b: -1 });
+        changed = true;
+        // Find geometrically touching neighbor tiles (shared edge of non-zero length)
+        for (let i = 0; i < cells.length; i++) {
+          if (visited[i]) continue;
+          const nb = cells[i];
+          const touchX = Math.abs(nb.x0 - cur.x1) < 1e-4 || Math.abs(cur.x0 - nb.x1) < 1e-4;
+          const overlapY = Math.min(cur.y1, nb.y1) - Math.max(cur.y0, nb.y0) > 1e-4;
+          const touchY = Math.abs(nb.y0 - cur.y1) < 1e-4 || Math.abs(cur.y0 - nb.y1) < 1e-4;
+          const overlapX = Math.min(cur.x1, nb.x1) - Math.max(cur.x0, nb.x0) > 1e-4;
+          if ((touchX && overlapY) || (touchY && overlapX)) {
+            visited[i] = 1;
+            queue.push(nb);
+          }
+        }
+      }
+      return changed;
+    }
+
     const startCellIdx = startRow * cols + startCol;
     const startType = state.cellTypes[startCellIdx] || 0;
     const startA = state.gridAssignments[startCellIdx] ?? 0;
@@ -6927,6 +9586,16 @@
 
     if (brush === "color" || brush === "hst-slash" || brush === "hst-back") {
       const pIdx = Math.max(0, Math.min(state.palette.length - 1, state.paintFabricIdx));
+      const cfg = getLayoutConfig();
+      if (cfg.stagger !== "none") {
+        const key = `${centerCol},${centerRow}`;
+        const prev = state.manualCells.get(key);
+        if (!prev || prev.t !== 0 || prev.a !== pIdx) {
+          state.manualCells.set(key, { t: 0, a: pIdx, b: -1 });
+          return true;
+        }
+        return false;
+      }
       const half = brush === "color" ? Math.floor(state.paintSize / 2) : 0;
       let changed = false;
       for (let r = centerRow - half; r <= centerRow + half; r++) {
@@ -7180,6 +9849,10 @@
     paintClearBtn.addEventListener("click", () => {
       state.paintMask.fill(0);
       state.manualCells.clear();
+      state.activeMathPattern = "";
+      syncMathPropsButton();
+      closeMathPropsPopover();
+      syncMathPropsButton();
       renderQuilt();
       recordHistory("Cleared painted areas");
     });

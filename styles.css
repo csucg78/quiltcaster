@@ -794,6 +794,337 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* Modern Compact Pill Toggle Switch */
+.layout-select-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.78rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.layout-select-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.layout-select {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8rem;
+  padding: 0.36rem 0.48rem;
+}
+
+.math-toolbar-group {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.math-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 210px;
+}
+
+.math-menu-trigger.has-pattern {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: #fbf3ee;
+}
+
+.math-menu-trigger-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.math-menu-popover {
+  position: fixed;
+  z-index: 65;
+  width: 224px;
+  padding: 0.35rem;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 14px 36px rgba(34, 31, 26, 0.16), 0 2px 8px rgba(34, 31, 26, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.math-cat-row {
+  position: relative;
+}
+
+.math-cat-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  padding: 0.46rem 0.6rem;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.math-cat-btn:hover,
+.math-cat-row.is-open > .math-cat-btn {
+  background: #f5efe6;
+  color: var(--accent);
+}
+
+.math-cat-chevron {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.math-submenu {
+  position: absolute;
+  top: -0.35rem;
+  left: calc(100% + 6px);
+  width: 228px;
+  padding: 0.35rem;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 14px 36px rgba(34, 31, 26, 0.16), 0 2px 8px rgba(34, 31, 26, 0.06);
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 66;
+}
+
+.math-cat-row.is-open > .math-submenu {
+  display: flex;
+}
+
+.math-sub-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  padding: 0.44rem 0.6rem;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.79rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.math-sub-btn:hover {
+  background: #f5efe6;
+}
+
+.math-sub-btn.is-active {
+  background: #fbf3ee;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+@media (max-width: 600px) {
+  .math-submenu {
+    position: static;
+    width: 100%;
+    margin-top: 2px;
+    padding: 0.2rem 0 0.25rem 0.6rem;
+    border: none;
+    box-shadow: none;
+    background: transparent;
+  }
+}
+
+.math-props-trigger {
+  padding: 0.36rem 0.48rem;
+  min-height: 0;
+  flex-shrink: 0;
+}
+
+.math-props-trigger.is-open {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: #fbf3ee;
+}
+
+.math-props-popover {
+  width: 288px;
+}
+
+.math-props-body {
+  padding: 0.7rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-height: 66vh;
+  overflow-y: auto;
+}
+
+.math-props-divider {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  padding-top: 0.45rem;
+  margin-top: 0.1rem;
+  border-top: 1px solid var(--border);
+}
+
+.math-transform-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem 0.65rem;
+}
+
+.math-prop-control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+}
+
+.math-prop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.math-prop-select {
+  width: 100%;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text);
+  background: #f8f5ef;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.32rem 0.45rem;
+  outline: none;
+}
+
+.math-prop-select:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.math-props-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0.8rem;
+  border-top: 1px solid var(--border);
+  background: #fcfaf7;
+}
+
+.math-props-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.math-props-check input {
+  accent-color: var(--accent);
+}
+
+.math-reset-btn {
+  color: var(--accent);
+}
+
+/* Map & Satellite Popover */
+.map-popover {
+  width: 300px;
+}
+
+.map-popover-body {
+  padding: 0.75rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.map-location-input {
+  width: 100%;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text);
+  background: #f8f5ef;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 0.42rem 0.55rem;
+  outline: none;
+}
+
+.map-location-input:focus {
+  background: var(--surface);
+  border-color: var(--accent);
+}
+
+.map-quick-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.32rem;
+}
+
+.map-chip {
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: #f5efe6;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.16rem 0.48rem;
+  cursor: pointer;
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+
+.map-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.map-status {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.map-status.is-error {
+  color: var(--danger);
+}
+
+.map-load-btn {
+  width: 100%;
+  justify-content: center;
+}
+
 .switch-row {
   display: flex;
   align-items: center;
@@ -1647,6 +1978,26 @@ input[type="range"]::-moz-range-thumb {
   gap: 0.4rem;
   padding-top: 0.55rem;
   border-top: 1px solid var(--border);
+}
+
+.swatch-library-tabs {
+  display: flex;
+  width: 100%;
+}
+
+.swatch-library-tabs .segmented-btn {
+  flex: 1;
+  text-align: center;
+  padding: 0.24rem 0.22rem;
+  font-size: 0.68rem;
+}
+
+.swatch-library-chip {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 4px;
+  border: 1px solid rgba(34, 31, 26, 0.14);
+  display: block;
 }
 
 .swatch-library-head {

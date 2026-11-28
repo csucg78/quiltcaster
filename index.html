@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="64x64" href="favicon-v2.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-v2.png" />
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon-v2.png" />
-  <link rel="manifest" href="site.webmanifest?v=52" />
-  <link rel="stylesheet" href="styles.css?v=52" />
+  <link rel="manifest" href="site.webmanifest?v=68" />
+  <link rel="stylesheet" href="styles.css?v=68" />
 </head>
 <body>
   <header class="topbar">
@@ -20,7 +20,7 @@
       <img class="brand-icon" src="apple-touch-icon-v2.png" width="38" height="38" alt="" />
       <div>
         <h1>Miriam's Quiltcaster</h1>
-        <p class="tagline">A quilt design studio.</p>
+        <p class="tagline">A quilt design studio built on Samish Island.</p>
       </div>
     </div>
     <div class="topbar-right">
@@ -68,9 +68,9 @@
         </div>
         <span class="topbar-divider" aria-hidden="true"></span>
         <div class="action-group" role="group" aria-label="Pattern file actions">
-          <button type="button" class="btn btn-ghost" id="new-image-btn" title="Start from a different picture">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
-            New Image
+          <button type="button" class="btn btn-ghost" id="new-image-btn" title="Start a new quilt (from an image, blank canvas, or saved file)">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            New Quilt
           </button>
           <button type="button" class="btn btn-ghost" id="open-pattern-btn-top" title="Open a saved .quilt pattern">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
@@ -119,7 +119,7 @@
             </button>
             <button type="button" class="btn btn-secondary btn-landing" id="blank-quilt-btn">
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3Z"/><path d="M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7"/></svg>
-              Paint Blank Quilt
+              Blank Canvas
             </button>
             <button type="button" class="btn btn-secondary btn-landing" id="open-pattern-btn">
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
@@ -155,6 +155,8 @@
     <input type="file" id="file-input" accept="image/*,.quilt,.json" hidden />
 
     <input type="file" id="fabric-pattern-input" accept="image/*" hidden />
+
+    <input type="file" id="import-image-input" accept="image/*" hidden />
 
     <!-- Swatch Editor Popover (solid color + optional fabric print upload) -->
     <div class="swatch-popover" id="swatch-popover" role="dialog" aria-label="Edit fabric swatch" hidden>
@@ -214,19 +216,109 @@
         </button>
 
         <div class="swatch-library-wrap">
+          <div class="swatch-library-tabs-row">
+            <div class="segmented swatch-library-tabs" role="tablist" aria-label="Fabric library">
+              <button type="button" class="segmented-btn is-active" data-lib-tab="kona" role="tab" aria-selected="true" title="Robert Kaufman Kona Cotton Solids">Kona</button>
+              <button type="button" class="segmented-btn" data-lib-tab="kaffe" role="tab" aria-selected="false" title="Kaffe Fassett Classics &amp; Collective">Kaffe</button>
+              <button type="button" class="segmented-btn" data-lib-tab="brandon" role="tab" aria-selected="false" title="Brandon Mably · Kaffe Fassett Collective">Brandon</button>
+              <button type="button" class="segmented-btn" data-lib-tab="pj" role="tab" aria-selected="false" title="Philip Jacobs · Kaffe Fassett Collective">Philip</button>
+            </div>
+          </div>
           <div class="swatch-library-head">
-            <span>Philip Jacobs Library</span>
+            <span id="swatch-library-caption">Closest Kona matches</span>
             <input
               type="search"
               class="swatch-library-search"
               id="swatch-library-search"
-              placeholder="Filter prints…"
-              aria-label="Filter Philip Jacobs fabric prints"
+              placeholder="Filter…"
+              aria-label="Filter fabric library"
             />
           </div>
-          <div class="swatch-library-grid" id="swatch-library-grid" role="listbox" aria-label="Philip Jacobs fabric prints"></div>
+          <div class="swatch-library-grid" id="swatch-library-grid" role="listbox" aria-label="Fabric library"></div>
         </div>
       </div>
+    </div>
+
+    <!-- Pattern Properties Popover (live parameter controls for fractal & math generators) -->
+    <div class="swatch-popover math-props-popover" id="math-props-popover" role="dialog" aria-label="Pattern properties" hidden>
+      <div class="swatch-popover-header">
+        <span class="swatch-popover-title" id="math-props-title">Pattern Properties</span>
+        <button type="button" class="swatch-popover-close" id="math-props-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="math-props-body" id="math-props-body"></div>
+      <div class="math-props-footer">
+        <label class="math-props-check">
+          <input type="checkbox" id="math-reverse-palette" />
+          <span>Reverse palette</span>
+        </label>
+        <button type="button" class="swatch-link-btn math-reset-btn" id="math-props-reset">Reset defaults</button>
+      </div>
+    </div>
+
+    <!-- Map & Satellite Location Popover -->
+    <div class="swatch-popover map-popover" id="map-popover" role="dialog" aria-label="Map and satellite quilt generator" hidden>
+      <div class="swatch-popover-header">
+        <span class="swatch-popover-title">Map &amp; Satellite</span>
+        <button type="button" class="swatch-popover-close" id="map-popover-close" aria-label="Close">&times;</button>
+      </div>
+      <form class="map-popover-body" id="map-form">
+        <div class="math-prop-control">
+          <div class="math-prop-head">
+            <label for="map-location-input">Location</label>
+          </div>
+          <div class="map-search-row">
+            <input
+              type="text"
+              class="map-location-input"
+              id="map-location-input"
+              value="Samish Island, WA"
+              placeholder="City, island, landmark, or lat, lon"
+              autocomplete="off"
+            />
+          </div>
+          <div class="map-quick-chips">
+            <button type="button" class="map-chip" data-map-loc="Samish Island, WA" data-map-zoom="13">Samish Island</button>
+            <button type="button" class="map-chip" data-map-loc="Venice, Italy" data-map-zoom="14">Venice</button>
+            <button type="button" class="map-chip" data-map-loc="Grand Canyon, AZ" data-map-zoom="12">Grand Canyon</button>
+            <button type="button" class="map-chip" data-map-loc="Mount Rainier, WA" data-map-zoom="12">Mt. Rainier</button>
+          </div>
+        </div>
+
+        <div class="math-prop-control">
+          <div class="math-prop-head">
+            <label for="map-style-select">Map layer</label>
+          </div>
+          <select id="map-style-select" class="math-prop-select">
+            <option value="satellite">Satellite Imagery</option>
+            <option value="voyager">Clean Street Map (No Labels)</option>
+            <option value="topo">Topographic Map</option>
+            <option value="relief">Shaded Terrain &amp; Coast</option>
+          </select>
+        </div>
+
+        <div class="math-prop-control">
+          <div class="math-prop-head">
+            <label for="map-zoom-slider">Zoom level</label>
+            <span class="control-value" id="map-zoom-value">13</span>
+          </div>
+          <input type="range" id="map-zoom-slider" min="6" max="16" step="1" value="13" />
+          <div class="control-meta">
+            <span>Regional</span>
+            <span>Neighborhood</span>
+          </div>
+        </div>
+
+        <label class="math-props-check">
+          <input type="checkbox" id="map-extract-palette" checked />
+          <span>Extract palette colors from map</span>
+        </label>
+
+        <p class="map-status" id="map-status" hidden></p>
+
+        <button type="submit" class="btn btn-primary btn-small map-load-btn" id="map-load-btn">
+          Load Satellite / Map
+        </button>
+      </form>
     </div>
 
     <!-- Workspace (revealed once an image is loaded) -->
@@ -251,7 +343,18 @@
             <span>Fine</span>
           </div>
 
-          <label class="switch-row" for="hst-toggle">
+          <div class="layout-select-row">
+            <label class="layout-select-label" for="grid-layout-select">Layout</label>
+            <select id="grid-layout-select" class="quilt-preset-select layout-select" aria-label="Quilt block layout">
+              <option value="grid">Square Grid (1:1)</option>
+              <option value="staggered">Staggered Squares (1:1)</option>
+              <option value="brick">Brick / Running Bond (3:2)</option>
+              <option value="subway">Subway Tile (2:1)</option>
+              <option value="vertical-brick">Vertical Brick / Half-Drop</option>
+            </select>
+          </div>
+
+          <label class="switch-row" id="hst-switch-row" for="hst-toggle">
             <span class="switch-label">Half-square triangles</span>
             <input type="checkbox" id="hst-toggle" class="toggle-switch" />
           </label>
@@ -390,11 +493,11 @@
 
             <div class="dimensions-summary dimensions-summary-single" id="dimensions-summary">
               <div class="dim-stat dim-stat-inline">
-                <span class="dim-label">Cut square</span>
+                <span class="dim-label" id="cut-square-label">Cut square</span>
                 <strong class="dim-value" id="cut-square-value">3"</strong>
               </div>
               <div class="dim-stat dim-stat-inline" id="hst-cut-stat" hidden>
-                <span class="dim-label">HST starter</span>
+                <span class="dim-label" id="hst-cut-label">HST starter</span>
                 <strong class="dim-value" id="hst-cut-square-value">3 3/8"</strong>
               </div>
             </div>
@@ -425,6 +528,8 @@
 
           <div class="palette-actions">
             <button type="button" class="btn btn-subtle" id="add-color-btn">+ Add Fabric</button>
+            <button type="button" class="btn btn-subtle" id="harmony-palette-btn" title="Generate a harmonious fabric palette using color-wheel math (analogous, complementary, triadic, etc.)">Harmony</button>
+            <button type="button" class="btn btn-subtle" id="snap-kona-btn" title="Snap all solid colors in your palette to their exact closest Robert Kaufman Kona Cotton solid">Snap to Kona</button>
             <button type="button" class="btn btn-subtle" id="reset-palette-btn">Re-extract</button>
           </div>
         </div>
@@ -433,6 +538,16 @@
       <section class="preview-panel" aria-label="Live quilt preview">
         <div class="preview-toolbar" id="preview-toolbar">
           <div class="preview-toolbar-group" role="group" aria-label="Canvas editing tools">
+            <button
+              type="button"
+              class="btn btn-ghost btn-small"
+              id="import-image-btn"
+              title="Import a photo into your current blank quilt using your chosen palette and layout"
+              hidden
+            >
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+              Import Image
+            </button>
             <button
               type="button"
               class="btn btn-ghost btn-small"
@@ -451,6 +566,40 @@
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3Z"/><path d="M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7"/><path d="M14.5 17.5 4.5 15"/></svg>
               <span id="paint-btn-label">Paint</span>
             </button>
+            <div class="math-toolbar-group" id="math-menu-wrap">
+              <button
+                type="button"
+                class="btn btn-ghost btn-small math-menu-trigger"
+                id="math-menu-btn"
+                aria-haspopup="menu"
+                aria-expanded="false"
+                title="Generate botanical, fractal, or mathematical quilt patterns from your current palette"
+              >
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z"/></svg>
+                <span class="math-menu-trigger-label" id="math-menu-label">Generate</span>
+                <svg class="icon icon-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-small math-props-trigger"
+                id="math-props-btn"
+                title="Adjust pattern parameters live"
+                aria-label="Pattern properties"
+                hidden
+              >
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-small"
+                id="shuffle-quilt-btn"
+                title="Shuffle: pick a new pattern, parameters, and a color-wheel harmonious fabric palette"
+              >
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+                Shuffle
+              </button>
+              <div class="math-menu-popover" id="math-menu-popover" role="menu" aria-label="Pattern categories" hidden></div>
+            </div>
           </div>
           <div class="preview-toolbar-actions" role="group" aria-label="Preview display options">
             <button
@@ -599,6 +748,6 @@
   </main>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-  <script src="app.js?v=52" defer></script>
+  <script src="app.js?v=68" defer></script>
 </body>
 </html>
