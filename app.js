@@ -2120,10 +2120,19 @@
       color.r = r;
       color.g = g;
       color.b = b;
+      // Picking a solid color switches a printed swatch back to that solid color immediately on the canvas
+      if (color.patternDataUrl) {
+        color.patternDataUrl = null;
+        color.patternImg = null;
+        color.patternName = null;
+        color.patternAvgRgb = null;
+        color.libraryId = null;
+      }
       swatchPopoverHex.textContent = e.target.value.toUpperCase();
+      syncSwatchPopover();
       renderPaletteSwatches();
       renderQuilt();
-      recordHistory(`Edited Fabric ${code} (${getFabricDisplayName(color)})`, `swatch-${color.id}`);
+      recordHistory(`Changed Fabric ${code} to ${getFabricDisplayName(color)}`, `swatch-${color.id}`);
     });
   }
   if (swatchUploadPrintBtn && fabricPatternInput) {
@@ -5901,31 +5910,100 @@
     patternInput.value = "";
   });
 
-  // Keyboard shortcuts: Cmd/Ctrl + S (Save), Cmd/Ctrl + Z (Undo), Cmd/Ctrl + Shift + Z / Ctrl + Y (Redo), Escape (Close popover)
+  // Keyboard shortcuts:
+  //   Cmd/Ctrl + S (Save), Cmd/Ctrl + Z (Undo), Cmd/Ctrl + Shift + Z / Ctrl + Y (Redo)
+  //   Drawing tools (when not typing): P (Paint mode), B (Fabric brush), / (/ HST), \ (\ HST),
+  //   G or F (Flood fill), E (Reset / Background A), T (Auto Edge on photos),
+  //   [ / ] (Brush size 1x1 / 3x3 / 5x5), 1-9 (Pick Fabric A-I), S (Toggle seams), Esc (Close popover / exit paint)
   window.addEventListener("keydown", (e) => {
+    const tag = document.activeElement ? document.activeElement.tagName : "";
+    const isTyping = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || document.activeElement?.isContentEditable;
+
     if (e.key === "Escape") {
+      const hadPopover = (historyPopover && !historyPopover.hidden) || (swatchPopover && !swatchPopover.hidden);
       closeHistoryPopover();
       closeSwatchPopover();
+      if (!hadPopover && state.paintMode && !isTyping) {
+        setPaintMode(false);
+      }
       return;
     }
     if (!state.image) return;
+
     const mod = e.metaKey || e.ctrlKey;
-    if (!mod) return;
     const key = e.key.toLowerCase();
-    if (key === "s") {
-      e.preventDefault();
-      savePattern();
+    if (mod) {
+      if (key === "s") {
+        e.preventDefault();
+        savePattern();
+        return;
+      }
+      if (isTyping) return;
+      if (key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if ((key === "z" && e.shiftKey) || key === "y") {
+        e.preventDefault();
+        redo();
+      }
       return;
     }
-    // Let native text-input undo/redo work normally when typing in an input field
-    const tag = document.activeElement ? document.activeElement.tagName : "";
-    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-    if (key === "z" && !e.shiftKey) {
+
+    // Single-key drawing shortcuts (ignore when typing or holding Alt, or while crop modal is open)
+    if (isTyping || e.altKey || (cropStage && !cropStage.hidden)) return;
+
+    if (key === "p") {
       e.preventDefault();
-      undo();
-    } else if ((key === "z" && e.shiftKey) || key === "y") {
+      setPaintMode(!state.paintMode);
+    } else if (key === "b") {
       e.preventDefault();
-      redo();
+      setPaintMode(true, "color");
+    } else if (e.key === "/") {
+      e.preventDefault();
+      setPaintMode(true, "hst-slash");
+    } else if (e.key === "\\") {
+      e.preventDefault();
+      setPaintMode(true, "hst-back");
+    } else if (key === "g" || key === "f") {
+      e.preventDefault();
+      setPaintMode(true, "fill");
+    } else if (key === "t" && !state.isBlankQuilt) {
+      e.preventDefault();
+      setPaintMode(true, "hst");
+    } else if (key === "e") {
+      e.preventDefault();
+      if (state.isBlankQuilt) {
+        state.paintFabricIdx = 0; // Background Fabric A as eraser on blank quilt
+        setPaintMode(true, "color");
+        renderPaintFabricStrip();
+      } else {
+        setPaintMode(true, "auto");
+      }
+    } else if (e.key === "[") {
+      if (!state.paintMode) return;
+      e.preventDefault();
+      setPaintSize(state.paintSize === 5 ? 3 : 1);
+    } else if (e.key === "]") {
+      if (!state.paintMode) return;
+      e.preventDefault();
+      setPaintSize(state.paintSize === 1 ? 3 : 5);
+    } else if (key === "s") {
+      e.preventDefault();
+      setSeamLinesVisible(!state.showSeamLines);
+      renderQuilt();
+      recordHistory(state.showSeamLines ? "Showed seam lines" : "Hid seam lines");
+    } else if (/^[1-9]$/.test(e.key) && state.paintMode) {
+      const idx = Number(e.key) - 1;
+      if (idx < state.palette.length) {
+        e.preventDefault();
+        state.paintFabricIdx = idx;
+        if (state.paintBrush === "hst" || state.paintBrush === "auto" || state.paintBrush === "square") {
+          setPaintBrush("color");
+        }
+        renderPaintFabricStrip();
+        updatePaintToolbarUI();
+        redrawPreviewWithOverlayOnly();
+      }
     }
   });
 
@@ -6543,12 +6621,17 @@
       if (hasPrint) btn.style.backgroundImage = `url("${color.patternDataUrl}")`;
       btn.setAttribute("role", "radio");
       btn.setAttribute("aria-checked", idx === state.paintFabricIdx ? "true" : "false");
-      btn.title = `Paint with Fabric ${code}: ${displayName}`;
+      btn.title =
+        idx === state.paintFabricIdx
+          ? `Fabric ${code}: ${displayName} — click again to change color or fabric`
+          : `Paint with Fabric ${code}: ${displayName} (click twice to edit)`;
       const span = document.createElement("span");
       span.textContent = code;
       span.style.color = luminance(color.r, color.g, color.b) > 145 ? "#1c1914" : "#ffffff";
       btn.appendChild(span);
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const wasActive = state.paintFabricIdx === idx;
         state.paintFabricIdx = idx;
         if (state.paintBrush === "hst" || state.paintBrush === "auto" || state.paintBrush === "square") {
           setPaintBrush("color");
@@ -6556,6 +6639,10 @@
         renderPaintFabricStrip();
         updatePaintToolbarUI();
         redrawPreviewWithOverlayOnly();
+        if (wasActive) {
+          const freshChip = paintFabricStrip.querySelectorAll(".paint-fabric-chip")[idx] || btn;
+          openSwatchPopover(color, freshChip);
+        }
       });
       paintFabricStrip.appendChild(btn);
     });

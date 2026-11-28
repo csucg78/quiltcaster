@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="64x64" href="favicon-v2.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-v2.png" />
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon-v2.png" />
-  <link rel="manifest" href="site.webmanifest?v=50" />
-  <link rel="stylesheet" href="styles.css?v=50" />
+  <link rel="manifest" href="site.webmanifest?v=52" />
+  <link rel="stylesheet" href="styles.css?v=52" />
 </head>
 <body>
   <header class="topbar">
@@ -165,7 +165,7 @@
 
       <div class="swatch-popover-section">
         <label class="swatch-popover-color-row" for="swatch-popover-color">
-          <span>Matching color</span>
+          <span>Solid color</span>
           <span class="swatch-popover-color-chip">
             <input type="color" id="swatch-popover-color" value="#b84d2c" />
             <span class="swatch-popover-hex" id="swatch-popover-hex">#B84D2C</span>
@@ -484,20 +484,20 @@
               <div class="paint-toolbar-group">
                 <span class="paint-group-label">Tool</span>
                 <div class="segmented" role="radiogroup" aria-label="Paint tool mode">
-                  <button type="button" class="segmented-btn" data-paint-brush="color" role="radio" aria-checked="false" title="Paint solid squares with the selected fabric or color">■ Fabric</button>
-                  <button type="button" class="segmented-btn" data-paint-brush="hst-slash" role="radio" aria-checked="false" title="Paint / half-square triangles (click top-left or bottom-right half)">◿ / HST</button>
-                  <button type="button" class="segmented-btn" data-paint-brush="hst-back" role="radio" aria-checked="false" title="Paint \ half-square triangles (click bottom-left or top-right half)">◺ \ HST</button>
-                  <button type="button" class="segmented-btn" data-paint-brush="fill" role="radio" aria-checked="false" title="Flood-fill a connected region with the selected fabric">Fill</button>
-                  <button type="button" class="segmented-btn is-active" data-paint-brush="hst" data-photo-only="true" role="radio" aria-checked="true" title="Smooth stepped photo edges with Half-Square Triangles">△ Auto Edge</button>
-                  <button type="button" class="segmented-btn" data-paint-brush="auto" data-photo-only="true" role="radio" aria-checked="false" title="Restore brushed cells back to photo match">↺ Reset</button>
+                  <button type="button" class="segmented-btn" data-paint-brush="color" role="radio" aria-checked="false" title="Paint solid squares with the selected fabric (B)">■ Fabric</button>
+                  <button type="button" class="segmented-btn" data-paint-brush="hst-slash" role="radio" aria-checked="false" title="Paint / half-square triangles (/)">◿ / HST</button>
+                  <button type="button" class="segmented-btn" data-paint-brush="hst-back" role="radio" aria-checked="false" title="Paint \ half-square triangles (\)">◺ \ HST</button>
+                  <button type="button" class="segmented-btn" data-paint-brush="fill" role="radio" aria-checked="false" title="Flood-fill a connected region with the selected fabric (G or F)">Fill</button>
+                  <button type="button" class="segmented-btn is-active" data-paint-brush="hst" data-photo-only="true" role="radio" aria-checked="true" title="Smooth stepped photo edges with Half-Square Triangles (T)">△ Auto Edge</button>
+                  <button type="button" class="segmented-btn" data-paint-brush="auto" data-photo-only="true" role="radio" aria-checked="false" title="Restore brushed cells back to photo match (E)">↺ Reset</button>
                 </div>
               </div>
               <div class="paint-toolbar-group">
                 <span class="paint-group-label">Size</span>
                 <div class="segmented" role="radiogroup" aria-label="Brush size">
-                  <button type="button" class="segmented-btn" data-paint-size="1" role="radio" aria-checked="false">1×1</button>
-                  <button type="button" class="segmented-btn is-active" data-paint-size="3" role="radio" aria-checked="true">3×3</button>
-                  <button type="button" class="segmented-btn" data-paint-size="5" role="radio" aria-checked="false">5×5</button>
+                  <button type="button" class="segmented-btn" data-paint-size="1" role="radio" aria-checked="false" title="1×1 brush ([ to shrink, ] to grow)">1×1</button>
+                  <button type="button" class="segmented-btn is-active" data-paint-size="3" role="radio" aria-checked="true" title="3×3 brush ([ to shrink, ] to grow)">3×3</button>
+                  <button type="button" class="segmented-btn" data-paint-size="5" role="radio" aria-checked="false" title="5×5 brush ([ to shrink, ] to grow)">5×5</button>
                 </div>
               </div>
             </div>
@@ -599,6 +599,6 @@
   </main>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-  <script src="app.js?v=50" defer></script>
+  <script src="app.js?v=52" defer></script>
 </body>
 </html>
