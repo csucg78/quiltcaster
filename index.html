@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="64x64" href="favicon-v3.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-v3.png" />
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon-v3.png" />
-  <link rel="manifest" href="site.webmanifest?v=93" />
-  <link rel="stylesheet" href="styles.css?v=93" />
+  <link rel="manifest" href="site.webmanifest?v=96" />
+  <link rel="stylesheet" href="styles.css?v=96" />
 </head>
 <body>
   <header class="topbar">
@@ -467,7 +467,10 @@
           </div>
 
           <label class="switch-row" id="hst-switch-row" for="hst-toggle">
-            <span class="switch-label">Half-square triangles</span>
+            <span class="switch-label">
+              Half-square triangles
+              <span class="switch-hint" id="hst-layout-hint" hidden>(switches to Square Grid)</span>
+            </span>
             <input type="checkbox" id="hst-toggle" class="toggle-switch" />
           </label>
 
@@ -680,6 +683,16 @@
               >
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3Z"/><path d="M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7"/><path d="M14.5 17.5 4.5 15"/></svg>
                 <span id="paint-btn-label">Paint</span>
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-small pan-tool-btn"
+                id="fill-toggle-btn"
+                aria-pressed="false"
+                aria-label="Flood fill bucket tool"
+                title="Flood-fill bucket tool (G / F) — click a region to fill, Shift+Click to replace all matching squares"
+              >
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2c.8.8 2 .8 2.8 0L19 11Z"/><path d="m5 2 5 5"/><path d="M2 13h15"/><path d="M22 20a2 2 0 1 1-4 0c0-1.6 1.7-2.4 2-4 .3 1.6 2 2.4 2 4Z"/></svg>
               </button>
               <button
                 type="button"
@@ -947,6 +960,6 @@
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-  <script src="app.js?v=93" defer></script>
+  <script src="app.js?v=96" defer></script>
 </body>
 </html>

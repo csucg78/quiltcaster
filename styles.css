@@ -2640,6 +2640,17 @@ input[type="range"].harmony-hue-slider::-moz-range-thumb {
   opacity: 1;
 }
 
+.switch-hint {
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-left: 0.25rem;
+}
+
+.switch-row.is-staggered-hint {
+  opacity: 0.72;
+}
+
 .btn:focus-visible,
 .segmented-btn:focus-visible,
 .harmony-rule-btn:focus-visible,

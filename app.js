@@ -67,6 +67,7 @@
   const seamLinesBtn = document.getElementById("seam-lines-btn");
   const thirdsOverlayBtn = document.getElementById("thirds-overlay-btn");
   const hstSwitchRow = document.getElementById("hst-switch-row");
+  const hstLayoutHint = document.getElementById("hst-layout-hint");
   const hstToggle = document.getElementById("hst-toggle");
   const hstControls = document.getElementById("hst-controls");
   const hstModeBtns = document.querySelectorAll("[data-hst-mode]");
@@ -77,6 +78,7 @@
   const hstRatioSlider = document.getElementById("hst-ratio-slider");
   const hstRatioValue = document.getElementById("hst-ratio-value");
   const paintToggleBtn = document.getElementById("paint-toggle-btn");
+  const fillToggleBtn = document.getElementById("fill-toggle-btn");
   const panToggleBtn = document.getElementById("pan-toggle-btn");
   const paintBtnLabel = document.getElementById("paint-btn-label");
   const paintToolbar = document.getElementById("paint-toolbar");
@@ -1144,7 +1146,14 @@
       gridLayoutSelect.value = cfg.id;
     }
     const hstAllowed = cfg.supportsHst;
-    if (hstSwitchRow) hstSwitchRow.hidden = !hstAllowed;
+    if (hstSwitchRow) {
+      hstSwitchRow.hidden = false;
+      hstSwitchRow.classList.toggle("is-staggered-hint", !hstAllowed);
+    }
+    if (hstLayoutHint) hstLayoutHint.hidden = hstAllowed;
+    if (hstToggle && !hstAllowed && hstToggle.checked) {
+      hstToggle.checked = false;
+    }
     if (hstControls) hstControls.hidden = !hstAllowed || !state.hstEnabled;
     // Hide HST paint brushes when in staggered rectangular layouts
     document.querySelectorAll('[data-paint-brush="hst-slash"], [data-paint-brush="hst-back"], [data-paint-brush="hst"]').forEach((el) => {
@@ -4240,9 +4249,18 @@
   if (hstToggle) {
     hstToggle.addEventListener("change", () => {
       state.hstEnabled = hstToggle.checked;
+      if (state.hstEnabled && !getLayoutConfig().supportsHst) {
+        state.gridLayout = "grid";
+        syncGridLayoutUI();
+        computeSquareAverages();
+      }
       if (hstControls) hstControls.hidden = !state.hstEnabled;
       updateQuiltDimensions();
-      renderQuilt();
+      if (state.activeMathPattern) {
+        applyMathPattern(state.activeMathPattern, { record: false });
+      } else {
+        renderQuilt();
+      }
       recordHistory(state.hstEnabled ? "Enabled half-square triangles" : "Disabled half-square triangles");
     });
   }
@@ -7698,12 +7716,17 @@
     const isGeneratedPattern = Boolean(state.activeMathPattern);
     const hasPainted = !isGeneratedPattern && state.hasPaintedMask;
     const activeCount = isGeneratedPattern ? 0 : state.paintedCellsCount;
+    const isFillActive = state.paintMode && state.paintBrush === "fill";
     if (paintToggleBtn) {
-      paintToggleBtn.classList.toggle("is-painting", state.paintMode);
+      paintToggleBtn.classList.toggle("is-painting", state.paintMode && !isFillActive);
       paintToggleBtn.classList.toggle("is-cropped", !state.paintMode && hasPainted);
     }
+    if (fillToggleBtn) {
+      fillToggleBtn.classList.toggle("is-painting", isFillActive);
+      fillToggleBtn.setAttribute("aria-pressed", isFillActive ? "true" : "false");
+    }
     if (paintBtnLabel) {
-      if (state.paintMode) {
+      if (state.paintMode && !isFillActive) {
         paintBtnLabel.textContent = "Painting";
       } else if (activeCount > 0) {
         paintBtnLabel.textContent = `Paint (${activeCount})`;
@@ -7723,7 +7746,7 @@
       } else if (state.paintBrush === "hst-slash" || state.paintBrush === "hst-back") {
         paintStatusLabel.textContent = `Painting ${state.paintBrush === "hst-slash" ? "/" : "\\"} HST with ${fabLabel} · Shift for lines`;
       } else if (state.paintBrush === "fill") {
-        paintStatusLabel.textContent = `Click any region to fill with ${fabLabel}`;
+        paintStatusLabel.textContent = `Click region to flood-fill with ${fabLabel} · Shift+Click replaces all matching`;
       } else if (activeCount > 0) {
         paintStatusLabel.textContent = `${activeCount} custom cell${activeCount === 1 ? "" : "s"} · Shift for straight lines`;
       } else {
@@ -7803,6 +7826,39 @@
       params: [
         { key: "points", label: "Star points", type: "range", min: 4, max: 12, step: 2, def: 8, fmt: (v) => `${v}-pt` },
         { key: "rings", label: "Color bands", type: "range", min: 1, max: 5, step: 0.5, def: 2.0, fmt: (v) => `${v.toFixed(1)}×` },
+      ],
+    },
+    gradient: {
+      label: "Color Wash & Gradient",
+      params: [
+        {
+          key: "shape",
+          label: "Gradient shape",
+          type: "select",
+          def: "linear",
+          options: [
+            { value: "linear", label: "Linear Ombré" },
+            { value: "radial", label: "Radial Halo Glow" },
+            { value: "diamond", label: "Diamond Ombré" },
+            { value: "conic", label: "Conic Color Sweep" },
+            { value: "reflected", label: "Mirrored Horizon" },
+          ],
+        },
+        {
+          key: "blend",
+          label: "Transition style",
+          type: "select",
+          def: "bayer",
+          options: [
+            { value: "bayer", label: "Color-Wash Checker Dither" },
+            { value: "scatter", label: "Watercolor Organic Scatter" },
+            { value: "hst", label: "Diagonal HST Fade" },
+            { value: "smooth", label: "Clean Stepped Bands" },
+          ],
+        },
+        { key: "dither", label: "Blend softness", type: "range", min: 0, max: 1, step: 0.05, def: 0.65, fmt: (v) => `${Math.round(v * 100)}%` },
+        { key: "cycles", label: "Repeat cycles", type: "range", min: 0.5, max: 4.0, step: 0.25, def: 1.0, fmt: (v) => `${v.toFixed(2)}×` },
+        { key: "bias", label: "Light / dark balance", type: "range", min: -0.8, max: 0.8, step: 0.1, def: 0.0, fmt: (v) => (v > 0 ? `+${v.toFixed(1)}` : v.toFixed(1)) },
       ],
     },
     monogram: {
@@ -8335,7 +8391,7 @@
     },
     {
       label: "Classic & Modern Quilt",
-      items: ["monogram", "lone-star", "tumbling-blocks", "chevron", "tartan", "topo-map", "sunburst"],
+      items: ["gradient", "monogram", "lone-star", "tumbling-blocks", "chevron", "tartan", "topo-map", "sunburst"],
     },
     {
       label: "Heritage & Decorative",
@@ -8510,6 +8566,17 @@
       panToggleBtn.setAttribute("aria-pressed", state.panMode ? "true" : "false");
     }
     syncCanvasDragCursor();
+  }
+
+  if (fillToggleBtn) {
+    fillToggleBtn.addEventListener("click", () => {
+      if (!state.image) return;
+      if (state.paintMode && state.paintBrush === "fill") {
+        setPaintMode(false);
+      } else {
+        setPaintMode(true, "fill");
+      }
+    });
   }
 
   if (panToggleBtn) {
@@ -9351,7 +9418,68 @@
       const ny = 0.5 + dtx * sinR + dty * cosR;
       const key = `${cell.c},${cell.r}`;
 
-      if (patternId === "monogram") {
+      if (patternId === "gradient") {
+        // Quilt Color-Wash & Ombré Gradient (Linear, Radial, Diamond, Conic, Mirrored)
+        // with Bayer 4x4 checkerboard color-wash, organic scatter, HST diagonal fade, or clean stepped bands
+        const shape = String(getMathParam(patternId, "shape") || "linear");
+        const blend = String(getMathParam(patternId, "blend") || "bayer");
+        const ditherAmt = clampNumber(Number(getMathParam(patternId, "dither")), 0, 1, 0.65);
+        const cycles = Math.max(0.25, Number(getMathParam(patternId, "cycles")) || 1.0);
+        const bias = clampNumber(Number(getMathParam(patternId, "bias")), -0.8, 0.8, 0.0);
+
+        let tRaw = 0;
+        if (shape === "radial") {
+          tRaw = Math.hypot(nx - 0.5, ny - 0.5) * 1.42;
+        } else if (shape === "diamond") {
+          tRaw = (Math.abs(nx - 0.5) + Math.abs(ny - 0.5)) * 1.05;
+        } else if (shape === "conic") {
+          tRaw = (Math.atan2(ny - 0.5, nx - 0.5) + Math.PI) / (Math.PI * 2);
+        } else if (shape === "reflected") {
+          tRaw = Math.abs(ny - 0.5) * 2.0;
+        } else {
+          // Linear vertical ombré (use universal Rotate slider for horizontal or any diagonal angle!)
+          tRaw = ny;
+        }
+
+        let t = tRaw * cycles;
+        if (cycles > 1.001) {
+          // Smooth triangle-wave reflection on multi-cycle repeats so bands flow back and forth cleanly
+          const m = ((t % 2) + 2) % 2;
+          t = m <= 1 ? m : 2 - m;
+        }
+        t = Math.max(0, Math.min(1, t));
+        // Gamma balance bias (-0.8 darkens, +0.8 brightens)
+        const gamma = Math.pow(2, -bias);
+        t = Math.pow(t, gamma);
+
+        const scaled = t * Math.max(1, K - 1);
+        const idxLo = Math.min(K - 1, Math.floor(scaled));
+        const idxHi = Math.min(K - 1, idxLo + 1);
+        const frac = scaled - idxLo;
+
+        if (blend === "hst" && isSquareGrid && K >= 2 && idxLo !== idxHi && frac > 0.5 - ditherAmt * 0.4 && frac < 0.5 + ditherAmt * 0.4) {
+          const diag = (cell.c + cell.r) % 2 === 0 ? 1 : 2;
+          state.manualCells.set(key, { t: diag, a: lumOrder[idxLo], b: lumOrder[idxHi] });
+        } else {
+          let threshold = 0.5;
+          if (blend === "bayer") {
+            // Classic 4x4 Bayer ordered matrix for authentic color-wash checkerboard fade
+            const bayer4 = [
+              [0, 8, 2, 10],
+              [12, 4, 14, 6],
+              [3, 11, 1, 9],
+              [15, 7, 13, 5],
+            ];
+            const bVal = (bayer4[((cell.r % 4) + 4) % 4][((cell.c % 4) + 4) % 4] + 0.5) / 16;
+            threshold = 0.5 + (bVal - 0.5) * ditherAmt;
+          } else if (blend === "scatter") {
+            const rnd = hash2(cell.c, cell.r, 409);
+            threshold = 0.5 + (rnd - 0.5) * ditherAmt;
+          }
+          const chosen = frac >= threshold ? lumOrder[idxHi] : lumOrder[idxLo];
+          state.manualCells.set(key, { t: 0, a: chosen, b: -1 });
+        }
+      } else if (patternId === "monogram") {
         const backdrop = String(getMathParam(patternId, "backdrop") || "frame");
         const mx = Math.floor(((nx + 0.5) / 2) * monogramSize);
         const my = Math.floor(((ny + 0.5) / 2) * monogramSize);
@@ -11639,33 +11767,66 @@
     const startB = state.gridAssignmentsB[startCellIdx] ?? -1;
     if (startType === 0 && startA === targetIdx) return false;
 
+    // Shift+Click: global non-contiguous replace of every matching square across the entire quilt
+    if (shiftHeld) {
+      let changed = false;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const idx = r * cols + c;
+          if ((state.cellTypes[idx] || 0) === startType && state.gridAssignments[idx] === startA && state.gridAssignmentsB[idx] === startB) {
+            state.manualCells.set(`${c},${r}`, { t: 0, a: targetIdx, b: -1 });
+            changed = true;
+          }
+        }
+      }
+      return changed;
+    }
+
+    // Fast O(N) head-pointer BFS flood fill (no O(N^2) Array.shift on large King quilts)
     const visited = new Uint8Array(cols * rows);
-    const queue = [[startCol, startRow]];
+    const queueC = new Int32Array(cols * rows);
+    const queueR = new Int32Array(cols * rows);
+    let head = 0;
+    let tail = 0;
+    queueC[tail] = startCol;
+    queueR[tail] = startRow;
+    tail++;
     visited[startCellIdx] = 1;
     let changed = false;
 
-    while (queue.length > 0) {
-      const [c, r] = queue.shift();
+    while (head < tail) {
+      const c = queueC[head];
+      const r = queueR[head];
+      head++;
       const idx = r * cols + c;
       if ((state.cellTypes[idx] || 0) !== startType || state.gridAssignments[idx] !== startA || state.gridAssignmentsB[idx] !== startB) {
         continue;
       }
       state.manualCells.set(`${c},${r}`, { t: 0, a: targetIdx, b: -1 });
       changed = true;
-      const neighbors = [
-        [c + 1, r],
-        [c - 1, r],
-        [c, r + 1],
-        [c, r - 1],
-      ];
-      for (let k = 0; k < neighbors.length; k++) {
-        const [nc, nr] = neighbors[k];
-        if (nc < 0 || nc >= cols || nr < 0 || nr >= rows) continue;
-        const nIdx = nr * cols + nc;
-        if (!visited[nIdx]) {
-          visited[nIdx] = 1;
-          queue.push([nc, nr]);
-        }
+      if (c + 1 < cols && !visited[idx + 1]) {
+        visited[idx + 1] = 1;
+        queueC[tail] = c + 1;
+        queueR[tail] = r;
+        tail++;
+      }
+      if (c - 1 >= 0 && !visited[idx - 1]) {
+        visited[idx - 1] = 1;
+        queueC[tail] = c - 1;
+        queueR[tail] = r;
+        tail++;
+      }
+      if (r + 1 < rows && !visited[idx + cols]) {
+        visited[idx + cols] = 1;
+        queueC[tail] = c;
+        queueR[tail] = r + 1;
+        tail++;
+      }
+      if (r - 1 >= 0 && !visited[idx - cols]) {
+        visited[idx - cols] = 1;
+        queueC[tail] = c;
+        queueR[tail] = r - 1;
+        tail++;
       }
     }
     return changed;
