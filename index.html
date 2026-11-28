@@ -8,16 +8,16 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Quiltcaster" />
   <title>Miriam's Quiltcaster</title>
-  <link rel="icon" type="image/png" sizes="64x64" href="favicon-v2.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-v2.png" />
-  <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon-v2.png" />
-  <link rel="manifest" href="site.webmanifest?v=75" />
-  <link rel="stylesheet" href="styles.css?v=75" />
+  <link rel="icon" type="image/png" sizes="64x64" href="favicon-v3.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-v3.png" />
+  <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon-v3.png" />
+  <link rel="manifest" href="site.webmanifest?v=89" />
+  <link rel="stylesheet" href="styles.css?v=89" />
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <img class="brand-icon" src="apple-touch-icon-v2.png" width="38" height="38" alt="" />
+      <img class="brand-icon" src="apple-touch-icon-v3.png" width="38" height="38" alt="Miriam" />
       <div>
         <h1>Miriam's Quiltcaster</h1>
         <p class="tagline">A quilt design studio built on Samish Island.</p>
@@ -103,11 +103,10 @@
         <div class="drop-content">
           <div class="drop-icon" aria-hidden="true">
             <div class="drop-medallion">
-              <img class="drop-hero-icon" src="icon-192-v2.png" width="76" height="76" alt="" />
+              <img class="drop-hero-icon" src="icon-192-v3.png" width="76" height="76" alt="Miriam" />
             </div>
           </div>
 
-          <span class="drop-eyebrow">QUILT PATTERN STUDIO</span>
           <h2>Drop a photo to begin</h2>
 
           <div class="drop-actions">
@@ -144,7 +143,6 @@
         </div>
       </div>
 
-      <p class="drop-privacy-note">100% private — processed locally in your browser</p>
       <p class="error-banner" id="error-banner" role="alert" hidden></p>
     </section>
 
@@ -253,76 +251,97 @@
       </div>
     </div>
 
-    <!-- Palette Harmony & Swatch Mapper Popover -->
-    <div class="swatch-popover harmony-popover" id="harmony-popover" role="dialog" aria-label="Mathematically derived palette swapper" hidden>
+    <!-- Palette Mixer & Swatch Mapper Popover -->
+    <div class="swatch-popover harmony-popover" id="harmony-popover" role="dialog" aria-label="Palette mixer and fabric swatch mapper" hidden>
       <div class="swatch-popover-header">
-        <span class="swatch-popover-title">Palette Harmony</span>
+        <span class="swatch-popover-title">Palette Mixer</span>
         <button type="button" class="swatch-popover-close" id="harmony-popover-close" aria-label="Close">&times;</button>
       </div>
       <div class="harmony-popover-body">
-        <div class="math-prop-control">
-          <div class="math-prop-head">
-            <span>Color-wheel math</span>
-            <span class="harmony-formula-hint" id="harmony-formula-hint">0° · 120° · 240°</span>
+        <div class="segmented harmony-mode-tabs" role="tablist" aria-label="Palette source">
+          <button type="button" class="segmented-btn is-active" data-harmony-tab="math" role="tab" aria-selected="true">Color Math</button>
+          <button type="button" class="segmented-btn" data-harmony-tab="curated" role="tab" aria-selected="false">Curated Sets</button>
+        </div>
+
+        <div id="harmony-math-panel" class="harmony-panel-group">
+          <div class="math-prop-control">
+            <div class="math-prop-head">
+              <span>Color-wheel math</span>
+              <span class="harmony-formula-hint" id="harmony-formula-hint">0° · 120° · 240°</span>
+            </div>
+            <div class="harmony-rule-grid" id="harmony-rule-grid" role="radiogroup" aria-label="Color harmony rule">
+              <button type="button" class="harmony-rule-btn" data-harmony-rule="analogous">Analogous</button>
+              <button type="button" class="harmony-rule-btn" data-harmony-rule="complementary">Complementary</button>
+              <button type="button" class="harmony-rule-btn" data-harmony-rule="split-comp">Split-Comp</button>
+              <button type="button" class="harmony-rule-btn is-active" data-harmony-rule="triadic">Triadic</button>
+              <button type="button" class="harmony-rule-btn" data-harmony-rule="tetradic">Tetradic</button>
+              <button type="button" class="harmony-rule-btn" data-harmony-rule="golden">Golden φ</button>
+              <button type="button" class="harmony-rule-btn" data-harmony-rule="double-comp">Double-Comp</button>
+              <button type="button" class="harmony-rule-btn" data-harmony-rule="monochrome">Monochrome</button>
+            </div>
           </div>
-          <div class="harmony-rule-grid" id="harmony-rule-grid" role="radiogroup" aria-label="Color harmony rule">
-            <button type="button" class="harmony-rule-btn" data-harmony-rule="analogous">Analogous</button>
-            <button type="button" class="harmony-rule-btn" data-harmony-rule="complementary">Complementary</button>
-            <button type="button" class="harmony-rule-btn" data-harmony-rule="split-comp">Split-Comp</button>
-            <button type="button" class="harmony-rule-btn is-active" data-harmony-rule="triadic">Triadic</button>
-            <button type="button" class="harmony-rule-btn" data-harmony-rule="tetradic">Tetradic</button>
-            <button type="button" class="harmony-rule-btn" data-harmony-rule="golden">Golden φ</button>
-            <button type="button" class="harmony-rule-btn" data-harmony-rule="double-comp">Double-Comp</button>
-            <button type="button" class="harmony-rule-btn" data-harmony-rule="monochrome">Monochrome</button>
+
+          <div class="math-prop-control">
+            <div class="math-prop-head">
+              <label for="harmony-hue-slider">Base hue</label>
+              <span class="harmony-hue-readout">
+                <span class="harmony-hue-dot" id="harmony-hue-dot"></span>
+                <span class="control-value" id="harmony-hue-value">210°</span>
+              </span>
+            </div>
+            <input type="range" class="harmony-hue-slider" id="harmony-hue-slider" min="0" max="359" step="1" value="210" />
+          </div>
+
+          <div class="math-transform-grid">
+            <div class="math-prop-control">
+              <div class="math-prop-head">
+                <label for="harmony-sat-slider">Saturation</label>
+                <span class="control-value" id="harmony-sat-value">62%</span>
+              </div>
+              <input type="range" id="harmony-sat-slider" min="18" max="92" step="1" value="62" />
+            </div>
+            <div class="math-prop-control">
+              <div class="math-prop-head">
+                <label for="harmony-contrast-slider">Contrast</label>
+                <span class="control-value" id="harmony-contrast-value">74%</span>
+              </div>
+              <input type="range" id="harmony-contrast-slider" min="30" max="86" step="1" value="74" />
+            </div>
           </div>
         </div>
 
-        <div class="math-prop-control">
-          <div class="math-prop-head">
-            <label for="harmony-hue-slider">Base hue</label>
-            <span class="harmony-hue-readout">
-              <span class="harmony-hue-dot" id="harmony-hue-dot"></span>
-              <span class="control-value" id="harmony-hue-value">210°</span>
-            </span>
-          </div>
-          <input type="range" class="harmony-hue-slider" id="harmony-hue-slider" min="0" max="359" step="1" value="210" />
-        </div>
-
-        <div class="math-transform-grid">
-          <div class="math-prop-control">
-            <div class="math-prop-head">
-              <label for="harmony-sat-slider">Saturation</label>
-              <span class="control-value" id="harmony-sat-value">62%</span>
-            </div>
-            <input type="range" id="harmony-sat-slider" min="18" max="92" step="1" value="62" />
-          </div>
-          <div class="math-prop-control">
-            <div class="math-prop-head">
-              <label for="harmony-contrast-slider">Contrast</label>
-              <span class="control-value" id="harmony-contrast-value">74%</span>
-            </div>
-            <input type="range" id="harmony-contrast-slider" min="30" max="86" step="1" value="74" />
-          </div>
+        <div id="harmony-curated-panel" class="harmony-panel-group" hidden>
+          <div class="harmony-curated-list" id="harmony-curated-list" role="listbox" aria-label="Curated color palettes"></div>
         </div>
 
         <div class="math-prop-control">
           <div class="math-prop-head">
             <label for="harmony-library-select">Map to fabric swatches</label>
           </div>
-          <select id="harmony-library-select" class="math-prop-select">
-            <option value="kona" selected>Robert Kaufman Kona Solids</option>
-            <option value="pure">Pure Math Colors (Unmapped)</option>
-            <option value="kaffe">Kaffe Fassett Prints</option>
-            <option value="brandon">Brandon Mably Prints</option>
-            <option value="pj">Philip Jacobs Prints</option>
-            <option value="prints">All Designer Prints</option>
-            <option value="mixed">Kona Solids + Designer Prints</option>
-          </select>
+          <div class="harmony-library-row">
+            <select id="harmony-library-select" class="math-prop-select">
+              <option value="kona" selected>Kona Cotton Solids</option>
+              <option value="pure">Pure Colors (Unmapped)</option>
+              <option value="kaffe">Kaffe Fassett Prints</option>
+              <option value="brandon">Brandon Mably Prints</option>
+              <option value="pj">Philip Jacobs Prints</option>
+              <option value="prints">All Designer Prints</option>
+              <option value="mixed">Kona Solids + Designer Prints</option>
+            </select>
+            <button
+              type="button"
+              class="btn btn-subtle btn-small harmony-snap-btn"
+              id="harmony-snap-current-btn"
+              title="Snap your current quilt swatches to their closest match in this fabric catalog"
+            >
+              Snap Current
+            </button>
+          </div>
         </div>
 
         <div class="math-prop-control">
           <div class="math-prop-head">
-            <span>Math target → mapped swatch</span>
+            <span id="harmony-preview-caption">Target → mapped swatch</span>
             <span class="harmony-map-note" id="harmony-map-note">Dark → Light</span>
           </div>
           <div class="harmony-preview-strip" id="harmony-preview-strip" aria-live="polite"></div>
@@ -621,8 +640,7 @@
 
           <div class="palette-actions">
             <button type="button" class="btn btn-subtle" id="add-color-btn">+ Add Fabric</button>
-            <button type="button" class="btn btn-subtle" id="harmony-palette-btn" aria-haspopup="dialog" aria-expanded="false" title="Swap palette with mathematically derived color-wheel harmonies mapped onto real fabric swatches">Harmony ▾</button>
-            <button type="button" class="btn btn-subtle" id="snap-kona-btn" title="Snap all solid colors in your palette to their exact closest Robert Kaufman Kona Cotton solid">Snap to Kona</button>
+            <button type="button" class="btn btn-subtle" id="harmony-palette-btn" aria-haspopup="dialog" aria-expanded="false" title="Open Palette Mixer: color-wheel math, curated sets, and snap to any fabric catalog">Palette Mixer ▾</button>
             <button type="button" class="btn btn-subtle" id="reset-palette-btn">Re-extract</button>
           </div>
         </div>
@@ -669,6 +687,7 @@
             >
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>
             </button>
+            <span class="toolbar-sep" aria-hidden="true"></span>
             <div class="math-toolbar-group" id="math-menu-wrap">
               <button
                 type="button"
@@ -714,6 +733,16 @@
             >
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 12h18"/><path d="M12 3v18"/></svg>
               Seams
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost btn-small"
+              id="thirds-overlay-btn"
+              aria-pressed="false"
+              title="Show or hide Rule of Thirds composition overlay"
+            >
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>
+              Thirds
             </button>
             <button
               type="button"
@@ -855,10 +884,29 @@
     <span class="footer-sep" aria-hidden="true">·</span>
     <span>Built on Samish Island</span>
     <span class="footer-sep" aria-hidden="true">·</span>
-    <a href="changelog.html" target="_blank" rel="noopener" class="footer-link">Changelog</a>
+    <span>100% private — processed locally in your browser</span>
+    <span class="footer-sep" aria-hidden="true">·</span>
+    <a href="changelog.html" id="open-changelog-btn" class="footer-link">Changelog</a>
   </footer>
 
+  <!-- In-App Changelog Modal (never leaves your active quilt!) -->
+  <div class="changelog-modal" id="changelog-modal" role="dialog" aria-modal="true" aria-labelledby="changelog-modal-title" hidden>
+    <div class="changelog-modal-backdrop" id="changelog-modal-backdrop"></div>
+    <div class="changelog-modal-card">
+      <div class="changelog-modal-head">
+        <div>
+          <span class="changelog-modal-eyebrow">Release History</span>
+          <h2 id="changelog-modal-title">Changelog</h2>
+        </div>
+        <button type="button" class="swatch-popover-close" id="changelog-modal-close" aria-label="Close changelog">&times;</button>
+      </div>
+      <div class="changelog-modal-body" id="changelog-modal-body">
+        <p class="changelog-loading">Loading changelog…</p>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-  <script src="app.js?v=75" defer></script>
+  <script src="app.js?v=89" defer></script>
 </body>
 </html>

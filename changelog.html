@@ -4,11 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Changelog · Miriam's Quiltcaster</title>
-  <link rel="icon" type="image/png" href="favicon-v2.png" />
+  <link rel="icon" type="image/png" href="favicon-v3.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=JetBrains+Mono:wght@500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=75" />
+  <link rel="stylesheet" href="styles.css?v=89" />
   <style>
     .changelog-shell {
       max-width: 820px;
@@ -106,14 +106,14 @@
 <body>
   <header class="topbar">
     <div class="brand">
-      <img class="brand-icon" src="apple-touch-icon-v2.png" width="38" height="38" alt="" />
+      <img class="brand-icon" src="apple-touch-icon-v3.png" width="38" height="38" alt="Miriam" />
       <div>
         <h1>Miriam's Quiltcaster</h1>
         <p class="tagline">A quilt design studio built on Samish Island.</p>
       </div>
     </div>
     <div class="topbar-right">
-      <a href="index.html" class="btn btn-secondary">← Back to Studio</a>
+      <a href="index.html" class="btn btn-secondary" onclick="if(window.opener){window.close();return false;}">← Back to Studio</a>
     </div>
   </header>
 
@@ -125,6 +125,21 @@
     </div>
 
     <div class="release-list">
+      <article class="release-card">
+        <div class="release-meta">
+          <h3 class="release-title">Miriam's Portrait Logo, Palette Mixer &amp; Curated Sets, Heritage &amp; Fire Generators, Low-Res Monogram Fonts &amp; UX Pass</h3>
+          <span class="release-date">Nov 27, 2026</span>
+        </div>
+        <ul class="release-items">
+          <li><strong>Miriam's Portrait Logo:</strong> Updated the studio header emblem, landing medallion, browser favicon, PWA icons, and PDF pattern emblem with Miriam's portrait.</li>
+          <li><strong>Palette Mixer &amp; 14 Curated Color Sets (<code>Palette Mixer ▾</code>):</strong> Grouped color-wheel harmony math, <strong>14 acclaimed curated palettes</strong> (<em>Pacific Northwest</em>, <em>Desert Autumn</em>, <em>Nordic Minimalist</em>, <em>Sanzo Wada</em>, <em>Wes Anderson Grand Budapest &amp; Darjeeling</em>, <em>Bauhaus</em>, <em>Van Gogh Starry Night</em>, <em>Monet Water Lilies</em>, <em>Nord Arctic</em>, <em>Viridis</em>, <em>Inferno Flame</em>, <em>Plasma</em>, and <em>Desert × Nordic</em>), and one-click <strong>Snap Current</strong> to any fabric catalog (Kona Solids, Kaffe Fassett, Brandon Mably, Philip Jacobs, or Pure Colors).</li>
+          <li><strong>Heritage &amp; Decorative Generators:</strong> Added 6 historic &amp; decorative pattern styles—<strong>William Morris Trellis &amp; Acanthus</strong>, <strong>Art Deco Sunburst Fan</strong>, <strong>Art Nouveau Whiplash</strong>, <strong>Japanese Seigaiha Waves</strong>, <strong>Moroccan Zellige Star Tile</strong>, and <strong>Bauhaus Geometric</strong>—plus a cellular buoyancy <strong>Flame &amp; Ember Fire Sim</strong> under <em>Physics &amp; Organic</em>.</li>
+          <li><strong>Text &amp; Initials Monogram + 6 Low-Res Pixel Fonts:</strong> Generate custom initials or 2-line monograms with <strong>6 purpose-built low-res quilt-block fonts</strong> (<em>Quilt Block 5×7</em>, <em>8-Bit Arcade Heavy 7×7</em>, <em>Heirloom Pixel Serif 6×7</em>, <em>Quilt Stencil 6×7</em>, <em>Tall Narrow Poster 4×7</em>, and <em>Cross-Stitch Mini 3×5</em>) plus 4 fine-grid styles, 4 quilt backdrops, outline/halo control, and full <code>-180°…+180°</code> rotation.</li>
+          <li><strong>Rule of Thirds Overlay &amp; 2× Pan Overscan:</strong> Added a dual-contrast <strong>Thirds</strong> composition overlay toggle beside <strong>Seams</strong>, and expanded generated patterns with 2× overscan / toroidal tiling so the <strong>Hand</strong> tool pans smoothly without edge clipping.</li>
+          <li><strong>In-App Changelog Modal, Local Draft Auto-Save &amp; UX Polish:</strong> Clicking <strong>Changelog</strong> now opens in-app without leaving your quilt, edits auto-save locally to IndexedDB across reloads, toolbar tools align on a uniform <code>34px</code> baseline with clean grouping/wrapping, unused <code>0 sq</code> swatches gently dim, and the start screen was streamlined.</li>
+        </ul>
+      </article>
+
       <article class="release-card">
         <div class="release-meta">
           <h3 class="release-title">Hand Repositioning Mode, Interactive Palette Harmony Studio, Map &amp; Satellite Quilts, 30+ Generators &amp; Designer Libraries</h3>

@@ -65,6 +65,7 @@
   const mapLoadBtn = document.getElementById("map-load-btn");
   const mapQuickChips = document.querySelectorAll("[data-map-loc]");
   const seamLinesBtn = document.getElementById("seam-lines-btn");
+  const thirdsOverlayBtn = document.getElementById("thirds-overlay-btn");
   const hstSwitchRow = document.getElementById("hst-switch-row");
   const hstToggle = document.getElementById("hst-toggle");
   const hstControls = document.getElementById("hst-controls");
@@ -113,6 +114,10 @@
   const harmonyPaletteBtn = document.getElementById("harmony-palette-btn");
   const harmonyPopover = document.getElementById("harmony-popover");
   const harmonyPopoverClose = document.getElementById("harmony-popover-close");
+  const harmonyTabBtns = document.querySelectorAll("[data-harmony-tab]");
+  const harmonyMathPanel = document.getElementById("harmony-math-panel");
+  const harmonyCuratedPanel = document.getElementById("harmony-curated-panel");
+  const harmonyCuratedList = document.getElementById("harmony-curated-list");
   const harmonyFormulaHint = document.getElementById("harmony-formula-hint");
   const harmonyRuleBtns = document.querySelectorAll("[data-harmony-rule]");
   const harmonyHueSlider = document.getElementById("harmony-hue-slider");
@@ -123,6 +128,7 @@
   const harmonyContrastSlider = document.getElementById("harmony-contrast-slider");
   const harmonyContrastValue = document.getElementById("harmony-contrast-value");
   const harmonyLibrarySelect = document.getElementById("harmony-library-select");
+  const harmonySnapCurrentBtn = document.getElementById("harmony-snap-current-btn");
   const harmonyMapNote = document.getElementById("harmony-map-note");
   const harmonyPreviewStrip = document.getElementById("harmony-preview-strip");
   const harmonyPreserveWrap = document.getElementById("harmony-preserve-wrap");
@@ -382,6 +388,8 @@
     // allowing photos & satellite maps to keep their exact contours and HST diagonals while swapping fabrics
     sourcePalette: null,
     harmonyConfig: {
+      tab: "math", // "math" | "curated"
+      curatedId: "pnw",
       rule: "triadic",
       baseHue: 210,
       saturation: 62,
@@ -393,6 +401,7 @@
     },
     nextColorId: 1,
     showSeamLines: true,
+    showThirdsOverlay: false,
     showingOriginal: false,
     // Physical quilt sizing
     unit: "in",
@@ -2319,6 +2328,7 @@
     if (state.showingOriginal) {
       const { sx, sy, sw, sh } = getCroppedSourceRect();
       quiltCtx.drawImage(state.image, sx, sy, sw, sh, 0, 0, canvasW, canvasH);
+      drawRuleOfThirdsOverlay(quiltCtx, canvasW, canvasH);
       return;
     }
 
@@ -2328,7 +2338,61 @@
       cellW,
       cellH,
     });
+    drawRuleOfThirdsOverlay(quiltCtx, canvasW, canvasH);
     drawPaintCursorOverlay(squarePx);
+  }
+
+  function drawRuleOfThirdsOverlay(ctx, w, h) {
+    if (!state.showThirdsOverlay || !w || !h) return;
+    const x1 = w / 3;
+    const x2 = (2 * w) / 3;
+    const y1 = h / 3;
+    const y2 = (2 * h) / 3;
+    const scale = Math.max(1, Math.min(w, h) / 600);
+
+    ctx.save();
+    // Dual-stroke contrast: dark halo beneath crisp white guide lines so it reads on both light & dark fabrics
+    const drawLines = () => {
+      ctx.beginPath();
+      ctx.moveTo(x1, 0);
+      ctx.lineTo(x1, h);
+      ctx.moveTo(x2, 0);
+      ctx.lineTo(x2, h);
+      ctx.moveTo(0, y1);
+      ctx.lineTo(w, y1);
+      ctx.moveTo(0, y2);
+      ctx.lineTo(w, y2);
+      ctx.stroke();
+    };
+
+    ctx.lineCap = "butt";
+    ctx.strokeStyle = "rgba(24, 21, 18, 0.45)";
+    ctx.lineWidth = 3 * scale;
+    drawLines();
+
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.88)";
+    ctx.lineWidth = 1.25 * scale;
+    drawLines();
+
+    // Subtle focal power-point rings at the 4 intersections
+    const pts = [
+      [x1, y1],
+      [x2, y1],
+      [x1, y2],
+      [x2, y2],
+    ];
+    const r = 4.5 * scale;
+    pts.forEach(([px, py]) => {
+      ctx.beginPath();
+      ctx.arc(px, py, r, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(24, 21, 18, 0.5)";
+      ctx.lineWidth = 2.6 * scale;
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
+      ctx.lineWidth = 1.2 * scale;
+      ctx.stroke();
+    });
+    ctx.restore();
   }
 
   function updateSwatchCounts() {
@@ -2352,6 +2416,8 @@
       if (fabricEl) {
         fabricEl.textContent = calc.formatted;
       }
+      const isUsed = solidCnt > 0 || hstHalfCnt > 0;
+      item.classList.toggle("is-unused", !isUsed);
       if (solidCnt > 0 || hstStarterCnt > 0) {
         const parts = [];
         if (solidCnt > 0) {
@@ -3155,6 +3221,7 @@
     closeCropStage();
     setPaintMode(false);
     setPanMode(false);
+    clearActiveDraft();
     workspace.hidden = true;
     topbarActions.hidden = true;
     dropStage.hidden = false;
@@ -3384,6 +3451,21 @@
       seamLinesBtn.classList.toggle("is-toggled", state.showSeamLines);
       seamLinesBtn.setAttribute("aria-pressed", state.showSeamLines ? "true" : "false");
     }
+  }
+
+  function setThirdsOverlayVisible(visible) {
+    state.showThirdsOverlay = Boolean(visible);
+    if (thirdsOverlayBtn) {
+      thirdsOverlayBtn.classList.toggle("is-toggled", state.showThirdsOverlay);
+      thirdsOverlayBtn.setAttribute("aria-pressed", state.showThirdsOverlay ? "true" : "false");
+    }
+  }
+
+  if (thirdsOverlayBtn) {
+    thirdsOverlayBtn.addEventListener("click", () => {
+      setThirdsOverlayVisible(!state.showThirdsOverlay);
+      renderQuilt();
+    });
   }
 
   function applyRestoredSettings(saved) {
@@ -3723,6 +3805,7 @@
     state.history = [{ label: initialLabel, ts: Date.now(), snapshot: captureSnapshot() }];
     state.historyIndex = 0;
     renderHistoryUI();
+    scheduleDraftSave();
   }
 
   // Restores saved history from newer .quilt files, and gracefully initializes a 1-step
@@ -3788,6 +3871,7 @@
 
     lastHistoryCoalesce = { key: coalesceKey, time: now };
     renderHistoryUI();
+    scheduleDraftSave();
   }
 
   function jumpToHistory(targetIndex) {
@@ -3796,6 +3880,7 @@
     lastHistoryCoalesce = { key: null, time: 0 };
     restoreSnapshot(state.history[targetIndex].snapshot);
     renderHistoryUI();
+    scheduleDraftSave();
   }
 
   function undo() {
@@ -4438,7 +4523,7 @@
         resolve(cachedBrandIconDataUrl);
       };
       img.onerror = () => resolve(null);
-      img.src = "icon-192-v2.png";
+      img.src = "icon-192-v3.png";
     });
   }
 
@@ -7467,8 +7552,9 @@
   }
 
   function updatePaintToolbarUI() {
-    const hasPainted = state.hasPaintedMask;
-    const activeCount = state.paintedCellsCount;
+    const isGeneratedPattern = Boolean(state.activeMathPattern);
+    const hasPainted = !isGeneratedPattern && state.hasPaintedMask;
+    const activeCount = isGeneratedPattern ? 0 : state.paintedCellsCount;
     if (paintToggleBtn) {
       paintToggleBtn.classList.toggle("is-painting", state.paintMode);
       paintToggleBtn.classList.toggle("is-cropped", !state.paintMode && hasPainted);
@@ -7576,6 +7662,44 @@
         { key: "rings", label: "Color bands", type: "range", min: 1, max: 5, step: 0.5, def: 2.0, fmt: (v) => `${v.toFixed(1)}×` },
       ],
     },
+    monogram: {
+      label: "Text & Initials Monogram",
+      params: [
+        { key: "text", label: "Text or initials", type: "text", def: "M", placeholder: "e.g. M, MH, MIRIAM", maxLength: 16 },
+        {
+          key: "font",
+          label: "Lettering style",
+          type: "select",
+          def: "quilt-pixel",
+          options: [
+            { value: "quilt-pixel", label: "Quilt Block (5×7)" },
+            { value: "arcade-8", label: "8-Bit Arcade Heavy (7×7)" },
+            { value: "pixel-serif", label: "Heirloom Pixel Serif (6×7)" },
+            { value: "stencil-pixel", label: "Quilt Stencil (6×7)" },
+            { value: "tall-poster", label: "Tall Narrow Poster (4×7)" },
+            { value: "sampler", label: "Cross-Stitch Mini (3×5)" },
+            { value: "varsity", label: "Chunky Varsity Block" },
+            { value: "sans", label: "Modern Geometric Sans" },
+            { value: "serif", label: "Heirloom Serif (Fine Grid)" },
+            { value: "script", label: "Flowing Italic Script" },
+          ],
+        },
+        {
+          key: "backdrop",
+          label: "Quilt backdrop",
+          type: "select",
+          def: "frame",
+          options: [
+            { value: "frame", label: "Heirloom Border Frame" },
+            { value: "solid", label: "Clean Solid Ground" },
+            { value: "ombre", label: "Radiant Ombré Glow" },
+            { value: "stripes", label: "Banded Quilt Stripes" },
+          ],
+        },
+        { key: "size", label: "Letter size", type: "range", min: 0.4, max: 1.4, step: 0.05, def: 0.92, fmt: (v) => `${Math.round(v * 100)}%` },
+        { key: "outline", label: "Outline / halo", type: "range", min: 0, max: 3, step: 0.5, def: 1.0, fmt: (v) => (v === 0 ? "Off" : `${v.toFixed(1)}×`) },
+      ],
+    },
     "tumbling-blocks": {
       label: "Tumbling Blocks (3D)",
       params: [
@@ -7609,6 +7733,53 @@
       params: [
         { key: "rays", label: "Ray count", type: "range", min: 6, max: 28, step: 2, def: 14, fmt: (v) => `${v}` },
         { key: "rings", label: "Concentric rings", type: "range", min: 0, max: 6, step: 1, def: 2, fmt: (v) => `${v}` },
+      ],
+    },
+    "william-morris": {
+      label: "William Morris Trellis & Acanthus",
+      params: [
+        { key: "repeats", label: "Tile repeats", type: "range", min: 1, max: 4, step: 1, def: 2, fmt: (v) => `${v}×` },
+        { key: "scroll", label: "Vine scroll", type: "range", min: 0.5, max: 2.0, step: 0.1, def: 1.1, fmt: (v) => `${v.toFixed(1)}×` },
+        { key: "blossom", label: "Rosette fullness", type: "range", min: 0.5, max: 1.6, step: 0.1, def: 1.0, fmt: (v) => `${v.toFixed(1)}×` },
+      ],
+    },
+    "art-deco": {
+      label: "Art Deco Sunburst Fan",
+      params: [
+        { key: "fans", label: "Fan columns", type: "range", min: 2, max: 6, step: 1, def: 3, fmt: (v) => `${v}` },
+        { key: "rays", label: "Sunburst rays", type: "range", min: 5, max: 15, step: 2, def: 9, fmt: (v) => `${v}` },
+        { key: "layers", label: "Arch tiers", type: "range", min: 1, max: 4, step: 1, def: 2, fmt: (v) => `${v}` },
+      ],
+    },
+    "art-nouveau": {
+      label: "Art Nouveau Whiplash",
+      params: [
+        { key: "flow", label: "Tendril flow", type: "range", min: 1, max: 5, step: 0.5, def: 2.5, fmt: (v) => `${v.toFixed(1)}` },
+        { key: "whip", label: "Curve whip", type: "range", min: 0.5, max: 2.2, step: 0.1, def: 1.2, fmt: (v) => `${v.toFixed(1)}×` },
+        { key: "bands", label: "Stained glass", type: "range", min: 1, max: 4, step: 0.5, def: 2.0, fmt: (v) => `${v.toFixed(1)}×` },
+      ],
+    },
+    seigaiha: {
+      label: "Japanese Seigaiha Waves",
+      params: [
+        { key: "cols", label: "Wave columns", type: "range", min: 2, max: 8, step: 1, def: 4, fmt: (v) => `${v}` },
+        { key: "rings", label: "Concentric rings", type: "range", min: 2, max: 6, step: 1, def: 4, fmt: (v) => `${v}` },
+        { key: "depth", label: "Scallop depth", type: "range", min: 0.6, max: 1.4, step: 0.1, def: 1.0, fmt: (v) => `${v.toFixed(1)}×` },
+      ],
+    },
+    "moroccan-zellige": {
+      label: "Moroccan Zellige Star Tile",
+      params: [
+        { key: "repeats", label: "Tile repeats", type: "range", min: 1, max: 5, step: 1, def: 2, fmt: (v) => `${v}×` },
+        { key: "sharpness", label: "Star points", type: "range", min: 0.4, max: 1.5, step: 0.1, def: 1.0, fmt: (v) => `${v.toFixed(1)}×` },
+        { key: "bands", label: "Border bands", type: "range", min: 1, max: 4, step: 0.5, def: 2.0, fmt: (v) => `${v.toFixed(1)}×` },
+      ],
+    },
+    "bauhaus-grid": {
+      label: "Bauhaus Geometric",
+      params: [
+        { key: "modules", label: "Module grid", type: "range", min: 2, max: 6, step: 1, def: 4, fmt: (v) => `${v}×${v}` },
+        { key: "seed", label: "Composition", type: "range", min: 1, max: 20, step: 1, def: 5, fmt: (v) => `#${v}` },
       ],
     },
     "orchid-macro": {
@@ -7693,6 +7864,26 @@
         { key: "n", label: "Mode N", type: "range", min: 1, max: 9, step: 1, def: 2, fmt: (v) => String(v) },
         { key: "m", label: "Mode M", type: "range", min: 1, max: 9, step: 1, def: 5, fmt: (v) => String(v) },
         { key: "mix", label: "Resonance mix", type: "range", min: -1, max: 1, step: 0.1, def: 1.0, fmt: (v) => v.toFixed(1) },
+      ],
+    },
+    fire: {
+      label: "Flame & Ember Fire Sim",
+      params: [
+        {
+          key: "style",
+          label: "Fire type",
+          type: "select",
+          def: "campfire",
+          options: [
+            { value: "campfire", label: "Campfire Hearth" },
+            { value: "wildfire", label: "Roaring Wall of Fire" },
+            { value: "phoenix", label: "Rising Ember Plume" },
+          ],
+        },
+        { key: "intensity", label: "Flame height", type: "range", min: 0.35, max: 1.0, step: 0.05, def: 0.78, fmt: (v) => `${Math.round(v * 100)}%` },
+        { key: "turbulence", label: "Turbulence", type: "range", min: 0.2, max: 1.5, step: 0.1, def: 0.85, fmt: (v) => `${v.toFixed(1)}×` },
+        { key: "wind", label: "Wind drift", type: "range", min: -1.0, max: 1.0, step: 0.1, def: 0.0, fmt: (v) => (v > 0 ? `+${v.toFixed(1)}` : v.toFixed(1)) },
+        { key: "seed", label: "Ember seed", type: "range", min: 1, max: 24, step: 1, def: 7, fmt: (v) => `#${v}` },
       ],
     },
     turing: {
@@ -8001,7 +8192,11 @@
     },
     {
       label: "Classic & Modern Quilt",
-      items: ["lone-star", "tumbling-blocks", "chevron", "tartan", "topo-map", "sunburst"],
+      items: ["monogram", "lone-star", "tumbling-blocks", "chevron", "tartan", "topo-map", "sunburst"],
+    },
+    {
+      label: "Heritage & Decorative",
+      items: ["william-morris", "art-deco", "art-nouveau", "seigaiha", "moroccan-zellige", "bauhaus-grid"],
     },
     {
       label: "Botanical Close-Ups",
@@ -8013,7 +8208,7 @@
     },
     {
       label: "Physics & Organic",
-      items: ["chladni", "turing", "interference", "voronoi"],
+      items: ["fire", "chladni", "turing", "interference", "voronoi"],
     },
     {
       label: "Quilt Math & Waves",
@@ -8079,7 +8274,9 @@
           state.mathParams = getDefaultMathParams(id);
           state.mathTransform = { offsetX: 0, offsetY: 0, scale: 1.0, rotate: 0 };
           applyMathPattern(id, { record: true });
-          if (mathPropsPopover && !mathPropsPopover.hidden) {
+          if (id === "monogram" && mathPropsPopover && mathPropsPopover.hidden) {
+            openMathPropsPopover();
+          } else if (mathPropsPopover && !mathPropsPopover.hidden) {
             renderMathPropsControls();
           }
         });
@@ -8227,7 +8424,21 @@
 
       const curVal = getMathParam(state.activeMathPattern, p.key);
 
-      if (p.type === "select") {
+      if (p.type === "text") {
+        const inp = document.createElement("input");
+        inp.type = "text";
+        inp.className = "map-location-input";
+        inp.value = String(curVal ?? "");
+        if (p.placeholder) inp.placeholder = p.placeholder;
+        if (p.maxLength) inp.maxLength = p.maxLength;
+        inp.autocomplete = "off";
+        inp.addEventListener("input", () => {
+          state.mathParams[p.key] = inp.value;
+          applyMathPattern(state.activeMathPattern, { record: true, coalesceKey: `math-${p.key}` });
+        });
+        wrap.appendChild(head);
+        wrap.appendChild(inp);
+      } else if (p.type === "select") {
         const sel = document.createElement("select");
         sel.className = "math-prop-select";
         p.options.forEach((opt) => {
@@ -8276,10 +8487,10 @@
     const tGrid = document.createElement("div");
     tGrid.className = "math-transform-grid";
     const tSpecs = [
-      { key: "offsetX", label: "Move X", min: -0.5, max: 0.5, step: 0.02, fmt: (v) => `${Math.round(v * 100)}%` },
-      { key: "offsetY", label: "Move Y", min: -0.5, max: 0.5, step: 0.02, fmt: (v) => `${Math.round(v * 100)}%` },
+      { key: "offsetX", label: "Move X", min: -0.75, max: 0.75, step: 0.02, fmt: (v) => `${Math.round(v * 100)}%` },
+      { key: "offsetY", label: "Move Y", min: -0.75, max: 0.75, step: 0.02, fmt: (v) => `${Math.round(v * 100)}%` },
       { key: "scale", label: "Scale", min: 0.4, max: 2.5, step: 0.05, fmt: (v) => `${v.toFixed(2)}×` },
-      { key: "rotate", label: "Rotate", min: 0, max: 345, step: 15, fmt: (v) => `${Math.round(v)}°` },
+      { key: "rotate", label: "Rotate", min: -180, max: 180, step: 5, fmt: (v) => `${Math.round(v)}°` },
     ];
     tSpecs.forEach((tp) => {
       const cell = document.createElement("div");
@@ -8420,21 +8631,24 @@
     }
     const cells = state.layoutCells;
 
-    // Precompute Wolfram elementary cellular automaton rows if needed
+    // Precompute Wolfram elementary cellular automaton rows with 2x overscan for seamless Hand panning
     let caGrid = null;
+    let caCols = 0;
+    let caRows = 0;
     if (patternId === "cellular-rule90") {
       const ruleNum = Math.max(0, Math.min(255, Number(getMathParam(patternId, "rule")) || 90));
-      const wGrid = cols + 1;
-      caGrid = Array.from({ length: rows + 1 }, () => new Uint8Array(wGrid));
-      caGrid[0][Math.floor(cols / 2)] = 1;
+      caCols = Math.max(32, cols * 2);
+      caRows = Math.max(32, rows * 2);
+      caGrid = Array.from({ length: caRows }, () => new Uint8Array(caCols));
+      caGrid[0][Math.floor(caCols / 2)] = 1;
       if (ruleNum === 184) {
-        for (let c = 0; c < wGrid; c++) caGrid[0][c] = (c * 7 + 3) % 3 === 0 ? 1 : 0;
+        for (let c = 0; c < caCols; c++) caGrid[0][c] = (c * 7 + 3) % 3 === 0 ? 1 : 0;
       }
-      for (let r = 1; r <= rows; r++) {
-        for (let c = 0; c < wGrid; c++) {
-          const left = c > 0 ? caGrid[r - 1][c - 1] : 0;
+      for (let r = 1; r < caRows; r++) {
+        for (let c = 0; c < caCols; c++) {
+          const left = caGrid[r - 1][(c - 1 + caCols) % caCols];
           const mid = caGrid[r - 1][c];
-          const right = c + 1 < wGrid ? caGrid[r - 1][c + 1] : 0;
+          const right = caGrid[r - 1][(c + 1) % caCols];
           const bits = (left << 2) | (mid << 1) | right;
           caGrid[r][c] = (ruleNum >> bits) & 1;
         }
@@ -8452,6 +8666,98 @@
       const steps = Math.round(Number(getMathParam(patternId, "steps")) || 220);
       const seed = Math.round(Number(getMathParam(patternId, "seed")) || 3);
       turingData = computeTuringGrid(turingW, turingH, preset, steps, seed);
+    }
+
+    // Precompute Cellular Buoyancy + Heat-Diffusion Fire Simulation on a 2x overscanned buffer
+    // covering nx, ny in [-0.5 .. 1.5] so Hand repositioning has generous spare room around all edges!
+    let fireData = null;
+    let fireW = 0;
+    let fireH = 0;
+    if (patternId === "fire") {
+      fireW = Math.max(48, Math.min(96, cols * 2));
+      fireH = Math.max(48, Math.min(96, rows * 2));
+      const fireStyle = String(getMathParam(patternId, "style") || "campfire");
+      const intensity = clampNumber(Number(getMathParam(patternId, "intensity")), 0.35, 1.0, 0.78);
+      const turbulence = clampNumber(Number(getMathParam(patternId, "turbulence")), 0.2, 1.5, 0.85);
+      const wind = clampNumber(Number(getMathParam(patternId, "wind")), -1.0, 1.0, 0.0);
+      const fireSeed = Math.round(Number(getMathParam(patternId, "seed")) || 7);
+
+      let rng = (fireSeed * 1664525 + 1013904223) >>> 0;
+      const nextRand = () => {
+        rng = (Math.imul(rng, 1664525) + 1013904223) >>> 0;
+        return rng / 4294967296;
+      };
+
+      let grid = new Float32Array(fireW * fireH);
+      let next = new Float32Array(fireW * fireH);
+      const simSteps = Math.max(56, Math.round(fireH * 1.4));
+      const baseCool = (1.16 - intensity) * 0.072;
+      const hearthRow = Math.round(fireH * 0.76); // Aligns bottom of quilt (ny=1.0) with the glowing hearth
+
+      for (let step = 0; step < simSteps; step++) {
+        // 1. Energize hearth fuel bed + deep glowing coal bed below for downward panning
+        for (let x = 0; x < fireW; x++) {
+          const u = ((x + 0.5) / fireW) * 2 - 0.5; // -0.5..1.5 (visible quilt is 0..1)
+          const dxCenter = (u - 0.5) * 2;
+          let fuel = 0;
+          if (fireStyle === "wildfire") {
+            fuel = 0.8 + nextRand() * 0.22;
+          } else if (fireStyle === "phoenix") {
+            const core = Math.exp(-dxCenter * dxCenter * 3.8);
+            fuel = core * (0.85 + nextRand() * 0.24) + (nextRand() < 0.08 ? 0.42 : 0);
+          } else {
+            const dome = Math.max(0, 1 - dxCenter * dxCenter * 0.85);
+            fuel = Math.pow(dome, 0.65) * (0.82 + nextRand() * 0.24);
+          }
+          for (let r = hearthRow; r < fireH; r++) {
+            const depthFade = 1 - ((r - hearthRow) / Math.max(1, fireH - hearthRow)) * 0.35;
+            grid[r * fireW + x] = Math.min(1, fuel * depthFade);
+          }
+        }
+
+        // 2. Buoyancy advection + turbulent flicker + radiative cooling upward from hearthRow
+        for (let y = 0; y < hearthRow; y++) {
+          const yNorm = 1 - y / Math.max(1, hearthRow);
+          const rowBelow = Math.min(fireH - 1, y + 1);
+          const rowBelow2 = Math.min(fireH - 1, y + 2);
+          for (let x = 0; x < fireW; x++) {
+            const swirl =
+              Math.sin((y * 0.28 + step * 0.25 + fireSeed) * 1.12) *
+              Math.cos((x * 0.24 - step * 0.17) * 1.05);
+            const drift = wind * 0.9 + swirl * turbulence * 0.85 + (nextRand() - 0.5) * turbulence * 0.7;
+            const sx = Math.max(0, Math.min(fireW - 1, Math.round(x - drift)));
+            const sxL = Math.max(0, sx - 1);
+            const sxR = Math.min(fireW - 1, sx + 1);
+
+            const avgHeat =
+              grid[rowBelow * fireW + sx] * 0.42 +
+              grid[rowBelow * fireW + sxL] * 0.19 +
+              grid[rowBelow * fireW + sxR] * 0.19 +
+              grid[rowBelow2 * fireW + sx] * 0.2;
+
+            const u = ((x + 0.5) / fireW) * 2 - 0.5;
+            const edgeCool =
+              fireStyle === "wildfire"
+                ? 0
+                : Math.pow(Math.abs((u - 0.5) * 2), 2) * (fireStyle === "phoenix" ? 0.055 : 0.03);
+            const flickerCool = baseCool * (0.45 + nextRand() * 1.15) * (0.68 + yNorm * 0.6) + edgeCool;
+            let val = Math.max(0, avgHeat - flickerCool);
+            if (val > 0.05 && val < 0.35 && nextRand() < 0.015 * turbulence) {
+              val = Math.min(1, val + 0.28);
+            }
+            next[y * fireW + x] = val;
+          }
+        }
+        for (let r = hearthRow; r < fireH; r++) {
+          for (let x = 0; x < fireW; x++) {
+            next[r * fireW + x] = grid[r * fireW + x];
+          }
+        }
+        const tmp = grid;
+        grid = next;
+        next = tmp;
+      }
+      fireData = grid;
     }
 
     // Precompute Golden-Ratio Voronoi seeds if needed
@@ -8491,6 +8797,397 @@
       return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy;
     };
 
+    // Hand-crafted low-res quilt-block pixel fonts (5x7 Quilt Block & 3x5 Cross-Stitch Sampler)
+    const PIXEL_FONT_5X7 = {
+      A: ["01110", "10001", "10001", "11111", "10001", "10001", "10001"],
+      B: ["11110", "10001", "10001", "11110", "10001", "10001", "11110"],
+      C: ["01110", "10001", "10000", "10000", "10000", "10001", "01110"],
+      D: ["11110", "10001", "10001", "10001", "10001", "10001", "11110"],
+      E: ["11111", "10000", "10000", "11110", "10000", "10000", "11111"],
+      F: ["11111", "10000", "10000", "11110", "10000", "10000", "10000"],
+      G: ["01110", "10001", "10000", "10111", "10001", "10001", "01110"],
+      H: ["10001", "10001", "10001", "11111", "10001", "10001", "10001"],
+      I: ["11111", "00100", "00100", "00100", "00100", "00100", "11111"],
+      J: ["00111", "00010", "00010", "00010", "10010", "10010", "01100"],
+      K: ["10001", "10010", "10100", "11000", "10100", "10010", "10001"],
+      L: ["10000", "10000", "10000", "10000", "10000", "10000", "11111"],
+      M: ["10001", "11011", "10101", "10101", "10001", "10001", "10001"],
+      N: ["10001", "11001", "10101", "10011", "10001", "10001", "10001"],
+      O: ["01110", "10001", "10001", "10001", "10001", "10001", "01110"],
+      P: ["11110", "10001", "10001", "11110", "10000", "10000", "10000"],
+      Q: ["01110", "10001", "10001", "10001", "10101", "10010", "01101"],
+      R: ["11110", "10001", "10001", "11110", "10100", "10010", "10001"],
+      S: ["01111", "10000", "10000", "01110", "00001", "00001", "11110"],
+      T: ["11111", "00100", "00100", "00100", "00100", "00100", "00100"],
+      U: ["10001", "10001", "10001", "10001", "10001", "10001", "01110"],
+      V: ["10001", "10001", "10001", "10001", "10001", "01010", "00100"],
+      W: ["10001", "10001", "10001", "10101", "10101", "11011", "10001"],
+      X: ["10001", "10001", "01010", "00100", "01010", "10001", "10001"],
+      Y: ["10001", "10001", "01010", "00100", "00100", "00100", "00100"],
+      Z: ["11111", "00001", "00010", "00100", "01000", "10000", "11111"],
+      0: ["01110", "10011", "10101", "10101", "11001", "10001", "01110"],
+      1: ["00100", "01100", "00100", "00100", "00100", "00100", "01110"],
+      2: ["01110", "10001", "00001", "00110", "01000", "10000", "11111"],
+      3: ["11110", "00001", "00001", "01110", "00001", "00001", "11110"],
+      4: ["00010", "00110", "01010", "10010", "11111", "00010", "00010"],
+      5: ["11111", "10000", "11110", "00001", "00001", "10001", "01110"],
+      6: ["01110", "10000", "11110", "10001", "10001", "10001", "01110"],
+      7: ["11111", "00001", "00010", "00100", "01000", "01000", "01000"],
+      8: ["01110", "10001", "10001", "01110", "10001", "10001", "01110"],
+      9: ["01110", "10001", "10001", "01111", "00001", "00010", "01100"],
+      "&": ["01100", "10010", "10100", "01000", "10101", "10010", "01101"],
+      "!": ["00100", "00100", "00100", "00100", "00100", "00000", "00100"],
+      "?": ["01110", "10001", "00001", "00110", "00100", "00000", "00100"],
+      "-": ["00000", "00000", "00000", "11111", "00000", "00000", "00000"],
+      ".": ["00000", "00000", "00000", "00000", "00000", "01100", "01100"],
+      "♥": ["01010", "11111", "11111", "11111", "01110", "00100", "00000"],
+      " ": ["00000", "00000", "00000", "00000", "00000", "00000", "00000"],
+    };
+
+    const PIXEL_FONT_3X5 = {
+      A: ["010", "101", "111", "101", "101"],
+      B: ["110", "101", "110", "101", "110"],
+      C: ["011", "100", "100", "100", "011"],
+      D: ["110", "101", "101", "101", "110"],
+      E: ["111", "100", "110", "100", "111"],
+      F: ["111", "100", "110", "100", "100"],
+      G: ["011", "100", "101", "101", "011"],
+      H: ["101", "101", "111", "101", "101"],
+      I: ["111", "010", "010", "010", "111"],
+      J: ["001", "001", "001", "101", "010"],
+      K: ["101", "101", "110", "101", "101"],
+      L: ["100", "100", "100", "100", "111"],
+      M: ["101", "111", "111", "101", "101"],
+      N: ["111", "101", "101", "101", "101"],
+      O: ["010", "101", "101", "101", "010"],
+      P: ["110", "101", "110", "100", "100"],
+      Q: ["010", "101", "101", "111", "011"],
+      R: ["110", "101", "110", "101", "101"],
+      S: ["011", "100", "010", "001", "110"],
+      T: ["111", "010", "010", "010", "010"],
+      U: ["101", "101", "101", "101", "111"],
+      V: ["101", "101", "101", "101", "010"],
+      W: ["101", "101", "111", "111", "101"],
+      X: ["101", "101", "010", "101", "101"],
+      Y: ["101", "101", "010", "010", "010"],
+      Z: ["111", "001", "010", "100", "111"],
+      0: ["111", "101", "101", "101", "111"],
+      1: ["010", "110", "010", "010", "111"],
+      2: ["110", "001", "010", "100", "111"],
+      3: ["110", "001", "010", "001", "110"],
+      4: ["101", "101", "111", "001", "001"],
+      5: ["111", "100", "110", "001", "110"],
+      6: ["011", "100", "111", "101", "111"],
+      7: ["111", "001", "010", "010", "010"],
+      8: ["111", "101", "111", "101", "111"],
+      9: ["111", "101", "111", "001", "110"],
+      "&": ["010", "101", "010", "101", "011"],
+      "!": ["010", "010", "010", "000", "010"],
+      "-": ["000", "000", "111", "000", "000"],
+      ".": ["000", "000", "000", "000", "010"],
+      " ": ["000", "000", "000", "000", "000"],
+    };
+
+    // 7x7 8-Bit Arcade Heavy (Press Start 2P / retro coin-op double-thick stems)
+    const PIXEL_FONT_ARCADE_7X7 = {
+      A: ["0011100", "0110110", "1100011", "1111111", "1100011", "1100011", "1100011"],
+      B: ["1111110", "1100011", "1100011", "1111110", "1100011", "1100011", "1111110"],
+      C: ["0111110", "1100011", "1100000", "1100000", "1100000", "1100011", "0111110"],
+      D: ["1111100", "1100110", "1100011", "1100011", "1100011", "1100110", "1111100"],
+      E: ["1111111", "1100000", "1100000", "1111110", "1100000", "1100000", "1111111"],
+      F: ["1111111", "1100000", "1100000", "1111110", "1100000", "1100000", "1100000"],
+      G: ["0111110", "1100011", "1100000", "1101111", "1100011", "1100011", "0111110"],
+      H: ["1100011", "1100011", "1100011", "1111111", "1100011", "1100011", "1100011"],
+      I: ["0111110", "0011100", "0011100", "0011100", "0011100", "0011100", "0111110"],
+      J: ["0011111", "0000110", "0000110", "0000110", "1100110", "1100110", "0111100"],
+      K: ["1100011", "1100110", "1101100", "1111000", "1101100", "1100110", "1100011"],
+      L: ["1100000", "1100000", "1100000", "1100000", "1100000", "1100000", "1111111"],
+      M: ["1100011", "1110111", "1111111", "1101011", "1100011", "1100011", "1100011"],
+      N: ["1100011", "1110011", "1111011", "1101111", "1100111", "1100011", "1100011"],
+      O: ["0111110", "1100011", "1100011", "1100011", "1100011", "1100011", "0111110"],
+      P: ["1111110", "1100011", "1100011", "1111110", "1100000", "1100000", "1100000"],
+      Q: ["0111110", "1100011", "1100011", "1100011", "1101011", "1100110", "0111101"],
+      R: ["1111110", "1100011", "1100011", "1111110", "1101100", "1100110", "1100011"],
+      S: ["0111110", "1100011", "1100000", "0111110", "0000011", "1100011", "0111110"],
+      T: ["1111111", "0011100", "0011100", "0011100", "0011100", "0011100", "0011100"],
+      U: ["1100011", "1100011", "1100011", "1100011", "1100011", "1100011", "0111110"],
+      V: ["1100011", "1100011", "1100011", "1100011", "0110110", "0011100", "0001000"],
+      W: ["1100011", "1100011", "1100011", "1101011", "1111111", "1110111", "1100011"],
+      X: ["1100011", "0110110", "0011100", "0011100", "0110110", "1100011", "1100011"],
+      Y: ["1100011", "0110110", "0011100", "0011100", "0011100", "0011100", "0011100"],
+      Z: ["1111111", "0000110", "0001100", "0011000", "0110000", "1100000", "1111111"],
+      0: ["0111110", "1100111", "1101011", "1110011", "1100011", "1100011", "0111110"],
+      1: ["0011100", "0111100", "0011100", "0011100", "0011100", "0011100", "0111110"],
+      2: ["0111110", "1100011", "0000110", "0011100", "0110000", "1100000", "1111111"],
+      3: ["0111110", "1100011", "0000011", "0011110", "0000011", "1100011", "0111110"],
+      4: ["0001110", "0011110", "0110110", "1100110", "1111111", "0000110", "0000110"],
+      5: ["1111111", "1100000", "1111110", "0000011", "0000011", "1100011", "0111110"],
+      6: ["0111110", "1100000", "1111110", "1100011", "1100011", "1100011", "0111110"],
+      7: ["1111111", "0000011", "0000110", "0001100", "0011000", "0011000", "0011000"],
+      8: ["0111110", "1100011", "1100011", "0111110", "1100011", "1100011", "0111110"],
+      9: ["0111110", "1100011", "1100011", "0111111", "0000011", "0000110", "0111100"],
+      "&": ["0111000", "1101100", "0111000", "1110110", "1100110", "1101100", "0111011"],
+      "!": ["0011100", "0011100", "0011100", "0011100", "0000000", "0011100", "0011100"],
+      "-": ["0000000", "0000000", "0000000", "1111111", "0000000", "0000000", "0000000"],
+      ".": ["0000000", "0000000", "0000000", "0000000", "0000000", "0011000", "0011000"],
+      "♥": ["0110110", "1111111", "1111111", "1111111", "0111110", "0011100", "0001000"],
+      " ": ["0000000", "0000000", "0000000", "0000000", "0000000", "0000000", "0000000"],
+    };
+
+    // 6x7 Heirloom Pixel Serif (needlepoint slab feet & refined terminals)
+    const PIXEL_FONT_SERIF_6X7 = {
+      A: ["001100", "010010", "010010", "011110", "010010", "010010", "111011"],
+      B: ["111110", "010001", "010001", "011110", "010001", "010001", "111110"],
+      C: ["011111", "100001", "100000", "100000", "100000", "100001", "011110"],
+      D: ["111100", "010010", "010001", "010001", "010001", "010010", "111100"],
+      E: ["111111", "010001", "010000", "011110", "010000", "010001", "111111"],
+      F: ["111111", "010001", "010000", "011110", "010000", "010000", "111000"],
+      G: ["011111", "100001", "100000", "100111", "100010", "100010", "011110"],
+      H: ["111011", "010010", "010010", "011110", "010010", "010010", "111011"],
+      I: ["011110", "001100", "001100", "001100", "001100", "001100", "011110"],
+      J: ["001111", "000100", "000100", "000100", "100100", "100100", "011000"],
+      K: ["111011", "010010", "010100", "011000", "010100", "010010", "111011"],
+      L: ["111000", "010000", "010000", "010000", "010000", "010001", "111111"],
+      M: ["110011", "011110", "010110", "010010", "010010", "010010", "111011"],
+      N: ["110011", "011010", "010110", "010010", "010010", "010010", "111010"],
+      O: ["011110", "100001", "100001", "100001", "100001", "100001", "011110"],
+      P: ["111110", "010001", "010001", "011110", "010000", "010000", "111000"],
+      Q: ["011110", "100001", "100001", "100001", "100101", "100010", "011101"],
+      R: ["111110", "010001", "010001", "011110", "010100", "010010", "111011"],
+      S: ["011111", "100001", "100000", "011110", "000001", "100001", "111110"],
+      T: ["111111", "101101", "001100", "001100", "001100", "001100", "011110"],
+      U: ["111011", "010010", "010010", "010010", "010010", "010010", "001100"],
+      V: ["111011", "010010", "010010", "010010", "010010", "001100", "001100"],
+      W: ["111011", "010010", "010010", "010110", "010110", "011110", "010010"],
+      X: ["111011", "010010", "001100", "001100", "001100", "010010", "111011"],
+      Y: ["111011", "010010", "010010", "001100", "001100", "001100", "011110"],
+      Z: ["111111", "100010", "000100", "001000", "010000", "100001", "111111"],
+      0: ["011110", "100011", "100101", "101001", "110001", "100001", "011110"],
+      1: ["001100", "011100", "001100", "001100", "001100", "001100", "011110"],
+      2: ["011110", "100001", "000010", "001100", "010000", "100001", "111111"],
+      3: ["011110", "100001", "000001", "001110", "000001", "100001", "011110"],
+      4: ["000110", "001010", "010010", "100010", "111111", "000010", "000111"],
+      5: ["111111", "100000", "111110", "000001", "000001", "100001", "011110"],
+      6: ["011110", "100000", "111110", "100001", "100001", "100001", "011110"],
+      7: ["111111", "100001", "000010", "000100", "001000", "001000", "011100"],
+      8: ["011110", "100001", "100001", "011110", "100001", "100001", "011110"],
+      9: ["011110", "100001", "100001", "011111", "000001", "000010", "011100"],
+      "&": ["011100", "100100", "011000", "101010", "100100", "100110", "011001"],
+      "!": ["001100", "001100", "001100", "001100", "000000", "001100", "001100"],
+      "-": ["000000", "000000", "000000", "111111", "000000", "000000", "000000"],
+      ".": ["000000", "000000", "000000", "000000", "000000", "001100", "001100"],
+      " ": ["000000", "000000", "000000", "000000", "000000", "000000", "000000"],
+    };
+
+    // 6x7 Quilt Stencil (crisp 1-square negative-space stencil bridges!)
+    const PIXEL_FONT_STENCIL_6X7 = {
+      A: ["011010", "110011", "110011", "110111", "110011", "110011", "110011"],
+      B: ["110110", "110011", "110011", "110110", "110011", "110011", "110110"],
+      C: ["011111", "110000", "110000", "000000", "110000", "110000", "011111"],
+      D: ["110110", "110011", "110011", "110011", "110011", "110011", "110110"],
+      E: ["110111", "110000", "110000", "110110", "110000", "110000", "110111"],
+      F: ["110111", "110000", "110000", "110110", "110000", "110000", "110000"],
+      G: ["011111", "110000", "110000", "110011", "110011", "110011", "011111"],
+      H: ["110011", "110011", "110011", "001100", "110011", "110011", "110011"],
+      I: ["110011", "001100", "001100", "001100", "001100", "001100", "110011"],
+      J: ["000111", "000011", "000011", "000011", "110011", "110011", "011110"],
+      K: ["110011", "110110", "110100", "110100", "110110", "110011", "110011"],
+      L: ["110000", "110000", "110000", "110000", "110000", "110000", "110111"],
+      M: ["110011", "110011", "111111", "110011", "110011", "110011", "110011"],
+      N: ["110011", "111011", "111011", "110111", "110111", "110011", "110011"],
+      O: ["011010", "110011", "110011", "110011", "110011", "110011", "011010"],
+      P: ["110110", "110011", "110011", "110110", "110000", "110000", "110000"],
+      Q: ["011010", "110011", "110011", "110011", "110111", "110011", "011001"],
+      R: ["110110", "110011", "110011", "110110", "110110", "110011", "110011"],
+      S: ["011111", "110000", "110000", "011010", "000011", "000011", "111110"],
+      T: ["110011", "001100", "001100", "001100", "001100", "001100", "001100"],
+      U: ["110011", "110011", "110011", "110011", "110011", "110011", "011010"],
+      V: ["110011", "110011", "110011", "110011", "011010", "001100", "001100"],
+      W: ["110011", "110011", "110011", "110011", "111111", "110011", "110011"],
+      X: ["110011", "110011", "011010", "001100", "011010", "110011", "110011"],
+      Y: ["110011", "110011", "011010", "001100", "001100", "001100", "001100"],
+      Z: ["111111", "000011", "000110", "001100", "011000", "110000", "111111"],
+      0: ["011010", "110011", "110011", "110011", "110011", "110011", "011010"],
+      1: ["001100", "011100", "001100", "001100", "001100", "001100", "110011"],
+      2: ["111110", "000011", "000011", "011110", "110000", "110000", "110111"],
+      3: ["111110", "000011", "000011", "011110", "000011", "000011", "111110"],
+      4: ["110011", "110011", "110011", "110111", "000011", "000011", "000011"],
+      5: ["110111", "110000", "110000", "110110", "000011", "000011", "111110"],
+      6: ["011111", "110000", "110000", "110110", "110011", "110011", "011010"],
+      7: ["110111", "000011", "000011", "000110", "001100", "001100", "001100"],
+      8: ["011010", "110011", "110011", "011010", "110011", "110011", "011010"],
+      9: ["011010", "110011", "110011", "011111", "000011", "000011", "111110"],
+      "&": ["011000", "110110", "011000", "110011", "110011", "110110", "011011"],
+      "!": ["001100", "001100", "001100", "001100", "000000", "001100", "001100"],
+      "-": ["000000", "000000", "000000", "110111", "000000", "000000", "000000"],
+      ".": ["000000", "000000", "000000", "000000", "000000", "001100", "001100"],
+      " ": ["000000", "000000", "000000", "000000", "000000", "000000", "000000"],
+    };
+
+    // 4x7 Tall Narrow Poster (VCR OSD / condensed barn-quilt poster lettering)
+    const PIXEL_FONT_TALL_4X7 = {
+      A: ["0110", "1001", "1001", "1111", "1001", "1001", "1001"],
+      B: ["1110", "1001", "1001", "1110", "1001", "1001", "1110"],
+      C: ["0111", "1000", "1000", "1000", "1000", "1000", "0111"],
+      D: ["1110", "1001", "1001", "1001", "1001", "1001", "1110"],
+      E: ["1111", "1000", "1000", "1110", "1000", "1000", "1111"],
+      F: ["1111", "1000", "1000", "1110", "1000", "1000", "1000"],
+      G: ["0111", "1000", "1000", "1011", "1001", "1001", "0111"],
+      H: ["1001", "1001", "1001", "1111", "1001", "1001", "1001"],
+      I: ["1110", "0100", "0100", "0100", "0100", "0100", "1110"],
+      J: ["0011", "0001", "0001", "0001", "1001", "1001", "0110"],
+      K: ["1001", "1001", "1010", "1100", "1010", "1001", "1001"],
+      L: ["1000", "1000", "1000", "1000", "1000", "1000", "1111"],
+      M: ["1001", "1111", "1111", "1001", "1001", "1001", "1001"],
+      N: ["1001", "1101", "1101", "1011", "1011", "1001", "1001"],
+      O: ["0110", "1001", "1001", "1001", "1001", "1001", "0110"],
+      P: ["1110", "1001", "1001", "1110", "1000", "1000", "1000"],
+      Q: ["0110", "1001", "1001", "1001", "1011", "1001", "0111"],
+      R: ["1110", "1001", "1001", "1110", "1010", "1001", "1001"],
+      S: ["0111", "1000", "1000", "0110", "0001", "0001", "1110"],
+      T: ["1111", "0110", "0110", "0110", "0110", "0110", "0110"],
+      U: ["1001", "1001", "1001", "1001", "1001", "1001", "0110"],
+      V: ["1001", "1001", "1001", "1001", "1001", "0110", "0110"],
+      W: ["1001", "1001", "1001", "1001", "1111", "1111", "1001"],
+      X: ["1001", "1001", "0110", "0110", "0110", "1001", "1001"],
+      Y: ["1001", "1001", "1001", "0110", "0110", "0110", "0110"],
+      Z: ["1111", "0001", "0010", "0100", "1000", "1000", "1111"],
+      0: ["0110", "1001", "1011", "1011", "1101", "1001", "0110"],
+      1: ["0100", "1100", "0100", "0100", "0100", "0100", "1110"],
+      2: ["1110", "0001", "0001", "0110", "1000", "1000", "1111"],
+      3: ["1110", "0001", "0001", "0110", "0001", "0001", "1110"],
+      4: ["1001", "1001", "1001", "1111", "0001", "0001", "0001"],
+      5: ["1111", "1000", "1000", "1110", "0001", "0001", "1110"],
+      6: ["0111", "1000", "1000", "1110", "1001", "1001", "0110"],
+      7: ["1111", "0001", "0001", "0010", "0100", "0100", "0100"],
+      8: ["0110", "1001", "1001", "0110", "1001", "1001", "0110"],
+      9: ["0110", "1001", "1001", "0111", "0001", "0001", "1110"],
+      "&": ["0110", "1001", "0110", "1010", "1001", "1010", "0101"],
+      "!": ["0100", "0100", "0100", "0100", "0100", "0000", "0100"],
+      "-": ["0000", "0000", "0000", "1111", "0000", "0000", "0000"],
+      ".": ["0000", "0000", "0000", "0000", "0000", "0100", "0100"],
+      " ": ["0000", "0000", "0000", "0000", "0000", "0000", "0000"],
+    };
+
+    const BITMAP_FONT_CATALOG = {
+      "quilt-pixel": { glyphs: PIXEL_FONT_5X7, w: 5, h: 7 },
+      sampler: { glyphs: PIXEL_FONT_3X5, w: 3, h: 5 },
+      "arcade-8": { glyphs: PIXEL_FONT_ARCADE_7X7, w: 7, h: 7 },
+      "pixel-serif": { glyphs: PIXEL_FONT_SERIF_6X7, w: 6, h: 7 },
+      "stencil-pixel": { glyphs: PIXEL_FONT_STENCIL_6X7, w: 6, h: 7 },
+      "tall-poster": { glyphs: PIXEL_FONT_TALL_4X7, w: 4, h: 7 },
+    };
+
+    // Precompute 2x overscanned offscreen Text & Initials Monogram mask (covering nx, ny in [-0.5 .. 1.5])
+    let monogramPixels = null;
+    const monogramSize = 512;
+    if (patternId === "monogram") {
+      const rawText = String(getMathParam(patternId, "text") ?? "M").trim() || "M";
+      const fontStyle = String(getMathParam(patternId, "font") || "quilt-pixel");
+      const sizeScale = clampNumber(Number(getMathParam(patternId, "size")), 0.4, 1.4, 0.92);
+      const outlineMult = clampNumber(Number(getMathParam(patternId, "outline")), 0, 3, 1.0);
+
+      const mc = document.createElement("canvas");
+      mc.width = monogramSize;
+      mc.height = monogramSize;
+      const mctx = mc.getContext("2d", { willReadFrequently: true });
+      mctx.clearRect(0, 0, monogramSize, monogramSize);
+
+      const lines = rawText.split("/").map((s) => s.trim()).filter(Boolean);
+      const safeLines = lines.length > 0 ? lines.slice(0, 2) : ["M"];
+
+      const bitmapSpec = BITMAP_FONT_CATALOG[fontStyle];
+      if (bitmapSpec) {
+        // Crisp hand-crafted pixel/quilt-block rendering — razor-sharp even on chunky low-res grids!
+        const glyphSet = bitmapSpec.glyphs;
+        const gW = bitmapSpec.w;
+        const gH = bitmapSpec.h;
+        const charGap = 1;
+        const lineGapUnits = 2;
+        const upperLines = safeLines.map((ln) => ln.toUpperCase());
+        const maxChars = Math.max(1, ...upperLines.map((ln) => ln.length));
+        const totalUnitsW = maxChars * gW + Math.max(0, maxChars - 1) * charGap;
+        const totalUnitsH = upperLines.length * gH + Math.max(0, upperLines.length - 1) * lineGapUnits;
+
+        const targetSpan = 216 * sizeScale;
+        const unitPx = Math.min(targetSpan / totalUnitsW, targetSpan / totalUnitsH);
+        const totalPxH = totalUnitsH * unitPx;
+        const topY = monogramSize * 0.5 - totalPxH * 0.5;
+        const padPx = outlineMult > 0 ? Math.max(2, unitPx * 0.65 * outlineMult) : 0;
+
+        const drawGlyphBlocks = (fillColor, expand) => {
+          mctx.fillStyle = fillColor;
+          upperLines.forEach((ln, li) => {
+            const lineUnitsW = ln.length * gW + Math.max(0, ln.length - 1) * charGap;
+            const startX = monogramSize * 0.5 - (lineUnitsW * unitPx) * 0.5;
+            const y0 = topY + li * (gH + lineGapUnits) * unitPx;
+            for (let ci = 0; ci < ln.length; ci++) {
+              const ch = ln[ci];
+              const glyph = glyphSet[ch] || glyphSet[" "];
+              const gx0 = startX + ci * (gW + charGap) * unitPx;
+              for (let r = 0; r < gH; r++) {
+                const rowStr = glyph[r];
+                for (let c = 0; c < gW; c++) {
+                  if (rowStr[c] === "1") {
+                    mctx.fillRect(
+                      gx0 + c * unitPx - expand,
+                      y0 + r * unitPx - expand,
+                      unitPx + expand * 2,
+                      unitPx + expand * 2
+                    );
+                  }
+                }
+              }
+            }
+          });
+        };
+
+        if (padPx > 0) drawGlyphBlocks("rgb(255, 0, 0)", padPx);
+        drawGlyphBlocks("rgb(0, 255, 0)", 0.5);
+      } else {
+        const fontMap = {
+          varsity: '900 {px}px "Arial Black", Impact, "Plus Jakarta Sans", sans-serif',
+          sans: '800 {px}px "Plus Jakarta Sans", -apple-system, sans-serif',
+          serif: '400 {px}px "DM Serif Display", Georgia, serif',
+          script: 'italic 400 {px}px "DM Serif Display", Georgia, serif',
+        };
+        const fontTpl = fontMap[fontStyle] || fontMap.varsity;
+        const boxSpan = 216 * sizeScale;
+        let fontPx = Math.round((safeLines.length > 1 ? 104 : 186) * sizeScale);
+        mctx.font = fontTpl.replace("{px}", String(fontPx));
+        let maxW = 1;
+        safeLines.forEach((ln) => {
+          maxW = Math.max(maxW, mctx.measureText(ln).width);
+        });
+        if (maxW > boxSpan) {
+          fontPx = Math.max(24, Math.floor(fontPx * (boxSpan / maxW)));
+          mctx.font = fontTpl.replace("{px}", String(fontPx));
+        }
+        mctx.textAlign = "center";
+        mctx.textBaseline = "middle";
+        const lineGap = fontPx * 1.04;
+        const startY = monogramSize * 0.5 - ((safeLines.length - 1) * lineGap) * 0.5;
+
+        // Red channel = outer halo/outline, Green channel = crisp filled letter body
+        if (outlineMult > 0) {
+          mctx.lineJoin = "round";
+          mctx.lineCap = "round";
+          mctx.strokeStyle = "rgb(255, 0, 0)";
+          mctx.lineWidth = Math.max(8, fontPx * (fontStyle === "varsity" ? 0.18 : 0.14) * outlineMult);
+          safeLines.forEach((ln, idx) => mctx.strokeText(ln, monogramSize * 0.5, startY + idx * lineGap));
+        }
+        mctx.fillStyle = "rgb(0, 255, 0)";
+        safeLines.forEach((ln, idx) => mctx.fillText(ln, monogramSize * 0.5, startY + idx * lineGap));
+        if (fontStyle === "varsity") {
+          // Slight bold thickening so varsity stems stay crisp on low-res grids
+          mctx.strokeStyle = "rgb(0, 255, 0)";
+          mctx.lineWidth = Math.max(3, fontPx * 0.045);
+          safeLines.forEach((ln, idx) => mctx.strokeText(ln, monogramSize * 0.5, startY + idx * lineGap));
+        }
+      }
+      monogramPixels = mctx.getImageData(0, 0, monogramSize, monogramSize).data;
+    }
+
     const tOffX = Number(state.mathTransform?.offsetX) || 0;
     const tOffY = Number(state.mathTransform?.offsetY) || 0;
     const tScale = Math.max(0.25, Number(state.mathTransform?.scale) || 1.0);
@@ -8511,7 +9208,60 @@
       const ny = 0.5 + dtx * sinR + dty * cosR;
       const key = `${cell.c},${cell.r}`;
 
-      if (patternId === "lone-star") {
+      if (patternId === "monogram") {
+        const backdrop = String(getMathParam(patternId, "backdrop") || "frame");
+        const mx = Math.floor(((nx + 0.5) / 2) * monogramSize);
+        const my = Math.floor(((ny + 0.5) / 2) * monogramSize);
+        let isLetter = false;
+        let isOutline = false;
+        if (monogramPixels && mx >= 0 && mx < monogramSize && my >= 0 && my < monogramSize) {
+          // 3x3 supersampled check keeps stems unbroken on chunky low-res grids & diagonal rotations
+          const step = Math.max(1, Math.round(monogramSize / (Math.max(cols, rows) * 5)));
+          let gSum = 0;
+          let rSum = 0;
+          let cnt = 0;
+          for (let oy = -step; oy <= step; oy += step) {
+            const sy = my + oy;
+            if (sy < 0 || sy >= monogramSize) continue;
+            for (let ox = -step; ox <= step; ox += step) {
+              const sx = mx + ox;
+              if (sx < 0 || sx >= monogramSize) continue;
+              const pIdx = (sy * monogramSize + sx) * 4;
+              rSum += monogramPixels[pIdx];
+              gSum += monogramPixels[pIdx + 1];
+              cnt++;
+            }
+          }
+          if (cnt > 0) {
+            isLetter = gSum / cnt > 95;
+            isOutline = !isLetter && rSum / cnt > 85;
+          }
+        }
+        if (isLetter) {
+          state.manualCells.set(key, { t: 0, a: lumOrder[0], b: -1 });
+        } else if (isOutline) {
+          const outlineIdx = K >= 3 ? lumOrder[Math.min(K - 2, Math.max(1, Math.floor(K * 0.38)))] : lumOrder[0];
+          state.manualCells.set(key, { t: 0, a: outlineIdx, b: -1 });
+        } else if (backdrop === "ombre") {
+          const d = Math.hypot(rawNx - 0.5, rawNy - 0.5) * 1.45;
+          const norm = Math.max(0.28, Math.min(1, 1 - d * 0.65));
+          state.manualCells.set(key, { t: 0, a: pickGrad(norm), b: -1 });
+        } else if (backdrop === "stripes") {
+          const bandIdx = Math.floor(rawNy * Math.max(6, Math.min(14, K * 2))) % Math.max(1, K - 1);
+          state.manualCells.set(key, { t: 0, a: lumOrder[Math.min(K - 1, Math.max(1, K - 1 - (bandIdx % Math.max(1, K - 2))))], b: -1 });
+        } else if (backdrop === "frame") {
+          const edge = Math.min(rawNx, 1 - rawNx, rawNy, 1 - rawNy);
+          if (edge < 0.075) {
+            state.manualCells.set(key, { t: 0, a: lumOrder[Math.min(K - 1, Math.max(1, Math.floor(K * 0.28)))], b: -1 });
+          } else if (edge < 0.115) {
+            state.manualCells.set(key, { t: 0, a: lumOrder[Math.min(K - 1, Math.max(1, Math.floor(K * 0.65)))], b: -1 });
+          } else {
+            state.manualCells.set(key, { t: 0, a: lumOrder[K - 1], b: -1 });
+          }
+        } else {
+          state.manualCells.set(key, { t: 0, a: lumOrder[K - 1], b: -1 });
+        }
+      } else if (patternId === "lone-star") {
         const pts = Math.max(4, Math.round(Number(getMathParam(patternId, "points")) || 8));
         const rings = Number(getMathParam(patternId, "rings")) || 2.0;
         const dx = nx - 0.5;
@@ -8823,8 +9573,8 @@
         state.manualCells.set(key, { t: 0, a: palIdx, b: -1 });
       } else if (patternId === "sierpinski-triangle") {
         const bandDepth = Math.max(1, Math.round(Number(getMathParam(patternId, "bandDepth")) || 1));
-        const sc = cell.c;
-        const sr = cell.r;
+        const sc = Math.abs(Math.floor(nx * cols));
+        const sr = Math.abs(Math.floor(ny * rows));
         const filled = (sc & sr) === 0;
         if (isSquareGrid && K >= 2) {
           const depth = Math.floor(Math.log2(Math.max(1, sr + 1)) * bandDepth);
@@ -8852,11 +9602,176 @@
         const norm = Math.min(1, Math.abs(val) / (1 + Math.abs(Number.isFinite(mix) ? mix : 1) + 1e-4));
         state.manualCells.set(key, { t: 0, a: pickGrad(norm), b: -1 });
       } else if (patternId === "turing") {
-        const tx = Math.min(turingW - 1, Math.floor(nx * turingW));
-        const ty = Math.min(turingH - 1, Math.floor(ny * turingH));
+        const twx = ((nx % 1) + 1) % 1;
+        const twy = ((ny % 1) + 1) % 1;
+        const tx = Math.min(turingW - 1, Math.floor(twx * turingW));
+        const ty = Math.min(turingH - 1, Math.floor(twy * turingH));
         const v = turingData[ty * turingW + tx];
         const norm = Math.max(0, Math.min(1, v * 2.4));
         state.manualCells.set(key, { t: 0, a: pickGrad(norm), b: -1 });
+      } else if (patternId === "fire") {
+        const fx = Math.max(0, Math.min(fireW - 1, Math.floor(((nx + 0.5) / 2) * fireW)));
+        const fy = Math.max(0, Math.min(fireH - 1, Math.floor(((ny + 0.5) / 2) * fireH)));
+        const heat = fireData ? fireData[fy * fireW + fx] : 0;
+        // Gamma curve emphasizes luminous flame tongues & embers while keeping cool smoke dark
+        const norm = Math.max(0, Math.min(1, Math.pow(heat, 0.78)));
+        state.manualCells.set(key, { t: 0, a: pickGrad(norm), b: -1 });
+      } else if (patternId === "william-morris") {
+        // Arts & Crafts mirrored S-curve acanthus vines + diamond trellis + rosette blossoms
+        const rep = Math.max(1, Number(getMathParam(patternId, "repeats")) || 2);
+        const scroll = Number(getMathParam(patternId, "scroll")) || 1.1;
+        const blossom = Number(getMathParam(patternId, "blossom")) || 1.0;
+        const u = ((nx * rep) % 1 + 1) % 1;
+        const v = ((ny * rep) % 1 + 1) % 1;
+        const mu = Math.abs(u - 0.5) * 2; // Bilateral wallpaper mirror 0..1
+        const mv = Math.abs(v - 0.5) * 2;
+        // Intertwining S-curve stems
+        const vine1 = Math.abs(mu - (0.48 + 0.34 * Math.sin(v * Math.PI * 2 * scroll)));
+        const vine2 = Math.abs(mu - (0.48 - 0.34 * Math.sin(v * Math.PI * 2 * scroll)));
+        const stem = Math.min(vine1, vine2);
+        // Acanthus scalloped leaf fronds branching off the vine
+        const frond = 0.5 + 0.5 * Math.sin((mu * 5.2 - v * 4.0) * Math.PI) * Math.cos((mv * 3.5 + u * 2.0) * Math.PI);
+        // Rosette medallions at tile center (0.5, 0.5) & corners (0, 0)
+        const dCenter = Math.hypot(u - 0.5, v - 0.5);
+        const aCenter = Math.atan2(v - 0.5, u - 0.5);
+        const rosetteCenter = dCenter - (0.16 + 0.045 * Math.cos(aCenter * 8)) * blossom;
+        const dCorner = Math.hypot(Math.min(u, 1 - u), Math.min(v, 1 - v));
+        const aCorner = Math.atan2(Math.min(v, 1 - v), Math.min(u, 1 - u));
+        const rosetteCorner = dCorner - (0.14 + 0.04 * Math.cos(aCorner * 8)) * blossom;
+        let norm;
+        if (rosetteCenter < 0 || rosetteCorner < 0) {
+          const rVal = rosetteCenter < 0 ? dCenter / (0.22 * blossom) : dCorner / (0.2 * blossom);
+          norm = 0.72 + (1 - Math.min(1, rVal)) * 0.28; // Luminous blossom highlight
+        } else if (stem < 0.095) {
+          norm = 0.42 + (1 - stem / 0.095) * 0.22; // Intertwining acanthus vine
+        } else {
+          norm = 0.06 + frond * 0.34; // Rich foliage & deep Arts & Crafts ground
+        }
+        state.manualCells.set(key, { t: 0, a: pickGrad(norm), b: -1 });
+      } else if (patternId === "art-deco") {
+        // 1920s Chrysler / Gatsby overlapping scalloped sunburst fans in staggered half-drop rows
+        const fans = Math.max(2, Number(getMathParam(patternId, "fans")) || 3);
+        const rays = Math.max(5, Number(getMathParam(patternId, "rays")) || 9);
+        const layers = Math.max(1, Number(getMathParam(patternId, "layers")) || 2);
+        const gx = nx * fans;
+        const gy = ny * fans * 1.15;
+        // Check overlapping fan arches from current & lower half-drop rows (front-to-back)
+        let norm = 0.1;
+        for (let rowOff = 1; rowOff >= -1; rowOff--) {
+          const rIdx = Math.floor(gy) + rowOff;
+          const xShift = (rIdx & 1) ? 0.5 : 0;
+          const cIdx = Math.floor(gx - xShift);
+          for (let colOff = 0; colOff <= 1; colOff++) {
+            const cx = cIdx + colOff + xShift;
+            const cy = rIdx + 0.85;
+            const dx = gx - cx;
+            const dy = cy - gy; // Positive upward from fan base
+            const dist = Math.hypot(dx, dy);
+            if (dy >= -0.05 && dist <= 0.72) {
+              const ang = Math.atan2(dx, Math.max(0.001, dy)); // -PI/2..PI/2
+              const rayWave = Math.cos(ang * rays * 2);
+              const archRing = Math.abs(((dist / 0.72) * layers) % 1 - 0.5) * 2;
+              const isRim = dist > 0.64 || archRing > 0.82;
+              norm = isRim ? 0.92 : rayWave > 0 ? 0.62 + (1 - dist / 0.72) * 0.25 : 0.16 + (dist / 0.72) * 0.25;
+            }
+          }
+        }
+        state.manualCells.set(key, { t: 0, a: pickGrad(norm), b: -1 });
+      } else if (patternId === "art-nouveau") {
+        // Flowing asymmetrical whiplash tendrils & stained-glass organic ribbons
+        const flow = Number(getMathParam(patternId, "flow")) || 2.5;
+        const whip = Number(getMathParam(patternId, "whip")) || 1.2;
+        const bands = Number(getMathParam(patternId, "bands")) || 2.0;
+        const x = nx * 2 - 1;
+        const y = ny * 2 - 1;
+        // Sinuous whiplash coordinate warp
+        const wx = x + 0.35 * whip * Math.sin(y * Math.PI * flow + 0.4 * Math.cos(x * Math.PI * 1.5));
+        const wy = y + 0.35 * whip * Math.cos(x * Math.PI * flow * 0.85 - 0.35 * Math.sin(y * Math.PI * 1.8));
+        const stream = Math.sin(wx * Math.PI * bands) * Math.cos(wy * Math.PI * bands * 0.75);
+        const leadLine = Math.abs(Math.sin((wx * 1.6 + wy * 1.2) * Math.PI * bands));
+        const norm = leadLine < 0.12 ? 0.06 : Math.max(0.14, Math.min(1, stream * 0.45 + 0.55));
+        state.manualCells.set(key, { t: 0, a: pickGrad(norm), b: -1 });
+      } else if (patternId === "seigaiha") {
+        // Classic Japanese Edo Seigaiha concentric overlapping ocean waves
+        const wCols = Math.max(2, Number(getMathParam(patternId, "cols")) || 4);
+        const wRings = Math.max(2, Number(getMathParam(patternId, "rings")) || 4);
+        const depth = Number(getMathParam(patternId, "depth")) || 1.0;
+        const gx = nx * wCols;
+        const gy = ny * wCols * 1.55 / depth;
+        let norm = 0.2;
+        for (let rowOff = 2; rowOff >= -1; rowOff--) {
+          const rIdx = Math.floor(gy) + rowOff;
+          const xShift = (rIdx & 1) ? 0.5 : 0;
+          const cIdx = Math.floor(gx - xShift);
+          for (let colOff = 0; colOff <= 1; colOff++) {
+            const cx = cIdx + colOff + xShift;
+            const cy = rIdx + 0.5;
+            const d = Math.hypot(gx - cx, (gy - cy) * 0.65);
+            if (d <= 0.62) {
+              const band = Math.floor((d / 0.62) * wRings * 2);
+              const tRing = (band % (wRings * 2)) / Math.max(1, wRings * 2 - 1);
+              norm = (band & 1) ? 0.78 + tRing * 0.2 : 0.12 + tRing * 0.48;
+            }
+          }
+        }
+        state.manualCells.set(key, { t: 0, a: pickGrad(norm), b: -1 });
+      } else if (patternId === "moroccan-zellige") {
+        // Interlocking 8-point Khatam star & cross Islamic geometric tessellation
+        const rep = Math.max(1, Number(getMathParam(patternId, "repeats")) || 2);
+        const sharp = Number(getMathParam(patternId, "sharpness")) || 1.0;
+        const bands = Number(getMathParam(patternId, "bands")) || 2.0;
+        const u = (((nx * rep) % 1 + 1) % 1) * 2 - 1; // -1..1
+        const v = (((ny * rep) % 1 + 1) % 1) * 2 - 1;
+        // 8-fold dihedral symmetry fold
+        const ax = Math.abs(u);
+        const ay = Math.abs(v);
+        const dMax = Math.max(ax, ay);
+        const dRot = (ax + ay) * 0.70710678;
+        // Khatam 8-point star = union of axis-aligned square & 45-deg rotated square
+        const starDist = Math.min(dMax, dRot) * sharp;
+        const outerCross = Math.max(dMax, dRot);
+        const strap = Math.abs(((starDist * bands * 2.2) % 1) - 0.5) * 2;
+        let norm;
+        if (starDist < 0.42) {
+          norm = strap > 0.78 ? 0.94 : 0.58 + (1 - starDist / 0.42) * 0.28;
+        } else if (outerCross > 0.96) {
+          norm = 0.85;
+        } else {
+          norm = strap > 0.8 ? 0.88 : 0.12 + ((starDist - 0.42) / 0.6) * 0.35;
+        }
+        state.manualCells.set(key, { t: 0, a: pickGrad(Math.max(0, Math.min(1, norm))), b: -1 });
+      } else if (patternId === "bauhaus-grid") {
+        // Modernist Bauhaus module grid: quarter-circles, diagonals, split bars & Albers squares
+        const mods = Math.max(2, Math.round(Number(getMathParam(patternId, "modules")) || 4));
+        const seed = Math.round(Number(getMathParam(patternId, "seed")) || 5);
+        const gx = nx * mods;
+        const gy = ny * mods;
+        const mx = Math.floor(gx);
+        const my = Math.floor(gy);
+        const lx = gx - mx; // 0..1 inside module
+        const ly = gy - my;
+        const h1 = hash2(mx, my, seed);
+        const h2 = hash2(mx + 19, my + 37, seed);
+        const h3 = hash2(mx + 53, my + 11, seed);
+        const shapeType = Math.floor(h1 * 5); // 0: quarter-circle, 1: half-circle, 2: nested Albers, 3: diagonal split, 4: full circle
+        const cA = lumOrder[Math.floor(h2 * K) % K];
+        const cB = lumOrder[(Math.floor(h2 * K) + 1 + Math.floor(h3 * Math.max(1, K - 1))) % K];
+        let inShape = false;
+        if (shapeType === 0) {
+          const corner = Math.floor(h3 * 4);
+          const cx = corner === 1 || corner === 2 ? 1 : 0;
+          const cy = corner >= 2 ? 1 : 0;
+          inShape = Math.hypot(lx - cx, ly - cy) <= 1.0;
+        } else if (shapeType === 1) {
+          inShape = h3 < 0.5 ? Math.hypot(lx - 0.5, ly) <= 0.5 : Math.hypot(lx, ly - 0.5) <= 0.5;
+        } else if (shapeType === 2) {
+          inShape = Math.abs(lx - 0.5) < 0.27 && Math.abs(ly - 0.5) < 0.27;
+        } else if (shapeType === 3) {
+          inShape = h3 < 0.5 ? lx + ly < 1.0 : lx > ly;
+        } else {
+          inShape = Math.hypot(lx - 0.5, ly - 0.5) <= 0.42;
+        }
+        state.manualCells.set(key, { t: 0, a: inShape ? cA : cB, b: -1 });
       } else if (patternId === "kaleidoscope") {
         // N-fold dihedral mirror symmetry (D_n): fold angle into [0, PI/folds] mirrored wedge
         const folds = Math.max(4, Math.round(Number(getMathParam(patternId, "folds")) || 8));
@@ -8882,8 +9797,8 @@
         // 8-way dihedral symmetry (D_4) heirloom kaleidoscope star with diagonal HSTs
         const rings = Math.max(1, Number(getMathParam(patternId, "rings")) || 3);
         const seed = Math.max(1, Math.round(Number(getMathParam(patternId, "seed")) || 5));
-        const dx = cx - cols * 0.5;
-        const dy = cy - rows * 0.5;
+        const dx = (nx - 0.5) * cols;
+        const dy = (ny - 0.5) * rows;
         const ax = Math.abs(dx);
         const ay = Math.abs(dy);
         // Fold into fundamental octant (u >= v >= 0) for crisp 8-way mirror symmetry
@@ -8931,8 +9846,10 @@
       } else if (patternId === "truchet") {
         const seed = Math.max(1, Math.round(Number(getMathParam(patternId, "seed")) || 3));
         const bands = Math.max(1, Math.round(Number(getMathParam(patternId, "bands")) || 1));
-        const diag = ((cell.c ^ cell.r) + Math.floor((cell.c * seed + cell.r) / (seed + 1))) % 2 === 0 ? 1 : 2;
-        const band = Math.floor(((nx + ny) * 0.5) * bands * Math.max(1, K - 1));
+        const tc = Math.floor(nx * cols);
+        const tr = Math.floor(ny * rows);
+        const diag = (((tc ^ tr) + Math.floor((tc * seed + tr) / (seed + 1))) & 1) === 0 ? 1 : 2;
+        const band = Math.abs(Math.floor(((nx + ny) * 0.5) * bands * Math.max(1, K - 1)));
         const pA = lumOrder[band % Math.max(1, K - 1)];
         const pB = lumOrder[K - 1 - (band % Math.max(1, K - 1))];
         if (isSquareGrid && K >= 2) {
@@ -8942,8 +9859,8 @@
         }
       } else if (patternId === "log-cabin") {
         const ringW = Math.max(1, Math.round(Number(getMathParam(patternId, "ringWidth")) || 1));
-        const dx = cx - cols * 0.5;
-        const dy = cy - rows * 0.5;
+        const dx = (nx - 0.5) * cols;
+        const dy = (ny - 0.5) * rows;
         const ring = Math.floor(Math.max(Math.abs(dx), Math.abs(dy)) / ringW);
         const isLightHalf = dx + dy >= 0;
         const halfK = Math.max(1, Math.floor(K / 2));
@@ -8955,15 +9872,15 @@
         const mod = Math.max(3, Math.round(Number(getMathParam(patternId, "mod")) || 9));
         const zoom = Math.max(1, Math.round(Number(getMathParam(patternId, "zoom")) || 1));
         const mirror = String(getMathParam(patternId, "mirror") || "quad");
-        const ux = mirror === "quad" ? Math.floor(Math.abs(cx - cols * 0.5) * zoom) : Math.floor(cell.c * zoom);
-        const uy = mirror === "quad" ? Math.floor(Math.abs(cy - rows * 0.5) * zoom) : Math.floor(cell.r * zoom);
+        const ux = mirror === "quad" ? Math.floor(Math.abs((nx - 0.5) * cols) * zoom) : Math.abs(Math.floor(nx * cols * zoom));
+        const uy = mirror === "quad" ? Math.floor(Math.abs((ny - 0.5) * rows) * zoom) : Math.abs(Math.floor(ny * rows * zoom));
         const v = (ux ^ uy) % mod;
         state.manualCells.set(key, { t: 0, a: pickGrad(v / Math.max(1, mod - 1)), b: -1 });
       } else if (patternId === "ulam-spiral") {
         const startInt = Math.max(1, Math.round(Number(getMathParam(patternId, "start")) || 1));
         const mode = String(getMathParam(patternId, "mode") || "primes");
-        const dx = Math.round(cx - cols * 0.5);
-        const dy = Math.round(cy - rows * 0.5);
+        const dx = Math.round((nx - 0.5) * cols);
+        const dy = Math.round((ny - 0.5) * rows);
         const val = ulamSpiralValue(dx, dy, startInt);
         let palIdx;
         if (mode === "divisors") {
@@ -8977,16 +9894,18 @@
         state.manualCells.set(key, { t: 0, a: palIdx, b: -1 });
       } else if (patternId === "hilbert") {
         const cycles = Number(getMathParam(patternId, "cycles")) || 1;
-        const hx = Math.min(hilbertN - 1, Math.floor(nx * hilbertN));
-        const hy = Math.min(hilbertN - 1, Math.floor(ny * hilbertN));
+        const hwx = ((nx % 1) + 1) % 1;
+        const hwy = ((ny % 1) + 1) % 1;
+        const hx = Math.min(hilbertN - 1, Math.floor(hwx * hilbertN));
+        const hy = Math.min(hilbertN - 1, Math.floor(hwy * hilbertN));
         const d = hilbertXy2d(hilbertN, hx, hy);
         const normD = ((d / Math.max(1, hilbertN * hilbertN - 1)) * cycles) % 1;
         state.manualCells.set(key, { t: 0, a: pickGrad(normD), b: -1 });
       } else if (patternId === "cellular-rule90") {
-        const rr = Math.min(rows, cell.r);
-        const cc = Math.min(cols, cell.c);
+        const rr = Math.max(0, Math.min(caRows - 1, Math.floor(ny * rows)));
+        const cc = ((Math.floor((nx + 0.5) * cols) % caCols) + caCols) % caCols;
         const alive = caGrid[rr][cc] === 1;
-        const palIdx = alive ? lumOrder[Math.floor((rr / Math.max(1, rows)) * Math.max(1, K - 1))] : lumOrder[K - 1];
+        const palIdx = alive ? lumOrder[Math.floor((rr / Math.max(1, caRows)) * Math.max(1, K - 1))] : lumOrder[K - 1];
         state.manualCells.set(key, { t: 0, a: palIdx, b: -1 });
       } else if (patternId === "interference") {
         const freq = Number(getMathParam(patternId, "freq")) || 18;
@@ -8996,11 +9915,17 @@
         const wave = (Math.sin(d1) + Math.sin(d2)) * 0.25 + 0.5;
         state.manualCells.set(key, { t: 0, a: pickGrad(wave), b: -1 });
       } else if (patternId === "voronoi") {
+        const vwx = ((nx % 1) + 1) % 1;
+        const vwy = ((ny % 1) + 1) % 1;
         let bestD = Infinity;
         let bestPal = lumOrder[0];
         for (let s = 0; s < voronoiSeeds.length; s++) {
           const sd = voronoiSeeds[s];
-          const d = (nx - sd.x) * (nx - sd.x) + (ny - sd.y) * (ny - sd.y);
+          let ddx = Math.abs(vwx - sd.x);
+          let ddy = Math.abs(vwy - sd.y);
+          if (ddx > 0.5) ddx = 1 - ddx;
+          if (ddy > 0.5) ddy = 1 - ddy;
+          const d = ddx * ddx + ddy * ddy;
           if (d < bestD) {
             bestD = d;
             bestPal = sd.pal;
@@ -9266,6 +10191,223 @@
     };
   }
 
+  // Widely acclaimed curated color palettes (Fine Art, Cinema, Design, Cartography & Modern Quilting)
+  const CURATED_COLOR_PALETTES = [
+    {
+      id: "pnw",
+      name: "Pacific Northwest",
+      tag: "Quilting · Coastal",
+      colors: ["#274029", "#4A525A", "#7A7570", "#8FA8B2", "#B5C2C6", "#DCE5E8"],
+    },
+    {
+      id: "desert-autumn",
+      name: "Desert Autumn",
+      tag: "Quilting · Warm",
+      colors: ["#6B2F23", "#C05C46", "#D66E34", "#C99738", "#8D9B83", "#E0A896", "#F7EFE6"],
+    },
+    {
+      id: "nordic-minimal",
+      name: "Nordic Minimalist",
+      tag: "Quilting · Hygge",
+      colors: ["#23302B", "#333739", "#5D707A", "#8FA8B2", "#D7CBC0", "#F4F4F2"],
+    },
+    {
+      id: "sanzo-wada",
+      name: "Sanzo Wada · Shōwa",
+      tag: "1930s Japan",
+      colors: ["#2B2B2B", "#4B6B64", "#C65D3B", "#D9A74A", "#F9C1CE", "#F4EFEA"],
+    },
+    {
+      id: "grand-budapest",
+      name: "Grand Budapest",
+      tag: "Wes Anderson",
+      colors: ["#4A2B5E", "#8B5FBF", "#F4A8B9", "#FFBDD8", "#F9D1BC", "#A4D8FF"],
+    },
+    {
+      id: "darjeeling",
+      name: "Darjeeling Limited",
+      tag: "Wes Anderson",
+      colors: ["#005F54", "#00A08A", "#C82828", "#F98400", "#F2AD00", "#5BBCD6", "#FBF6EC"],
+    },
+    {
+      id: "bauhaus",
+      name: "Bauhaus Primary",
+      tag: "Modernist Art",
+      colors: ["#141414", "#1E3878", "#C8302A", "#E8C018", "#CCC4AE", "#F7F6F2"],
+    },
+    {
+      id: "starry-night",
+      name: "Van Gogh · Starry Night",
+      tag: "Fine Art",
+      colors: ["#101B2D", "#1E3F73", "#3367A8", "#7C9EC3", "#D4AF37", "#FADA5E"],
+    },
+    {
+      id: "water-lilies",
+      name: "Monet · Water Lilies",
+      tag: "Impressionism",
+      colors: ["#382F2E", "#87594F", "#6E8F6B", "#6BA89E", "#A9BFCB", "#E7B7C6"],
+    },
+    {
+      id: "nord-arctic",
+      name: "Nord Arctic",
+      tag: "Design Classic",
+      colors: ["#2E3440", "#434C5E", "#5E81AC", "#88C0D0", "#BF616A", "#A3BE8C", "#EBCB8B", "#ECEFF4"],
+    },
+    {
+      id: "viridis",
+      name: "Viridis",
+      tag: "Perceptual Math",
+      colors: ["#440154", "#3B528B", "#21918C", "#5EC962", "#FDE725"],
+    },
+    {
+      id: "inferno",
+      name: "Inferno Flame",
+      tag: "Perceptual Fire",
+      colors: ["#0B0614", "#420A68", "#932667", "#DD513A", "#FCA50A", "#FCFFA4"],
+    },
+    {
+      id: "plasma",
+      name: "Plasma Radiant",
+      tag: "Perceptual Math",
+      colors: ["#0D0887", "#6A00A8", "#B12A90", "#E16462", "#FCA636", "#F0F921"],
+    },
+    {
+      id: "desert-nordic",
+      name: "Desert × Nordic",
+      tag: "Modern Quilt",
+      colors: ["#51555A", "#A24D39", "#C2D05C", "#E8C8BE", "#FBF8F2"],
+    },
+  ];
+
+  const CURATED_PALETTE_MAP = Object.fromEntries(CURATED_COLOR_PALETTES.map((p) => [p.id, p]));
+
+  function generateCuratedPalette(curatedId, count = state.palette.length || 8, options = {}) {
+    const K = Math.max(2, Math.min(16, count));
+    const preset = CURATED_PALETTE_MAP[curatedId] || CURATED_COLOR_PALETTES[0];
+    const library = options.library || "kona";
+    const reverseValues = Boolean(options.reverseValues);
+
+    // Sort preset stops darkest -> lightest so resampling preserves smooth tonal contrast
+    const baseStops = preset.colors
+      .map((hex) => hexToRgb(hex))
+      .sort((a, b) => luminance(a[0], a[1], a[2]) - luminance(b[0], b[1], b[2]));
+
+    // Resample baseStops smoothly to exact K target RGBs
+    const targets = [];
+    for (let i = 0; i < K; i++) {
+      const pos = K === 1 ? 0 : (i / (K - 1)) * (baseStops.length - 1);
+      const lo = Math.floor(pos);
+      const hi = Math.min(baseStops.length - 1, Math.ceil(pos));
+      const frac = pos - lo;
+      const r = Math.round(baseStops[lo][0] + (baseStops[hi][0] - baseStops[lo][0]) * frac);
+      const g = Math.round(baseStops[lo][1] + (baseStops[hi][1] - baseStops[lo][1]) * frac);
+      const b = Math.round(baseStops[lo][2] + (baseStops[hi][2] - baseStops[lo][2]) * frac);
+      targets.push([r, g, b]);
+    }
+
+    const printPool = getPrintPoolForLibrary(library);
+    const usedKona = new Set();
+    const usedPrints = new Set();
+    const printSlots = new Set();
+    if (library === "mixed" && K >= 4) {
+      const printCount = Math.min(3, Math.max(1, Math.floor(K / 3)));
+      for (let p = 0; p < printCount; p++) {
+        const slot = Math.min(K - 2, Math.max(1, Math.round(((p + 1) / (printCount + 1)) * (K - 1))));
+        printSlots.add(slot);
+      }
+    }
+
+    const entries = targets.map((mathTarget, i) => {
+      const [tr, tg, tb] = mathTarget;
+      let swatch = null;
+      const forcePrint = library === "kaffe" || library === "brandon" || library === "pj" || library === "prints";
+      if (forcePrint || (library === "mixed" && printSlots.has(i))) {
+        const bestPrint = pickClosestPrint(tr, tg, tb, printPool, usedPrints);
+        if (bestPrint) {
+          usedPrints.add(bestPrint.id);
+          swatch = {
+            id: state.nextColorId++,
+            r: bestPrint.rgb[0],
+            g: bestPrint.rgb[1],
+            b: bestPrint.rgb[2],
+            patternDataUrl: getPhilipJacobsDataUrl(bestPrint),
+            patternName: bestPrint.name,
+            patternAvgRgb: [...bestPrint.rgb],
+            patternScale: 1.0,
+            patternCutMode: "repeat",
+            libraryId: bestPrint.id,
+          };
+        }
+      }
+      if (!swatch) {
+        if (library === "pure") {
+          swatch = { id: state.nextColorId++, r: tr, g: tg, b: tb };
+        } else {
+          const bestKona = pickClosestKona(tr, tg, tb, usedKona);
+          usedKona.add(bestKona[5]);
+          swatch = { id: state.nextColorId++, r: bestKona[1], g: bestKona[2], b: bestKona[3] };
+        }
+      }
+      return { swatch, mathTarget };
+    });
+
+    entries.sort((a, b) => {
+      const la = luminance(a.swatch.r, a.swatch.g, a.swatch.b);
+      const lb = luminance(b.swatch.r, b.swatch.g, b.swatch.b);
+      return reverseValues ? lb - la : la - lb;
+    });
+
+    return {
+      palette: entries.map((e) => e.swatch),
+      mathTargets: entries.map((e) => e.mathTarget),
+      ruleLabel: preset.name,
+      library,
+    };
+  }
+
+  function renderCuratedPaletteList() {
+    if (!harmonyCuratedList) return;
+    harmonyCuratedList.innerHTML = "";
+    CURATED_COLOR_PALETTES.forEach((preset) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "harmony-curated-card";
+      if (state.harmonyConfig.tab === "curated" && state.harmonyConfig.curatedId === preset.id) {
+        btn.classList.add("is-active");
+      }
+      btn.setAttribute("role", "option");
+
+      const meta = document.createElement("div");
+      meta.className = "harmony-curated-meta";
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "harmony-curated-name";
+      nameSpan.textContent = preset.name;
+      const tagSpan = document.createElement("span");
+      tagSpan.className = "harmony-curated-tag";
+      tagSpan.textContent = preset.tag;
+      meta.appendChild(nameSpan);
+      meta.appendChild(tagSpan);
+
+      const bar = document.createElement("div");
+      bar.className = "harmony-curated-bar";
+      preset.colors.forEach((hex) => {
+        const seg = document.createElement("span");
+        seg.style.backgroundColor = hex;
+        bar.appendChild(seg);
+      });
+
+      btn.appendChild(meta);
+      btn.appendChild(bar);
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        state.harmonyConfig.tab = "curated";
+        state.harmonyConfig.curatedId = preset.id;
+        applyHarmonyFromControls({ record: true });
+      });
+      harmonyCuratedList.appendChild(btn);
+    });
+  }
+
   function ensureSourcePaletteForSwap(targetCount) {
     if (state.isBlankQuilt || state.activeMathPattern || !state.samplePixels) {
       return null;
@@ -9315,6 +10457,16 @@
 
   function syncHarmonyPopoverUI() {
     const cfg = state.harmonyConfig;
+    const isCurated = cfg.tab === "curated";
+    harmonyTabBtns.forEach((btn) => {
+      const active = btn.dataset.harmonyTab === (isCurated ? "curated" : "math");
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    if (harmonyMathPanel) harmonyMathPanel.hidden = isCurated;
+    if (harmonyCuratedPanel) harmonyCuratedPanel.hidden = !isCurated;
+    if (isCurated) renderCuratedPaletteList();
+
     const rule = HARMONY_RULE_MAP[cfg.rule] || HARMONY_RULES[0];
     if (harmonyFormulaHint) harmonyFormulaHint.textContent = rule.formula;
     harmonyRuleBtns.forEach((btn) => {
@@ -9356,14 +10508,20 @@
       state.sourcePalette = null;
     }
 
-    const res = generateHarmoniousPalette(K, {
-      ruleId: cfg.rule,
-      baseHue: cfg.baseHue,
-      saturation: cfg.saturation,
-      contrast: cfg.contrast,
-      library: cfg.library,
-      reverseValues: cfg.reverseValues,
-    });
+    const res =
+      cfg.tab === "curated"
+        ? generateCuratedPalette(cfg.curatedId, K, {
+            library: cfg.library,
+            reverseValues: cfg.reverseValues,
+          })
+        : generateHarmoniousPalette(K, {
+            ruleId: cfg.rule,
+            baseHue: cfg.baseHue,
+            saturation: cfg.saturation,
+            contrast: cfg.contrast,
+            library: cfg.library,
+            reverseValues: cfg.reverseValues,
+          });
 
     cfg.lastMathTargets = res.mathTargets;
     state.palette = res.palette;
@@ -9509,10 +10667,19 @@
     harmonyPopoverClose.addEventListener("click", closeHarmonyPopover);
   }
 
+  harmonyTabBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const nextTab = btn.dataset.harmonyTab === "curated" ? "curated" : "math";
+      state.harmonyConfig.tab = nextTab;
+      syncHarmonyPopoverUI();
+    });
+  });
+
   harmonyRuleBtns.forEach((btn) => {
     btn.addEventListener("click", () => {
       const nextRule = btn.dataset.harmonyRule;
       if (!HARMONY_RULE_MAP[nextRule]) return;
+      state.harmonyConfig.tab = "math";
       state.harmonyConfig.rule = nextRule;
       applyHarmonyFromControls({ record: true, coalesceKey: "harmony-rule" });
     });
@@ -9541,8 +10708,79 @@
 
   if (harmonyLibrarySelect) {
     harmonyLibrarySelect.addEventListener("change", () => {
-      state.harmonyConfig.library = harmonyLibrarySelect.value || "mixed";
+      state.harmonyConfig.library = harmonyLibrarySelect.value || "kona";
       applyHarmonyFromControls({ record: true });
+    });
+  }
+
+  function snapCurrentPaletteToLibrary(library = state.harmonyConfig.library || "kona") {
+    if (!state.image || !state.palette || state.palette.length === 0) return;
+    const K = state.palette.length;
+    const isPhotoOrMap = !state.isBlankQuilt && !state.activeMathPattern;
+    if (isPhotoOrMap && state.harmonyConfig.preserveSlots) {
+      ensureSourcePaletteForSwap(K);
+    }
+
+    const targets = state.palette.map((c) => [c.r, c.g, c.b]);
+    const printPool = getPrintPoolForLibrary(library);
+    const usedKona = new Set();
+    const usedPrints = new Set();
+    const printSlots = new Set();
+    if (library === "mixed" && K >= 4) {
+      const printCount = Math.min(3, Math.max(1, Math.floor(K / 3)));
+      for (let p = 0; p < printCount; p++) {
+        const slot = Math.min(K - 2, Math.max(1, Math.round(((p + 1) / (printCount + 1)) * (K - 1))));
+        printSlots.add(slot);
+      }
+    }
+
+    const nextPalette = targets.map(([tr, tg, tb], i) => {
+      const forcePrint = library === "kaffe" || library === "brandon" || library === "pj" || library === "prints";
+      if (forcePrint || (library === "mixed" && printSlots.has(i))) {
+        const bestPrint = pickClosestPrint(tr, tg, tb, printPool, usedPrints);
+        if (bestPrint) {
+          usedPrints.add(bestPrint.id);
+          return {
+            id: state.nextColorId++,
+            r: bestPrint.rgb[0],
+            g: bestPrint.rgb[1],
+            b: bestPrint.rgb[2],
+            patternDataUrl: getPhilipJacobsDataUrl(bestPrint),
+            patternName: bestPrint.name,
+            patternAvgRgb: [...bestPrint.rgb],
+            patternScale: 1.0,
+            patternCutMode: "repeat",
+            libraryId: bestPrint.id,
+          };
+        }
+      }
+      if (library === "pure") {
+        return { id: state.nextColorId++, r: tr, g: tg, b: tb };
+      }
+      const bestKona = pickClosestKona(tr, tg, tb, usedKona);
+      usedKona.add(bestKona[5]);
+      return { id: state.nextColorId++, r: bestKona[1], g: bestKona[2], b: bestKona[3] };
+    });
+
+    state.harmonyConfig.lastMathTargets = targets;
+    state.palette = nextPalette;
+    rehydratePalettePatterns();
+    renderPaletteSwatches();
+    if (state.activeMathPattern) {
+      applyMathPattern(state.activeMathPattern, { record: false });
+    } else {
+      renderQuilt();
+    }
+    syncSwatchPopover();
+    syncHarmonyPopoverUI();
+    const libLabel = library === "pure" ? "Solid Colors" : HARMONY_LIBRARY_LABELS[library] || "Fabric Catalog";
+    recordHistory(`Snapped palette to ${libLabel}`);
+  }
+
+  if (harmonySnapCurrentBtn) {
+    harmonySnapCurrentBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      snapCurrentPaletteToLibrary(harmonyLibrarySelect ? harmonyLibrarySelect.value : state.harmonyConfig.library);
     });
   }
 
@@ -9562,6 +10800,13 @@
 
   if (harmonyRollBtn) {
     harmonyRollBtn.addEventListener("click", () => {
+      if (state.harmonyConfig.tab === "curated") {
+        const others = CURATED_COLOR_PALETTES.filter((p) => p.id !== state.harmonyConfig.curatedId);
+        const picked = others[Math.floor(Math.random() * others.length)] || CURATED_COLOR_PALETTES[0];
+        state.harmonyConfig.curatedId = picked.id;
+        applyHarmonyFromControls({ record: true });
+        return;
+      }
       const otherRules = HARMONY_RULES.filter((r) => r.id !== state.harmonyConfig.rule);
       const picked = otherRules[Math.floor(Math.random() * otherRules.length)] || HARMONY_RULES[0];
       state.harmonyConfig.rule = picked.id;
@@ -9907,8 +11152,8 @@
     e.preventDefault();
 
     if (activeCanvasPan.mode === "math" && state.activeMathPattern) {
-      const nextX = Math.max(-0.5, Math.min(0.5, activeCanvasPan.origOffX + dx / activeCanvasPan.rectW));
-      const nextY = Math.max(-0.5, Math.min(0.5, activeCanvasPan.origOffY + dy / activeCanvasPan.rectH));
+      const nextX = Math.max(-0.75, Math.min(0.75, activeCanvasPan.origOffX + dx / activeCanvasPan.rectW));
+      const nextY = Math.max(-0.75, Math.min(0.75, activeCanvasPan.origOffY + dy / activeCanvasPan.rectH));
       state.mathTransform.offsetX = Number(nextX.toFixed(3));
       state.mathTransform.offsetY = Number(nextY.toFixed(3));
       applyMathPattern(state.activeMathPattern, { record: false });
@@ -10608,4 +11853,175 @@
     if (e.key === " " || e.key === "Enter") showOriginal();
   });
   compareBtn.addEventListener("keyup", showQuilt);
+
+  // --- In-App Changelog Modal (preserves active quilt edits!) ---
+  const openChangelogBtn = document.getElementById("open-changelog-btn");
+  const changelogModal = document.getElementById("changelog-modal");
+  const changelogModalBackdrop = document.getElementById("changelog-modal-backdrop");
+  const changelogModalClose = document.getElementById("changelog-modal-close");
+  const changelogModalBody = document.getElementById("changelog-modal-body");
+  let changelogLoaded = false;
+
+  function closeChangelogModal() {
+    if (changelogModal) changelogModal.hidden = true;
+  }
+
+  async function openChangelogModal() {
+    if (!changelogModal) return;
+    changelogModal.hidden = false;
+    if (changelogLoaded || !changelogModalBody) return;
+    try {
+      const res = await fetch(`changelog.html?v=${Date.now()}`);
+      if (!res.ok) throw new Error("Failed to load changelog");
+      const html = await res.text();
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      const list = doc.querySelector(".release-list");
+      if (list) {
+        changelogModalBody.innerHTML = "";
+        changelogModalBody.appendChild(list);
+        changelogLoaded = true;
+      } else {
+        changelogModalBody.innerHTML = '<p class="changelog-loading">Could not load release history.</p>';
+      }
+    } catch {
+      changelogModalBody.innerHTML =
+        '<p class="changelog-loading">Could not load changelog inline. <a href="changelog.html" target="_blank" rel="noopener" class="footer-link">Open in new tab</a></p>';
+    }
+  }
+
+  if (openChangelogBtn) {
+    openChangelogBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      openChangelogModal();
+    });
+  }
+  if (changelogModalClose) changelogModalClose.addEventListener("click", closeChangelogModal);
+  if (changelogModalBackdrop) changelogModalBackdrop.addEventListener("click", closeChangelogModal);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && changelogModal && !changelogModal.hidden) {
+      closeChangelogModal();
+    }
+  });
+
+  // --- Automatic Local Draft Persistence (IndexedDB) so refreshes never lose edits ---
+  const DRAFT_DB_NAME = "quiltcaster_studio_db";
+  const DRAFT_STORE = "drafts";
+  const DRAFT_KEY = "active_quilt";
+  let draftSaveTimer = null;
+
+  function openDraftDb() {
+    return new Promise((resolve, reject) => {
+      if (typeof indexedDB === "undefined") {
+        reject(new Error("IndexedDB unavailable"));
+        return;
+      }
+      const req = indexedDB.open(DRAFT_DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(DRAFT_STORE)) {
+          db.createObjectStore(DRAFT_STORE);
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  function buildDraftPayload() {
+    if (!state.image) return null;
+    const currentTitle = getCurrentProjectTitle();
+    return {
+      format: PATTERN_FORMAT,
+      version: PATTERN_VERSION,
+      savedAt: new Date().toISOString(),
+      name: state.fileName || "quilt",
+      patternTitle: currentTitle,
+      settings: {
+        cols: state.cols,
+        gridLayout: state.gridLayout,
+        showSeamLines: state.showSeamLines,
+        hstEnabled: state.hstEnabled,
+        hstMode: state.hstMode,
+        hstEdgeSensitivity: state.hstEdgeSensitivity,
+        hstRatio: state.hstRatio,
+        paintMaskRle: encodePaintMaskRle(),
+        isBlankQuilt: state.isBlankQuilt,
+        ...(serializeManualCells() ? { manualCells: serializeManualCells() } : {}),
+        regionMode: state.unit === "cm" ? "metric" : "us",
+        unit: state.unit,
+        finishedSquareSize: state.finishedSquareSize,
+        seamAllowance: state.seamAllowance,
+        pageSize: pageSizeSelect.value,
+        assemblyMode: assemblyModeSelect.value,
+        crop: state.crop,
+      },
+      palette: state.palette.map((c) => rgbToHex(c.r, c.g, c.b)),
+      ...(state.sourcePalette && state.sourcePalette.length === state.palette.length
+        ? { sourcePalette: state.sourcePalette.map((c) => rgbToHex(c.r, c.g, c.b)) }
+        : {}),
+      ...(serializePalettePatterns() ? { palettePatterns: serializePalettePatterns() } : {}),
+      activeMathPattern: state.activeMathPattern || "",
+      mathParams: state.mathParams ? { ...state.mathParams } : {},
+      mathTransform: state.mathTransform ? { ...state.mathTransform } : { offsetX: 0, offsetY: 0, scale: 1.0, rotate: 0 },
+      mathReversePalette: Boolean(state.mathReversePalette),
+      history: state.history,
+      historyIndex: state.historyIndex,
+      image: getImageDataUrlForSave(),
+    };
+  }
+
+  function scheduleDraftSave() {
+    if (!state.image) return;
+    clearTimeout(draftSaveTimer);
+    draftSaveTimer = setTimeout(async () => {
+      try {
+        const payload = buildDraftPayload();
+        if (!payload || !payload.image) return;
+        const db = await openDraftDb();
+        const tx = db.transaction(DRAFT_STORE, "readwrite");
+        tx.objectStore(DRAFT_STORE).put(payload, DRAFT_KEY);
+      } catch {
+        // Ignore storage quota or private browsing errors
+      }
+    }, 450);
+  }
+
+  function clearActiveDraft() {
+    clearTimeout(draftSaveTimer);
+    openDraftDb()
+      .then((db) => {
+        const tx = db.transaction(DRAFT_STORE, "readwrite");
+        tx.objectStore(DRAFT_STORE).delete(DRAFT_KEY);
+      })
+      .catch(() => {});
+  }
+
+  async function restoreActiveDraftOnLoad() {
+    try {
+      const db = await openDraftDb();
+      const draft = await new Promise((resolve, reject) => {
+        const tx = db.transaction(DRAFT_STORE, "readonly");
+        const req = tx.objectStore(DRAFT_STORE).get(DRAFT_KEY);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => reject(req.error);
+      });
+      if (!draft || !draft.image || typeof draft.image !== "string") return;
+      if (state.image) return; // User already loaded something
+      loadImageFromSrc(draft.image, draft.name || "quilt.png", {
+        restore: draft,
+        onError: () => clearActiveDraft(),
+      });
+      if (draft.activeMathPattern && MATH_PATTERN_SPECS[draft.activeMathPattern]) {
+        state.activeMathPattern = draft.activeMathPattern;
+        state.mathParams = draft.mathParams || getDefaultMathParams(draft.activeMathPattern);
+        state.mathTransform = draft.mathTransform || { offsetX: 0, offsetY: 0, scale: 1.0, rotate: 0 };
+        state.mathReversePalette = Boolean(draft.mathReversePalette);
+        syncMathPropsButton();
+      }
+    } catch {
+      // Ignore IndexedDB errors
+    }
+  }
+
+  restoreActiveDraftOnLoad();
 })();
