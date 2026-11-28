@@ -98,6 +98,7 @@
   const dimensionsSummary = document.getElementById("dimensions-summary");
   const cutSquareLabel = document.getElementById("cut-square-label");
   const cutSquareValue = document.getElementById("cut-square-value");
+  const cuttingSummaryInline = document.getElementById("cutting-summary-inline");
   const hstCutStat = document.getElementById("hst-cut-stat");
   const hstCutLabel = document.getElementById("hst-cut-label");
   const hstCutSquareValue = document.getElementById("hst-cut-square-value");
@@ -1561,12 +1562,18 @@
       if (hstCutStat) hstCutStat.hidden = false;
       if (dimensionsSummary) dimensionsSummary.classList.add("has-hst");
       if (hstCutSquareValue) hstCutSquareValue.textContent = `${formatMeasure(halfCutW, unit)} × ${formatMeasure(halfCutH, unit)}`;
+      if (cuttingSummaryInline) {
+        cuttingSummaryInline.textContent = `Cut ${formatMeasure(cutW, unit)} × ${formatMeasure(cutH, unit)} · ${formatMeasure(seam, unit)} seam`;
+      }
     } else {
       const cutSize = finished + 2 * seam;
       if (cutSquareLabel) cutSquareLabel.textContent = "Cut square";
       cutSquareValue.textContent = state.hstEnabled
         ? formatMeasure(cutSize, unit)
         : `${formatMeasure(cutSize, unit)} × ${formatMeasure(cutSize, unit)}`;
+      if (cuttingSummaryInline) {
+        cuttingSummaryInline.textContent = `Cut ${formatMeasure(cutSize, unit)} sq · ${formatMeasure(seam, unit)} seam`;
+      }
       if (hstCutLabel) hstCutLabel.textContent = "HST starter";
       const hstCutSize = getHstCutSize();
       if (hstCutStat) hstCutStat.hidden = !state.hstEnabled;
@@ -3979,10 +3986,63 @@
     });
   }
 
-  function savePattern() {
+  const saveNameModal = document.getElementById("save-name-modal");
+  const saveNameBackdrop = document.getElementById("save-name-backdrop");
+  const saveNameClose = document.getElementById("save-name-close");
+  const saveNameCancel = document.getElementById("save-name-cancel");
+  const saveNameForm = document.getElementById("save-name-form");
+  const saveNameInput = document.getElementById("save-name-input");
+
+  function isDefaultProjectTitle(title) {
+    const clean = String(title || "").trim().toLowerCase();
+    return !clean || clean === "untitled quilt" || clean === "custom quilt";
+  }
+
+  function closeSaveNameModal() {
+    if (saveNameModal) saveNameModal.hidden = true;
+  }
+
+  function openSaveNameModal() {
+    if (!saveNameModal || !saveNameInput) {
+      savePattern({ skipNamePrompt: true });
+      return;
+    }
+    saveNameInput.value = "";
+    saveNameModal.hidden = false;
+    requestAnimationFrame(() => {
+      saveNameInput.focus();
+    });
+  }
+
+  if (saveNameClose) saveNameClose.addEventListener("click", closeSaveNameModal);
+  if (saveNameCancel) saveNameCancel.addEventListener("click", closeSaveNameModal);
+  if (saveNameBackdrop) saveNameBackdrop.addEventListener("click", closeSaveNameModal);
+  if (saveNameForm) {
+    saveNameForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const entered = saveNameInput ? saveNameInput.value.trim() : "";
+      if (entered) {
+        syncProjectTitle(entered);
+        recordHistory(`Renamed to "${entered}"`);
+      }
+      closeSaveNameModal();
+      savePattern({ skipNamePrompt: true });
+    });
+  }
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && saveNameModal && !saveNameModal.hidden) {
+      closeSaveNameModal();
+    }
+  });
+
+  function savePattern({ skipNamePrompt = false } = {}) {
     if (!state.image) return;
 
     const currentTitle = getCurrentProjectTitle();
+    if (!skipNamePrompt && isDefaultProjectTitle(currentTitle)) {
+      openSaveNameModal();
+      return;
+    }
 
     const pattern = {
       format: PATTERN_FORMAT,
@@ -4880,8 +4940,11 @@
       const [fontData, brandIconDataUrl] = await Promise.all([loadPdfFonts(), loadPdfBrandIcon()]);
       const { jsPDF } = window.jspdf;
       const isA4 = pageSizeSelect.value === "a4";
+      const layoutCfg = getLayoutConfig();
+      const isStaggeredLayout = layoutCfg.stagger !== "none";
+      const unitAspect = layoutCfg.aspect || 1.0;
       const assemblyMode = assemblyModeSelect ? assemblyModeSelect.value : "rows";
-      const isBlockMode = assemblyMode === "blocks";
+      const isBlockMode = !isStaggeredLayout && assemblyMode === "blocks";
       const BLOCK_SIZE = 8;
 
       const doc = new jsPDF({ orientation: "portrait", unit: "in", format: isA4 ? "a4" : "letter" });
@@ -4898,12 +4961,14 @@
       const rows = state.rows;
       const finished = Math.max(0.1, state.finishedSquareSize);
       const seam = Math.max(0, state.seamAllowance);
+      const uDimsPdf = getUnitFinishedDims(finished, state.gridLayout);
       const cutSize = finished + 2 * seam;
       const hstCutSize = getHstCutSize();
-      const hasHsts = state.hstEnabled && state.hstCount > 0;
-      const solidCellsTotal = Math.max(0, cols * rows - (hasHsts ? state.hstCount : 0));
-      const quiltW = cols * finished;
-      const quiltH = rows * finished;
+      const hasHsts = !isStaggeredLayout && state.hstEnabled && state.hstCount > 0;
+      const totalPiecesPdf = isStaggeredLayout && state.layoutCells ? state.layoutCells.length : cols * rows;
+      const solidCellsTotal = Math.max(0, totalPiecesPdf - (hasHsts ? state.hstCount : 0));
+      const quiltW = cols * uDimsPdf.w;
+      const quiltH = rows * uDimsPdf.h;
       const wof = getUsableWof(unit);
 
       const title = getCurrentProjectTitle();
@@ -5777,9 +5842,11 @@
           const gridAreaW = contentW - labelLeftW - arrowRightW;
           const gridAreaH = pageH - gridTopY - labelTopH - 0.65;
 
-          const cellSize = Math.min(0.44, gridAreaW / subCols, gridAreaH / subRows);
-          const gridW = subCols * cellSize;
-          const gridH = subRows * cellSize;
+          const pdfCellH = Math.min(0.44, gridAreaH / subRows, gridAreaW / (subCols * unitAspect));
+          const pdfCellW = pdfCellH * unitAspect;
+          const cellSize = Math.min(pdfCellW, pdfCellH);
+          const gridW = subCols * pdfCellW;
+          const gridH = subRows * pdfCellH;
           const gridX = margin + labelLeftW + (gridAreaW - gridW) / 2;
           const gridY = gridTopY + labelTopH;
 
@@ -5789,22 +5856,24 @@
           doc.setFontSize(headerFont);
           doc.setTextColor(90, 82, 72);
           for (let c = 0; c < subCols; c++) {
-            const cx = gridX + (c + 0.5) * cellSize;
+            const cx = gridX + (c + 0.5) * pdfCellW;
             doc.text(String(cStart + c + 1), cx, gridY - 0.08, { align: "center" });
           }
 
-          const cellFont = Math.min(9.2, Math.max(5.5, cellSize * 25));
+          const cellFont = Math.min(9.2, Math.max(5.0, cellSize * 25));
           for (let r = 0; r < subRows; r++) {
             const globalRow = rStart + r;
-            const ry = gridY + r * cellSize;
+            const ry = gridY + r * pdfCellH;
 
             doc.setFont(fonts.mono, "bold");
             doc.setFontSize(headerFont);
             doc.setTextColor(90, 82, 72);
-            doc.text(`R${globalRow + 1}`, gridX - 0.07, ry + cellSize * 0.64, { align: "right" });
+            doc.text(`R${globalRow + 1}`, gridX - 0.07, ry + pdfCellH * 0.64, { align: "right" });
 
             const pointRight = globalRow % 2 === 1;
-            drawPressArrow(doc, gridX + gridW + 0.08, ry + cellSize * 0.5, 0.18, pointRight);
+            drawPressArrow(doc, gridX + gridW + 0.08, ry + pdfCellH * 0.5, 0.18, pointRight);
+
+            if (isStaggeredLayout) continue;
 
             for (let c = 0; c < subCols; c++) {
               const globalCol = cStart + c;
@@ -5813,19 +5882,19 @@
               const palIdx = state.gridAssignments[cellIdx];
               const pal = state.palette[palIdx];
               const code = codeByPaletteIndex.get(palIdx) || "?";
-              const cx = gridX + c * cellSize;
+              const cx = gridX + c * pdfCellW;
 
               if (cellType === 0) {
                 doc.setFillColor(pal.r, pal.g, pal.b);
                 doc.setDrawColor(168, 160, 150);
                 doc.setLineWidth(0.005);
-                doc.rect(cx, ry, cellSize, cellSize, "FD");
+                doc.rect(cx, ry, pdfCellW, pdfCellH, "FD");
 
                 const isLight = luminance(pal.r, pal.g, pal.b) > 142;
                 doc.setTextColor(isLight ? 25 : 255, isLight ? 22 : 255, isLight ? 18 : 255);
                 doc.setFont(fonts.mono, "bold");
                 doc.setFontSize(cellFont);
-                doc.text(code, cx + cellSize / 2, ry + cellSize * 0.65, { align: "center" });
+                doc.text(code, cx + pdfCellW / 2, ry + pdfCellH * 0.65, { align: "center" });
               } else {
                 const palIdxB = state.gridAssignmentsB[cellIdx];
                 const palB = state.palette[palIdxB] || pal;
@@ -5834,22 +5903,22 @@
 
                 // Fill base rect with Half B, then overlay Half A triangle + diagonal seam
                 doc.setFillColor(palB.r, palB.g, palB.b);
-                doc.rect(cx, ry, cellSize, cellSize, "F");
+                doc.rect(cx, ry, pdfCellW, pdfCellH, "F");
                 doc.setFillColor(pal.r, pal.g, pal.b);
                 if (cellType === 1) {
                   // '/' diagonal: Half A = TL, Half B = BR
-                  doc.triangle(cx, ry, cx + cellSize, ry, cx, ry + cellSize, "F");
+                  doc.triangle(cx, ry, cx + pdfCellW, ry, cx, ry + pdfCellH, "F");
                   doc.setDrawColor(150, 142, 130);
                   doc.setLineWidth(0.005);
-                  doc.rect(cx, ry, cellSize, cellSize, "S");
-                  doc.line(cx, ry + cellSize, cx + cellSize, ry);
+                  doc.rect(cx, ry, pdfCellW, pdfCellH, "S");
+                  doc.line(cx, ry + pdfCellH, cx + pdfCellW, ry);
                 } else {
                   // '\' diagonal: Half A = BL, Half B = TR
-                  doc.triangle(cx, ry, cx, ry + cellSize, cx + cellSize, ry + cellSize, "F");
+                  doc.triangle(cx, ry, cx, ry + pdfCellH, cx + pdfCellW, ry + pdfCellH, "F");
                   doc.setDrawColor(150, 142, 130);
                   doc.setLineWidth(0.005);
-                  doc.rect(cx, ry, cellSize, cellSize, "S");
-                  doc.line(cx, ry, cx + cellSize, ry + cellSize);
+                  doc.rect(cx, ry, pdfCellW, pdfCellH, "S");
+                  doc.line(cx, ry, cx + pdfCellW, ry + pdfCellH);
                 }
 
                 doc.setFont(fonts.mono, "bold");
@@ -5858,16 +5927,50 @@
                 const lightB = luminance(palB.r, palB.g, palB.b) > 142;
                 if (cellType === 1) {
                   doc.setTextColor(lightA ? 25 : 255, lightA ? 22 : 255, lightA ? 18 : 255);
-                  doc.text(code, cx + cellSize * 0.27, ry + cellSize * 0.37, { align: "center" });
+                  doc.text(code, cx + pdfCellW * 0.27, ry + pdfCellH * 0.37, { align: "center" });
                   doc.setTextColor(lightB ? 25 : 255, lightB ? 22 : 255, lightB ? 18 : 255);
-                  doc.text(codeB, cx + cellSize * 0.73, ry + cellSize * 0.85, { align: "center" });
+                  doc.text(codeB, cx + pdfCellW * 0.73, ry + pdfCellH * 0.85, { align: "center" });
                 } else {
                   doc.setTextColor(lightA ? 25 : 255, lightA ? 22 : 255, lightA ? 18 : 255);
-                  doc.text(code, cx + cellSize * 0.27, ry + cellSize * 0.85, { align: "center" });
+                  doc.text(code, cx + pdfCellW * 0.27, ry + pdfCellH * 0.85, { align: "center" });
                   doc.setTextColor(lightB ? 25 : 255, lightB ? 22 : 255, lightB ? 18 : 255);
-                  doc.text(codeB, cx + cellSize * 0.73, ry + cellSize * 0.37, { align: "center" });
+                  doc.text(codeB, cx + pdfCellW * 0.73, ry + pdfCellH * 0.37, { align: "center" });
                 }
               }
+            }
+          }
+
+          // Exact staggered brick / tile / half-drop piece rendering matching state.layoutCells 1:1
+          if (isStaggeredLayout && Array.isArray(state.layoutCells)) {
+            for (let li = 0; li < state.layoutCells.length; li++) {
+              const lc = state.layoutCells[li];
+              if (lc.x1 <= cStart || lc.x0 >= cEnd || lc.y1 <= rStart || lc.y0 >= rEnd) continue;
+              const x0 = Math.max(cStart, lc.x0);
+              const x1 = Math.min(cEnd, lc.x1);
+              const y0 = Math.max(rStart, lc.y0);
+              const y1 = Math.min(rEnd, lc.y1);
+              const rx = gridX + (x0 - cStart) * pdfCellW;
+              const ry = gridY + (y0 - rStart) * pdfCellH;
+              const rw = (x1 - x0) * pdfCellW;
+              const rh = (y1 - y0) * pdfCellH;
+              if (rw <= 0.001 || rh <= 0.001) continue;
+
+              const palIdx = state.gridAssignments[lc.idx];
+              const pal = state.palette[palIdx] || { r: 230, g: 230, b: 230 };
+              const code = codeByPaletteIndex.get(palIdx) || "?";
+              const labelTxt = lc.isHalf ? `${code}½` : code;
+
+              doc.setFillColor(pal.r, pal.g, pal.b);
+              doc.setDrawColor(168, 160, 150);
+              doc.setLineWidth(0.005);
+              doc.rect(rx, ry, rw, rh, "FD");
+
+              const isLight = luminance(pal.r, pal.g, pal.b) > 142;
+              doc.setTextColor(isLight ? 25 : 255, isLight ? 22 : 255, isLight ? 18 : 255);
+              doc.setFont(fonts.mono, "bold");
+              const pieceFont = Math.min(cellFont, Math.max(4.0, Math.min(rw, rh) * (lc.isHalf ? 20 : 25)));
+              doc.setFontSize(pieceFont);
+              doc.text(labelTxt, rx + rw / 2, ry + rh * 0.65, { align: "center" });
             }
           }
 
@@ -5883,13 +5986,13 @@
           doc.setLineWidth(0.016);
           for (let c = 1; c < subCols; c++) {
             if ((cStart + c) % stepGuide === 0) {
-              const x = gridX + c * cellSize;
+              const x = gridX + c * pdfCellW;
               doc.line(x, gridY, x, gridY + gridH);
             }
           }
           for (let r = 1; r < subRows; r++) {
             if ((rStart + r) % stepGuide === 0) {
-              const y = gridY + r * cellSize;
+              const y = gridY + r * pdfCellH;
               doc.line(gridX, y, gridX + gridW, y);
             }
           }
@@ -5967,8 +6070,37 @@
 
       drawAssemblyHeader(false);
 
-      // Helper to encode a segment [cStart..cEnd) of row `r` into run-length items
+      // Helper to encode a segment [cStart..cEnd) of row `r` (or staggered strip) into exact run-length items
+      const encodeStaggeredStripRuns = (stripCells) => {
+        const runs = [];
+        let prevKey = null;
+        let curRun = null;
+        for (let i = 0; i < stripCells.length; i++) {
+          const lc = stripCells[i];
+          const pIdx = state.gridAssignments[lc.idx];
+          const baseCode = codeByPaletteIndex.get(pIdx) || "?";
+          const code = lc.isHalf ? `${baseCode}½` : baseCode;
+          const pal = state.palette[pIdx];
+          const key = `S:${code}`;
+          if (key === prevKey && curRun) {
+            curRun.count++;
+          } else {
+            if (curRun) runs.push(curRun);
+            prevKey = key;
+            curRun = { count: 1, isHst: false, code, pal };
+          }
+        }
+        if (curRun) runs.push(curRun);
+        return runs;
+      };
+
       const encodeRowRuns = (r, cStart, cEnd) => {
+        if (isStaggeredLayout && Array.isArray(state.layoutCells)) {
+          const stripCells = state.layoutCells
+            .filter((lc) => lc.r === r)
+            .sort((a, b) => a.x0 - b.x0);
+          return encodeStaggeredStripRuns(stripCells);
+        }
         const runs = [];
         let prevKey = null;
         let curRun = null;
@@ -6094,7 +6226,15 @@
         ay += totalH;
       };
 
-      if (!isBlockMode) {
+      if (isStaggeredLayout && layoutCfg.stagger === "col" && Array.isArray(state.layoutCells)) {
+        for (let c = 0; c < cols; c++) {
+          const colCells = state.layoutCells
+            .filter((lc) => lc.c === c)
+            .sort((a, b) => a.y0 - b.y0);
+          const runs = encodeStaggeredStripRuns(colCells);
+          renderChipRow(`Col ${c + 1}`, c % 2 === 1, runs);
+        }
+      } else if (!isBlockMode) {
         for (let r = 0; r < rows; r++) {
           const runs = encodeRowRuns(r, 0, cols);
           renderChipRow(`Row ${r + 1}`, r % 2 === 1, runs);
@@ -6389,6 +6529,7 @@
       const isA4 = pageSizeSelect.value === "a4";
       const doc = new jsPDF({ orientation: "portrait", unit: "in", format: isA4 ? "a4" : "letter" });
       doc.setLineHeightFactor(1.38);
+      const isStaggeredLayout = getLayoutConfig().stagger !== "none";
       const fonts = registerPdfFonts(doc, fontData);
 
       const pageW = isA4 ? 8.27 : 8.5;
@@ -6401,12 +6542,14 @@
       const rows = state.rows;
       const finished = Math.max(0.1, state.finishedSquareSize);
       const seam = Math.max(0, state.seamAllowance);
+      const uDimsPdf = getUnitFinishedDims(finished, state.gridLayout);
       const cutSize = finished + 2 * seam;
       const hstCutSize = getHstCutSize();
-      const hasHsts = state.hstEnabled && state.hstCount > 0;
-      const solidCellsTotal = Math.max(0, cols * rows - (hasHsts ? state.hstCount : 0));
-      const quiltW = cols * finished;
-      const quiltH = rows * finished;
+      const hasHsts = !isStaggeredLayout && state.hstEnabled && state.hstCount > 0;
+      const totalPiecesPdf = isStaggeredLayout && state.layoutCells ? state.layoutCells.length : cols * rows;
+      const solidCellsTotal = Math.max(0, totalPiecesPdf - (hasHsts ? state.hstCount : 0));
+      const quiltW = cols * uDimsPdf.w;
+      const quiltH = rows * uDimsPdf.h;
 
       const title = getCurrentProjectTitle();
 

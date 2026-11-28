@@ -2531,6 +2531,106 @@ input[type="range"].harmony-hue-slider::-moz-range-thumb {
   flex-shrink: 0;
 }
 
+/* Joined Pill & Split-Button Groups for Cohesive Tool Clustering */
+.toolbar-pill-group {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.toolbar-pill-group > .btn {
+  border: none;
+  border-radius: 0;
+  margin: 0;
+}
+
+.toolbar-pill-group > .btn + .btn {
+  border-left: 1px solid var(--border);
+}
+
+.toolbar-pill-group > .btn.is-cropped {
+  border-color: transparent;
+}
+
+/* Header File Actions Joined Pill (echoes Undo/Redo pill) */
+.topbar-actions .action-group {
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.topbar-actions .action-group > .btn {
+  border: none;
+  border-radius: 0;
+  min-height: 36px;
+  padding: 0.42rem 0.78rem;
+}
+
+.topbar-actions .action-group > .btn + .btn {
+  border-left: 1px solid var(--border);
+}
+
+/* Collapsible Cutting Units inside Quilt Size & Cutting */
+.cutting-details {
+  margin-top: 0.65rem;
+  border-top: 1px dashed var(--border);
+  padding-top: 0.55rem;
+}
+
+.cutting-details-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: color 0.12s ease;
+}
+
+.cutting-details-summary::-webkit-details-marker {
+  display: none;
+}
+
+.cutting-details-summary:hover {
+  color: var(--text);
+}
+
+.cutting-details-pill {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text);
+  background: #f5efe6;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.12rem 0.5rem;
+}
+
+.cutting-details-caret {
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+
+.cutting-details[open] .cutting-details-caret {
+  transform: rotate(180deg);
+}
+
+.cutting-details-body {
+  padding-top: 0.65rem;
+}
+
 .swatch-item.is-unused {
   opacity: 0.54;
   transition: opacity 0.14s ease, border-color 0.14s ease, transform 0.12s ease;
@@ -3126,6 +3226,33 @@ input[type="range"].harmony-hue-slider::-moz-range-thumb {
   background: #f5efe6;
   padding: 0.06rem 0.3rem;
   border-radius: 4px;
+}
+
+.save-name-modal-card {
+  width: min(420px, 100%);
+}
+
+.save-name-form {
+  padding: 1.1rem 1.35rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  background: var(--surface);
+}
+
+.save-name-form code {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  background: #f5efe6;
+  padding: 0.05rem 0.28rem;
+  border-radius: 4px;
+}
+
+.save-name-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }
 
 /* Tablet / iPad & Mobile responsiveness */

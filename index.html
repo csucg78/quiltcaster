@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="64x64" href="favicon-v3.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-v3.png" />
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon-v3.png" />
-  <link rel="manifest" href="site.webmanifest?v=89" />
-  <link rel="stylesheet" href="styles.css?v=89" />
+  <link rel="manifest" href="site.webmanifest?v=93" />
+  <link rel="stylesheet" href="styles.css?v=93" />
 </head>
 <body>
   <header class="topbar">
@@ -517,7 +517,7 @@
 
         <div class="control-card quilt-dimensions-card">
           <div class="control-header">
-            <label for="quilt-preset-select">Quilt Dimensions</label>
+            <label for="quilt-preset-select">Quilt Size &amp; Cutting</label>
             <span class="control-value region-mode-badge" id="unit-mode-badge">in · Letter</span>
           </div>
 
@@ -565,56 +565,59 @@
               </div>
             </div>
           </div>
-        </div>
 
-        <div class="control-card cutting-units-card">
-          <div class="control-header">
-            <label for="finished-size-input">Cutting Units</label>
-          </div>
+          <details class="cutting-details" id="cutting-details">
+            <summary class="cutting-details-summary">
+              <span class="cutting-details-title">Cutting units</span>
+              <span class="cutting-details-pill" id="cutting-summary-inline">Cut 3" × 3" · 0.25" seam</span>
+              <svg class="icon cutting-details-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </summary>
+            <div class="cutting-details-body">
+              <div class="cutting-units-row">
+                <label class="field">
+                  <span>Finished unit</span>
+                  <div class="input-with-unit">
+                    <input
+                      type="number"
+                      id="finished-size-input"
+                      min="0.5"
+                      max="24"
+                      step="0.25"
+                      value="2.5"
+                    />
+                    <span class="unit-suffix" data-unit-label>in</span>
+                  </div>
+                </label>
 
-          <div class="cutting-units-row">
-            <label class="field">
-              <span>Finished unit</span>
-              <div class="input-with-unit">
-                <input
-                  type="number"
-                  id="finished-size-input"
-                  min="0.5"
-                  max="24"
-                  step="0.25"
-                  value="2.5"
-                />
-                <span class="unit-suffix" data-unit-label>in</span>
-              </div>
-            </label>
+                <label class="field">
+                  <span>Seam allowance</span>
+                  <div class="input-with-unit">
+                    <input
+                      type="number"
+                      id="seam-allowance-input"
+                      min="0"
+                      max="4"
+                      step="0.125"
+                      value="0.25"
+                    />
+                    <span class="unit-suffix" data-unit-label>in</span>
+                  </div>
+                </label>
 
-            <label class="field">
-              <span>Seam allowance</span>
-              <div class="input-with-unit">
-                <input
-                  type="number"
-                  id="seam-allowance-input"
-                  min="0"
-                  max="4"
-                  step="0.125"
-                  value="0.25"
-                />
-                <span class="unit-suffix" data-unit-label>in</span>
+                <div class="dimensions-summary dimensions-summary-single" id="dimensions-summary">
+                  <div class="dim-stat dim-stat-inline">
+                    <span class="dim-label" id="cut-square-label">Cut square</span>
+                    <strong class="dim-value" id="cut-square-value">3"</strong>
+                  </div>
+                  <div class="dim-stat dim-stat-inline" id="hst-cut-stat" hidden>
+                    <span class="dim-label" id="hst-cut-label">HST starter</span>
+                    <strong class="dim-value" id="hst-cut-square-value">3 3/8"</strong>
+                  </div>
+                </div>
               </div>
-            </label>
-
-            <div class="dimensions-summary dimensions-summary-single" id="dimensions-summary">
-              <div class="dim-stat dim-stat-inline">
-                <span class="dim-label" id="cut-square-label">Cut square</span>
-                <strong class="dim-value" id="cut-square-value">3"</strong>
-              </div>
-              <div class="dim-stat dim-stat-inline" id="hst-cut-stat" hidden>
-                <span class="dim-label" id="hst-cut-label">HST starter</span>
-                <strong class="dim-value" id="hst-cut-square-value">3 3/8"</strong>
-              </div>
+              <p class="wof-note" id="wof-note">Yardage assumes 42" WOF + 10% buffer</p>
             </div>
-          </div>
-          <p class="wof-note" id="wof-note">Yardage assumes 42" WOF + 10% buffer</p>
+          </details>
         </div>
 
         <div class="control-card">
@@ -668,49 +671,53 @@
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg>
               <span id="crop-btn-label">Crop</span>
             </button>
-            <button
-              type="button"
-              class="btn btn-ghost btn-small"
-              id="paint-toggle-btn"
-              title="Brush half-square triangles or solid squares onto areas of the quilt"
-            >
-              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3Z"/><path d="M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7"/><path d="M14.5 17.5 4.5 15"/></svg>
-              <span id="paint-btn-label">Paint</span>
-            </button>
-            <button
-              type="button"
-              class="btn btn-ghost btn-small pan-tool-btn"
-              id="pan-toggle-btn"
-              aria-pressed="false"
-              aria-label="Hand reposition tool"
-              title="Hand reposition tool (H, or hold Space) — drag to pan patterns, satellite maps, cropped photos, or painted blocks"
-            >
-              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>
-            </button>
+            <div class="toolbar-pill-group" role="group" aria-label="Canvas pointer mode">
+              <button
+                type="button"
+                class="btn btn-ghost btn-small"
+                id="paint-toggle-btn"
+                title="Brush half-square triangles or solid squares onto areas of the quilt (P)"
+              >
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3Z"/><path d="M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7"/><path d="M14.5 17.5 4.5 15"/></svg>
+                <span id="paint-btn-label">Paint</span>
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-small pan-tool-btn"
+                id="pan-toggle-btn"
+                aria-pressed="false"
+                aria-label="Hand reposition tool"
+                title="Hand reposition tool (H, or hold Space) — drag to pan patterns, satellite maps, cropped photos, or painted blocks"
+              >
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>
+              </button>
+            </div>
             <span class="toolbar-sep" aria-hidden="true"></span>
             <div class="math-toolbar-group" id="math-menu-wrap">
-              <button
-                type="button"
-                class="btn btn-ghost btn-small math-menu-trigger"
-                id="math-menu-btn"
-                aria-haspopup="menu"
-                aria-expanded="false"
-                title="Generate botanical, fractal, or mathematical quilt patterns from your current palette"
-              >
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z"/></svg>
-                <span class="math-menu-trigger-label" id="math-menu-label">Generate</span>
-                <svg class="icon icon-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-              </button>
-              <button
-                type="button"
-                class="btn btn-ghost btn-small math-props-trigger"
-                id="math-props-btn"
-                title="Adjust pattern parameters live"
-                aria-label="Pattern properties"
-                hidden
-              >
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
-              </button>
+              <div class="toolbar-pill-group toolbar-split-group">
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-small math-menu-trigger"
+                  id="math-menu-btn"
+                  aria-haspopup="menu"
+                  aria-expanded="false"
+                  title="Generate botanical, fractal, heritage, or mathematical quilt patterns from your current palette"
+                >
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z"/></svg>
+                  <span class="math-menu-trigger-label" id="math-menu-label">Generate</span>
+                  <svg class="icon icon-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-small math-props-trigger"
+                  id="math-props-btn"
+                  title="Adjust pattern parameters live"
+                  aria-label="Pattern properties"
+                  hidden
+                >
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+                </button>
+              </div>
               <button
                 type="button"
                 class="btn btn-ghost btn-small"
@@ -724,26 +731,28 @@
             </div>
           </div>
           <div class="preview-toolbar-actions" role="group" aria-label="Preview display options">
-            <button
-              type="button"
-              class="btn btn-ghost btn-small is-toggled"
-              id="seam-lines-btn"
-              aria-pressed="true"
-              title="Show or hide stitched seam lines on preview"
-            >
-              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 12h18"/><path d="M12 3v18"/></svg>
-              Seams
-            </button>
-            <button
-              type="button"
-              class="btn btn-ghost btn-small"
-              id="thirds-overlay-btn"
-              aria-pressed="false"
-              title="Show or hide Rule of Thirds composition overlay"
-            >
-              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>
-              Thirds
-            </button>
+            <div class="toolbar-pill-group" role="group" aria-label="Canvas overlays">
+              <button
+                type="button"
+                class="btn btn-ghost btn-small is-toggled"
+                id="seam-lines-btn"
+                aria-pressed="true"
+                title="Show or hide stitched seam lines on preview"
+              >
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 12h18"/><path d="M12 3v18"/></svg>
+                Seams
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-small"
+                id="thirds-overlay-btn"
+                aria-pressed="false"
+                title="Show or hide Rule of Thirds composition overlay"
+              >
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>
+                Thirds
+              </button>
+            </div>
             <button
               type="button"
               class="btn btn-ghost btn-small"
@@ -906,7 +915,38 @@
     </div>
   </div>
 
+  <!-- Name Your Quilt Before Saving Modal -->
+  <div class="changelog-modal" id="save-name-modal" role="dialog" aria-modal="true" aria-labelledby="save-name-modal-title" hidden>
+    <div class="changelog-modal-backdrop" id="save-name-backdrop"></div>
+    <div class="changelog-modal-card save-name-modal-card">
+      <div class="changelog-modal-head">
+        <div>
+          <span class="changelog-modal-eyebrow">Save Pattern</span>
+          <h2 id="save-name-modal-title">Name your quilt</h2>
+        </div>
+        <button type="button" class="swatch-popover-close" id="save-name-close" aria-label="Close">&times;</button>
+      </div>
+      <form class="save-name-form" id="save-name-form">
+        <label class="field" for="save-name-input">
+          <span>Give this quilt a title before saving your <code>.quilt</code> file</span>
+          <input
+            type="text"
+            class="map-location-input"
+            id="save-name-input"
+            maxlength="60"
+            placeholder="e.g. Samish Sunset, Baby Quilt…"
+            autocomplete="off"
+          />
+        </label>
+        <div class="save-name-actions">
+          <button type="button" class="btn btn-secondary" id="save-name-cancel">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="save-name-confirm">Save .quilt</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-  <script src="app.js?v=89" defer></script>
+  <script src="app.js?v=93" defer></script>
 </body>
 </html>
