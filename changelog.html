@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Changelog · Miriam's Quiltcaster</title>
+  <link rel="icon" type="image/png" href="favicon-v2.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=JetBrains+Mono:wght@500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=75" />
+  <style>
+    .changelog-shell {
+      max-width: 820px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+    .changelog-header {
+      margin-bottom: 2rem;
+      padding-bottom: 1.25rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .changelog-eyebrow {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.4rem;
+    }
+    .changelog-header h2 {
+      font-family: var(--font-serif);
+      font-size: 2.15rem;
+      font-weight: 400;
+      letter-spacing: -0.015em;
+      color: var(--text);
+      margin: 0 0 0.45rem;
+    }
+    .changelog-header p {
+      color: var(--text-muted);
+      font-size: 0.94rem;
+      margin: 0;
+    }
+    .release-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+    .release-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 1.35rem 1.5rem;
+    }
+    .release-meta {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.75rem;
+    }
+    .release-title {
+      font-family: var(--font-serif);
+      font-size: 1.3rem;
+      font-weight: 400;
+      color: var(--text);
+      margin: 0;
+    }
+    .release-date {
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      font-weight: 600;
+      color: var(--accent);
+      background: #fbf3ee;
+      border: 1px solid #efd5c9;
+      padding: 0.18rem 0.55rem;
+      border-radius: 999px;
+    }
+    .release-items {
+      margin: 0;
+      padding-left: 1.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.42rem;
+      color: var(--text);
+      font-size: 0.89rem;
+      line-height: 1.55;
+    }
+    .release-items strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+    .release-items code {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      background: #f5efe6;
+      padding: 0.08rem 0.35rem;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img class="brand-icon" src="apple-touch-icon-v2.png" width="38" height="38" alt="" />
+      <div>
+        <h1>Miriam's Quiltcaster</h1>
+        <p class="tagline">A quilt design studio built on Samish Island.</p>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <a href="index.html" class="btn btn-secondary">← Back to Studio</a>
+    </div>
+  </header>
+
+  <main class="changelog-shell">
+    <div class="changelog-header">
+      <span class="changelog-eyebrow">Release History</span>
+      <h2>Changelog</h2>
+      <p>Every feature and refinement added to Miriam's Quiltcaster, from the initial release to today.</p>
+    </div>
+
+    <div class="release-list">
+      <article class="release-card">
+        <div class="release-meta">
+          <h3 class="release-title">Hand Repositioning Mode, Interactive Palette Harmony Studio, Map &amp; Satellite Quilts, 30+ Generators &amp; Designer Libraries</h3>
+          <span class="release-date">Nov 27, 2026</span>
+        </div>
+        <ul class="release-items">
+          <li><strong>Hand Icon Repositioning Mode (<code>H</code> / hold <code>Space</code>):</strong> Added a dedicated Hand tool button beside <strong>Paint</strong> in the canvas toolbar that switches to <code>grab</code>/<code>grabbing</code> mode to pan and frame <strong>Map &amp; Satellite</strong> quilts (fetching fresh tiles on release), all 30 mathematical/botanical/fractal patterns, cropped photos, and painted Blank Canvas designs with full Undo support.</li>
+          <li><strong>Interactive Palette Harmony &amp; Swatch Mapper (<code>Harmony ▾</code>):</strong> Swap any quilt onto mathematically derived color-wheel palettes—<strong>Analogous</strong>, <strong>Complementary</strong>, <strong>Split-Complementary</strong>, <strong>Triadic</strong>, <strong>Tetradic Square</strong>, <strong>Golden Angle φ</strong>, <strong>Double-Complementary</strong>, and <strong>Monochrome Value</strong>—with live <strong>Base Hue</strong>, <strong>Saturation</strong>, <strong>Contrast</strong>, <strong>Reverse dark ↔ light</strong>, and <strong>Math target → mapped swatch</strong> preview strip. Maps cleanly onto existing quilt swatches (preserving contours, piece counts, and HST diagonals on photos &amp; satellite maps) and defaults to <strong>100% solid Kona colors</strong> unless you explicitly choose a print catalog (Kaffe Fassett, Brandon Mably, Philip Jacobs, or Mixed).</li>
+          <li><strong>Map &amp; Satellite Quilt Generator:</strong> Enter any city, island, landmark, or <code>lat, lon</code> (with quick-pick chips like <em>Samish Island</em>, <em>Venice</em>, <em>Grand Canyon</em>, and <em>Mt. Rainier</em>) to turn Esri Satellite Imagery, Carto Clean Street Maps, Topographic Maps, or Shaded Terrain directly into a quilt pattern.</li>
+          <li><strong>Two-Level <code>Generate</code> Menu &amp; Live Pattern Properties:</strong> 30 programmatic generators organized into <em>Classic &amp; Modern Quilt</em> (Lone Star, Tumbling Blocks 3D, Chevron, Woven Tartan, Topographic Contour Map, Sunburst), <em>Botanical Close-Ups</em> (Orchid Macro, Dahlia/Mum, Peony/Rose, Sunflower Phyllotaxis), <em>Fractals</em> (Mandelbrot, Burning Ship, Julia Spiral, Newton Symmetry, Sierpinski Carpet &amp; Triangle), <em>Physics &amp; Organic</em> (Chladni Acoustic Mandala, Gray-Scott Turing Reaction-Diffusion, Moiré Wave Interference, Voronoi Stained Glass), <em>Quilt Math &amp; Waves</em> (Kaleidoscope Medallion &amp; HST Star, Bargello Sine Wave, Fibonacci Golden Spiral, Truchet Labyrinth, Log Cabin), and <em>Algorithmic &amp; Primes</em> (Bitwise XOR Mosaic, Ulam Prime Spiral, Wolfram Cellular Automata Rules 30/90/110/150/184, Hilbert Curve) — all with real-time sliders plus universal <strong>Move X/Y</strong>, <strong>Scale</strong>, <strong>Rotate</strong>, and <strong>Reverse palette</strong> controls, plus one-click <strong>Shuffle</strong>.</li>
+          <li><strong>4-Tab Designer Fabric Library &amp; <code>Snap to Kona</code>:</strong> Browse and search <strong>Robert Kaufman Kona Cotton Solids</strong> (70 shades with SKUs), <strong>Kaffe Fassett</strong> (16 signature prints including Aboriginal Dot, Roman Glass, Paperweight), <strong>Brandon Mably</strong> (16 graphic prints including Gameboard, Bubble Stripe, Wobble, Gingham), and <strong>Philip Jacobs</strong> (24 botanical florals) directly inside the Swatch Editor, plus one-click <strong>Snap to Kona</strong>.</li>
+          <li><strong>Staggered Quilt Block Layouts:</strong> Added <strong>Staggered Squares (1:1)</strong>, <strong>Brick / Running Bond (3:2)</strong>, <strong>Subway Tile (2:1)</strong>, and <strong>Vertical Brick / Half-Drop (2:3)</strong> alongside Square Grid, with exact photo sampling, <strong>Edge half</strong> cutting dimensions, painting, and flood-fill support.</li>
+          <li><strong>Blank Canvas &amp; Full Fabric Painting:</strong> Start from a <strong>Blank Canvas</strong> with an all-solid starter palette, paint solid squares, <code>/</code> HSTs, <code>\</code> HSTs, or flood-fill regions with any color or fabric print, hold <strong>Shift</strong> for horizontal/vertical/45° straight lines and point-to-point lines, use industry-standard drawing keyboard shortcuts (<code>B</code>, <code>/</code>, <code>\</code>, <code>G</code>, <code>E</code>, <code>H</code>, <code>[</code>/<code>]</code>, <code>1</code>–<code>9</code>, <code>P</code>, <code>S</code>), or click <strong>Import Image</strong> to map a photo into your current blank design.</li>
+          <li><strong>Custom Fabric Swatch Uploads:</strong> Upload any fabric photo onto a palette swatch with auto-trimmed studio borders, print scale slider, <em>Same per square</em> vs <em>Varied cuts</em> toggle, optional <em>Match by fabric color</em>, and embedded <code>.quilt</code> &amp; PDF export persistence.</li>
+          <li><strong>Global US / Metric Mode, Header Pinning &amp; Studio Footer:</strong> Pinned the <code>US · in</code> (Letter) ↔ <code>Metric · cm</code> (A4) switcher to the top right on the same header row as <em>Miriam's Quiltcaster</em> across all screen sizes, with timezone/locale auto-detection, persistent Undo/Redo history saved inside <code>.quilt</code> files, single-line responsive <strong>Quilt Dimensions</strong>, dedicated <strong>Cutting Units</strong>, and a subtle studio footer linking to this changelog.</li>
+        </ul>
+      </article>
+
+      <article class="release-card">
+        <div class="release-meta">
+          <h3 class="release-title">Half-Square Triangles, Edge Refinement, Design Sheet PDF &amp; Studio Redesign</h3>
+          <span class="release-date">Nov 26, 2026</span>
+        </div>
+        <ul class="release-items">
+          <li><strong>Half-Square Triangles (HSTs):</strong> Exact per-pixel variance &amp; diagonal dominance algorithm with <strong>Edge Refinement</strong> and <strong>Mix Ratio</strong> modes, plus 2-at-a-time HST starter square cutting math.</li>
+          <li><strong>Interactive Shape Painting:</strong> Brush <strong>Triangle Paint</strong>, <strong>Squares</strong>, or <strong>Auto</strong> directly over the quilt preview with live hover highlights and 1×1 click diagonal flipping.</li>
+          <li><strong>1-Page Design Sheet PDF:</strong> Added a crisp single-page concept preview PDF alongside the full multi-page Pattern Booklet.</li>
+          <li><strong>Studio UI Overhaul:</strong> Unified left inspector panel, stitched quilt-mat landing screen, and dynamically expanded Grid slider bounds (up to 240 columns) for large King-size quilts with small squares.</li>
+        </ul>
+      </article>
+
+      <article class="release-card">
+        <div class="release-meta">
+          <h3 class="release-title">Quilt Size Presets, Live Architectural Rulers &amp; Editorial Typography</h3>
+          <span class="release-date">Nov 25, 2026</span>
+        </div>
+        <ul class="release-items">
+          <li><strong>Standard Quilt Size Presets:</strong> Added Mini, Wall Hanging, Crib, Lap, Throw, Twin, Double, Queen, and King presets plus direct finished Width × Height editing synced with Crop mode.</li>
+          <li><strong>Live Architectural Dimension Rulers:</strong> Top and right finished-size measurement rulers hugging the live quilt canvas.</li>
+          <li><strong>Unified Editorial Typography &amp; Inline Project Naming:</strong> Matched web typography (DM Serif Display, Plus Jakarta Sans, JetBrains Mono) with the PDF booklet and added inline project renaming in the header.</li>
+        </ul>
+      </article>
+
+      <article class="release-card">
+        <div class="release-meta">
+          <h3 class="release-title">Boutique PDF Pattern Booklet, Patchwork Star Icon &amp; Enhanced Cropping</h3>
+          <span class="release-date">Nov 24, 2026</span>
+        </div>
+        <ul class="release-items">
+          <li><strong>Boutique Multi-Page PDF Booklet:</strong> Magazine-style cover, open editorial Cutting &amp; Scale page with 1:1 test square, WOF cutting diagrams, Fat Quarter optimization, Row-by-Row and 8×8 Sub-Block assembly modes, visual color chips, and printable pin tags.</li>
+          <li><strong>Patchwork Quilt-Star Brand Icon:</strong> Custom textured quilt-star emblem embedded in the web header, landing medallion, iOS Home Screen icon, and PDF booklet covers/footers.</li>
+          <li><strong>Improved Crop Tool:</strong> Added center move handle, distinct resize/move cursors, and aspect-ratio presets.</li>
+        </ul>
+      </article>
+
+      <article class="release-card">
+        <div class="release-meta">
+          <h3 class="release-title">Interactive Cropping, Fabric Shopping List &amp; Mobile Support</h3>
+          <span class="release-date">Nov 23, 2026</span>
+        </div>
+        <ul class="release-items">
+          <li><strong>Non-Destructive Image Cropping:</strong> Interactive touch- and mouse-friendly crop frame with optional palette re-extraction.</li>
+          <li><strong>Fabric Shopping List:</strong> Automatic Kona Cotton &amp; Moda Bella Solid shade matching with SKU codes, estimated yardage, and quilt-shop links.</li>
+          <li><strong>iOS / Mobile Web App Support:</strong> Touch-friendly controls, responsive stacked layout, favicon, Apple Touch Icon, and web app manifest.</li>
+        </ul>
+      </article>
+
+      <article class="release-card">
+        <div class="release-meta">
+          <h3 class="release-title">Initial Release · Miriam's Quiltcaster</h3>
+          <span class="release-date">Nov 22, 2026</span>
+        </div>
+        <ul class="release-items">
+          <li><strong>Photo-to-Quilt Designer:</strong> 100% client-side HTML/CSS/JS pixel-quilt studio with k-means++ color palette extraction, editable fabric swatches, human-readable color names, and seam-line preview.</li>
+          <li><strong>Quilt Math, Save/Load &amp; PDF Export:</strong> Finished square &amp; seam allowance sizing, WOF strip &amp; yardage estimates, self-contained <code>.quilt</code> project file save/load, and printable PDF pattern export with accurate 1:1 test square.</li>
+        </ul>
+      </article>
+    </div>
+  </main>
+</body>
+</html>

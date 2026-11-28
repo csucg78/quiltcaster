@@ -76,6 +76,7 @@
   const hstRatioSlider = document.getElementById("hst-ratio-slider");
   const hstRatioValue = document.getElementById("hst-ratio-value");
   const paintToggleBtn = document.getElementById("paint-toggle-btn");
+  const panToggleBtn = document.getElementById("pan-toggle-btn");
   const paintBtnLabel = document.getElementById("paint-btn-label");
   const paintToolbar = document.getElementById("paint-toolbar");
   const paintFabricStrip = document.getElementById("paint-fabric-strip");
@@ -110,6 +111,25 @@
   const paletteGrid = document.getElementById("palette-grid");
   const addColorBtn = document.getElementById("add-color-btn");
   const harmonyPaletteBtn = document.getElementById("harmony-palette-btn");
+  const harmonyPopover = document.getElementById("harmony-popover");
+  const harmonyPopoverClose = document.getElementById("harmony-popover-close");
+  const harmonyFormulaHint = document.getElementById("harmony-formula-hint");
+  const harmonyRuleBtns = document.querySelectorAll("[data-harmony-rule]");
+  const harmonyHueSlider = document.getElementById("harmony-hue-slider");
+  const harmonyHueDot = document.getElementById("harmony-hue-dot");
+  const harmonyHueValue = document.getElementById("harmony-hue-value");
+  const harmonySatSlider = document.getElementById("harmony-sat-slider");
+  const harmonySatValue = document.getElementById("harmony-sat-value");
+  const harmonyContrastSlider = document.getElementById("harmony-contrast-slider");
+  const harmonyContrastValue = document.getElementById("harmony-contrast-value");
+  const harmonyLibrarySelect = document.getElementById("harmony-library-select");
+  const harmonyMapNote = document.getElementById("harmony-map-note");
+  const harmonyPreviewStrip = document.getElementById("harmony-preview-strip");
+  const harmonyPreserveWrap = document.getElementById("harmony-preserve-wrap");
+  const harmonyPreserveSlots = document.getElementById("harmony-preserve-slots");
+  const harmonyReverseValues = document.getElementById("harmony-reverse-values");
+  const harmonyRestoreBtn = document.getElementById("harmony-restore-btn");
+  const harmonyRollBtn = document.getElementById("harmony-roll-btn");
   const snapKonaBtn = document.getElementById("snap-kona-btn");
   const resetPaletteBtn = document.getElementById("reset-palette-btn");
 
@@ -336,6 +356,7 @@
     smoothableDiag: new Uint8Array(0), // Per-cell: 0 = flat/non-edge, 1 = '/' smooths edge, 2 = '\' smooths edge
     paintMask: new Uint8Array(PAINT_MASK_RES * PAINT_MASK_RES),
     paintMode: false,
+    panMode: false,
     paintBrush: "hst", // "color" | "hst-slash" | "hst-back" | "fill" | "hst" | "square" | "auto"
     paintSize: 3, // 1 | 3 | 5
     paintFabricIdx: 0, // Active palette index when painting colors/fabrics
@@ -344,6 +365,7 @@
     mathParams: {}, // Live parameter values for the active math/fractal pattern
     mathTransform: { offsetX: 0, offsetY: 0, scale: 1.0, rotate: 0 }, // Universal pan/zoom/rotate for all generated patterns
     mathReversePalette: false,
+    activeMap: null, // { lat, lon, zoom, style, label, extractColors, stitchCanvas, cropX, cropY } when viewing a Map/Satellite quilt
     manualCells: new Map(), // "col,row" -> { t: 0|1|2, a: palIdx, b: palIdx }
     paintedCellsCount: 0,
     hasPaintedMask: false,
@@ -356,6 +378,19 @@
     usageCounts: new Int32Array(0), // Total pieces (solid + HST halves) per palette color
     // Palette: array of { id, r, g, b }
     palette: [],
+    // Optional luminance-ordered source RGB clusters captured before a harmony palette swap,
+    // allowing photos & satellite maps to keep their exact contours and HST diagonals while swapping fabrics
+    sourcePalette: null,
+    harmonyConfig: {
+      rule: "triadic",
+      baseHue: 210,
+      saturation: 62,
+      contrast: 74,
+      library: "kona",
+      preserveSlots: true,
+      reverseValues: false,
+      lastMathTargets: [],
+    },
     nextColorId: 1,
     showSeamLines: true,
     showingOriginal: false,
@@ -1658,6 +1693,8 @@
     const totalCells = isStaggered ? state.layoutCells.length : cols * rows;
     const palette = state.palette;
     const K = palette.length;
+    const matchPalette =
+      state.sourcePalette && state.sourcePalette.length === K ? state.sourcePalette : palette;
 
     const cellTypes = new Uint8Array(totalCells);
     const assignmentsA = new Int32Array(totalCells);
@@ -1670,7 +1707,7 @@
           let bestIdx = 0;
           let bestDist = Infinity;
           for (let p = 0; p < K; p++) {
-            const pal = palette[p];
+            const pal = matchPalette[p];
             const d = colorDistanceSq(avg[0], avg[1], avg[2], pal.r, pal.g, pal.b);
             if (d < bestDist) {
               bestDist = d;
@@ -1730,7 +1767,7 @@
           let bestIdx = 0;
           let bestDist = Infinity;
           for (let p = 0; p < K; p++) {
-            const pal = palette[p];
+            const pal = matchPalette[p];
             const d = colorDistanceSq(avg[0], avg[1], avg[2], pal.r, pal.g, pal.b);
             if (d < bestDist) {
               bestDist = d;
@@ -1767,8 +1804,8 @@
             const i = r * cols + c;
             const s = state.hstSlashAverages[i];
             const b = state.hstBackslashAverages[i];
-            const slash = bestDistinctHstPair(s[0], s[1], s[2], s[3], s[4], s[5], palette);
-            const back = bestDistinctHstPair(b[0], b[1], b[2], b[3], b[4], b[5], palette);
+            const slash = bestDistinctHstPair(s[0], s[1], s[2], s[3], s[4], s[5], matchPalette);
+            const back = bestDistinctHstPair(b[0], b[1], b[2], b[3], b[4], b[5], matchPalette);
             slashPairA[i] = slash.pA;
             slashPairB[i] = slash.pB;
             backPairA[i] = back.pA;
@@ -1781,18 +1818,18 @@
             // from turning into nonsensical diagonal zigzags.
             const st = state.cellDiagStats[i];
             const avg = state.squareAverages[i];
-            const sqPal = palette[sqBest[i]];
+            const sqPal = matchPalette[sqBest[i]];
             const solidSSE = st.varWhole + st.n * rgbDistSq(avg[0], avg[1], avg[2], sqPal.r, sqPal.g, sqPal.b);
 
-            const sPalA = palette[slash.pA];
-            const sPalB = palette[slash.pB];
+            const sPalA = matchPalette[slash.pA];
+            const sPalB = matchPalette[slash.pB];
             const slashSSE =
               st.varSlash +
               st.nTL * rgbDistSq(s[0], s[1], s[2], sPalA.r, sPalA.g, sPalA.b) +
               st.nBR * rgbDistSq(s[3], s[4], s[5], sPalB.r, sPalB.g, sPalB.b);
 
-            const bPalA = palette[back.pA];
-            const bPalB = palette[back.pB];
+            const bPalA = matchPalette[back.pA];
+            const bPalB = matchPalette[back.pB];
             const backSSE =
               st.varBack +
               st.nBL * rgbDistSq(b[0], b[1], b[2], bPalA.r, bPalA.g, bPalA.b) +
@@ -2690,6 +2727,7 @@
       return;
     }
     closeHistoryPopover();
+    closeHarmonyPopover();
     activeSwatchId = color.id;
     swatchPopover.hidden = false;
     syncSwatchPopover();
@@ -3044,6 +3082,8 @@
       state.paintMask.fill(0);
       state.manualCells.clear();
       state.activeMathPattern = "";
+      state.activeMap = null;
+      state.sourcePalette = null;
       syncMathPropsButton();
       state.gridLayout =
         restore && restore.settings && GRID_LAYOUTS[restore.settings.gridLayout] ? restore.settings.gridLayout : "grid";
@@ -3069,6 +3109,7 @@
         applyRestoredSettings(restore);
       } else {
         const targetColors = Number(paletteSizeSlider.value);
+        state.sourcePalette = null;
         state.palette = extractPalette(state.samplePixels, targetColors);
       }
 
@@ -3110,8 +3151,10 @@
     closeHistoryPopover();
     closeSwatchPopover();
     closeMathPropsPopover();
+    closeHarmonyPopover();
     closeCropStage();
     setPaintMode(false);
+    setPanMode(false);
     workspace.hidden = true;
     topbarActions.hidden = true;
     dropStage.hidden = false;
@@ -3136,6 +3179,8 @@
       state.fileName = file.name;
       state.isBlankQuilt = false;
       state.activeMathPattern = "";
+      state.activeMap = null;
+      state.sourcePalette = null;
       syncMathPropsButton();
       state.crop = { x: 0, y: 0, w: 1, h: 1 };
       state.paintMask.fill(0);
@@ -3181,6 +3226,8 @@
       state.paintMask.fill(0);
       state.manualCells.clear();
       state.activeMathPattern = "";
+      state.activeMap = null;
+      state.sourcePalette = null;
       syncMathPropsButton();
       state.targetQuiltSize = null;
       if (quiltPresetSelect) quiltPresetSelect.value = "custom";
@@ -3193,9 +3240,7 @@
       if (hstControls) hstControls.hidden = true;
       syncGridLayoutUI();
 
-      // Curated starter palette: warm linen background + solids + 2 Philip Jacobs floral prints
-      const pjBlue = PHILIP_JACOBS_FABRICS[0];
-      const pjRed = PHILIP_JACOBS_FABRICS[3];
+      // Curated all-solid starter palette (users can add designer prints from any swatch or Harmony)
       const starterPalette = [
         { id: state.nextColorId++, r: 244, g: 239, b: 230 }, // A: Warm Linen background
         { id: state.nextColorId++, r: 184, g: 77, b: 44 }, // B: Terracotta
@@ -3203,30 +3248,8 @@
         { id: state.nextColorId++, r: 214, g: 162, b: 64 }, // D: Ochre Gold
         { id: state.nextColorId++, r: 82, g: 112, b: 84 }, // E: Sage Forest
         { id: state.nextColorId++, r: 46, g: 52, b: 78 }, // F: Midnight Navy
-        {
-          id: state.nextColorId++,
-          r: pjBlue.rgb[0],
-          g: pjBlue.rgb[1],
-          b: pjBlue.rgb[2],
-          patternDataUrl: getPhilipJacobsDataUrl(pjBlue),
-          patternName: pjBlue.name,
-          patternAvgRgb: [...pjBlue.rgb],
-          patternScale: 1.0,
-          patternCutMode: "repeat",
-          libraryId: pjBlue.id,
-        },
-        {
-          id: state.nextColorId++,
-          r: pjRed.rgb[0],
-          g: pjRed.rgb[1],
-          b: pjRed.rgb[2],
-          patternDataUrl: getPhilipJacobsDataUrl(pjRed),
-          patternName: pjRed.name,
-          patternAvgRgb: [...pjRed.rgb],
-          patternScale: 1.0,
-          patternCutMode: "repeat",
-          libraryId: pjRed.id,
-        },
+        { id: state.nextColorId++, r: 122, g: 62, b: 92 }, // G: Mulberry Plum
+        { id: state.nextColorId++, r: 216, g: 148, b: 136 }, // H: Dusty Rose
       ];
       state.palette = starterPalette;
       paletteSizeSlider.value = String(starterPalette.length);
@@ -3438,6 +3461,18 @@
       state.palette = extractPalette(state.samplePixels, Number(paletteSizeSlider.value));
     }
 
+    const savedSourcePalette = Array.isArray(saved.sourcePalette)
+      ? saved.sourcePalette
+          .filter((hex) => typeof hex === "string" && /^#?[0-9a-f]{6}$/i.test(hex))
+          .slice(0, 24)
+          .map((hex) => {
+            const [r, g, b] = hexToRgb(hex.startsWith("#") ? hex : `#${hex}`);
+            return { r, g, b };
+          })
+      : null;
+    state.sourcePalette =
+      savedSourcePalette && savedSourcePalette.length === state.palette.length ? savedSourcePalette : null;
+
     paletteSizeSlider.value = String(
       clampNumber(state.palette.length, Number(paletteSizeSlider.min), Number(paletteSizeSlider.max), 8)
     );
@@ -3524,6 +3559,9 @@
       targetQuiltSize: state.targetQuiltSize ? { ...state.targetQuiltSize } : null,
       crop: { ...state.crop },
       palette: state.palette.map((c) => rgbToHex(c.r, c.g, c.b)),
+      ...(state.sourcePalette && state.sourcePalette.length === state.palette.length
+        ? { sourcePalette: state.sourcePalette.map((c) => rgbToHex(c.r, c.g, c.b)) }
+        : {}),
       ...(palettePatterns ? { palettePatterns } : {}),
       assemblyMode: assemblyModeSelect ? assemblyModeSelect.value : "rows",
       pageSize: pageSizeSelect ? pageSizeSelect.value : "letter",
@@ -3579,6 +3617,9 @@
       targetQuiltSize,
       crop: { x: cx, y: cy, w: cw, h: ch },
       palette,
+      sourcePalette: Array.isArray(raw.sourcePalette)
+        ? raw.sourcePalette.filter((hex) => typeof hex === "string" && /^#?[0-9a-f]{6}$/i.test(hex)).slice(0, 24)
+        : null,
       palettePatterns: sanitizePalettePatterns(raw.palettePatterns),
       assemblyMode: raw.assemblyMode === "blocks" ? "blocks" : "rows",
       pageSize: raw.pageSize === "a4" ? "a4" : "letter",
@@ -3656,7 +3697,19 @@
         );
       }
 
+      if (Array.isArray(snap.sourcePalette) && snap.sourcePalette.length === state.palette.length) {
+        state.sourcePalette = snap.sourcePalette.map((hex) => {
+          const [r, g, b] = hexToRgb(hex.startsWith("#") ? hex : `#${hex}`);
+          return { r, g, b };
+        });
+      } else {
+        state.sourcePalette = null;
+      }
+
       closeSwatchPopover();
+      if (typeof syncHarmonyPopoverUI === "function" && harmonyPopover && !harmonyPopover.hidden) {
+        syncHarmonyPopoverUI();
+      }
       computeSquareAverages();
       renderPaletteSwatches();
       renderQuilt();
@@ -3872,6 +3925,9 @@
         crop: state.crop,
       },
       palette: state.palette.map((c) => rgbToHex(c.r, c.g, c.b)),
+      ...(state.sourcePalette && state.sourcePalette.length === state.palette.length
+        ? { sourcePalette: state.sourcePalette.map((c) => rgbToHex(c.r, c.g, c.b)) }
+        : {}),
       ...(serializePalettePatterns() ? { palettePatterns: serializePalettePatterns() } : {}),
       history: state.history,
       historyIndex: state.historyIndex,
@@ -4233,18 +4289,27 @@
   paletteSizeSlider.addEventListener("input", () => {
     if (!state.samplePixels) return;
     const targetColors = Number(paletteSizeSlider.value);
+    if (state.sourcePalette && !state.isBlankQuilt && !state.activeMathPattern) {
+      state.sourcePalette = extractPalette(state.samplePixels, targetColors).map((c) => ({ r: c.r, g: c.g, b: c.b }));
+      applyHarmonyFromControls({ record: true, coalesceKey: "palette-size", count: targetColors });
+      return;
+    }
+    state.sourcePalette = null;
     state.palette = extractPalette(state.samplePixels, targetColors);
     renderPaletteSwatches();
     renderQuilt();
+    if (harmonyPopover && !harmonyPopover.hidden) syncHarmonyPopoverUI();
     recordHistory(`Palette: ${targetColors} colors`, "palette-size");
   });
 
   resetPaletteBtn.addEventListener("click", () => {
     if (!state.samplePixels) return;
     const targetColors = Number(paletteSizeSlider.value);
+    state.sourcePalette = null;
     state.palette = extractPalette(state.samplePixels, targetColors);
     renderPaletteSwatches();
     renderQuilt();
+    if (harmonyPopover && !harmonyPopover.hidden) syncHarmonyPopoverUI();
     recordHistory("Re-extracted palette");
   });
 
@@ -6657,8 +6722,9 @@
       closeMathPropsPopover();
       closeMathMenuPopover();
       closeMapPopover();
-      if (!hadPopover && state.paintMode && !isTyping) {
-        setPaintMode(false);
+      if (!hadPopover && !isTyping) {
+        if (state.paintMode) setPaintMode(false);
+        if (state.panMode) setPanMode(false);
       }
       return;
     }
@@ -6689,6 +6755,13 @@
     if (key === "p") {
       e.preventDefault();
       setPaintMode(!state.paintMode);
+    } else if (key === "h") {
+      e.preventDefault();
+      setPanMode(!state.panMode);
+    } else if (e.code === "Space" && !e.repeat && state.paintMode) {
+      e.preventDefault();
+      spaceTempPan = true;
+      setPanMode(true);
     } else if (key === "b") {
       e.preventDefault();
       setPaintMode(true, "color");
@@ -7461,6 +7534,13 @@
 
   function setPaintMode(enabled, initialBrush = null) {
     state.paintMode = Boolean(enabled);
+    if (state.paintMode && state.panMode) {
+      state.panMode = false;
+      if (panToggleBtn) {
+        panToggleBtn.classList.remove("is-panning");
+        panToggleBtn.setAttribute("aria-pressed", "false");
+      }
+    }
     if (initialBrush) {
       setPaintBrush(initialBrush);
     } else if (state.paintMode && state.isBlankQuilt && (state.paintBrush === "hst" || state.paintBrush === "auto")) {
@@ -7473,6 +7553,7 @@
       renderPaintFabricStrip();
     }
     quiltCanvas.classList.toggle("is-paintable", state.paintMode);
+    syncCanvasDragCursor();
     if (!state.paintMode) {
       paintHoverCell = null;
       activePaintStroke = null;
@@ -8068,12 +8149,56 @@
     closeMathMenuPopover();
   });
 
+  function syncCanvasDragCursor() {
+    if (!quiltCanvas) return;
+    const canDrag =
+      !state.paintMode &&
+      !state.showingOriginal &&
+      (state.panMode || Boolean(state.activeMathPattern || state.activeMap));
+    quiltCanvas.classList.toggle("is-draggable", canDrag);
+  }
+
+  let spaceTempPan = false;
+  function setPanMode(enabled) {
+    const next = Boolean(enabled);
+    if (next && state.paintMode) {
+      setPaintMode(false);
+    }
+    state.panMode = next;
+    if (panToggleBtn) {
+      panToggleBtn.classList.toggle("is-panning", state.panMode);
+      panToggleBtn.setAttribute("aria-pressed", state.panMode ? "true" : "false");
+    }
+    syncCanvasDragCursor();
+  }
+
+  if (panToggleBtn) {
+    panToggleBtn.addEventListener("click", () => {
+      if (!state.image) return;
+      setPanMode(!state.panMode);
+    });
+  }
+
+  window.addEventListener("keyup", (e) => {
+    if (e.code === "Space" && spaceTempPan) {
+      spaceTempPan = false;
+      if (state.panMode) {
+        setPaintMode(true);
+      }
+    }
+  });
+
   function syncMathPropsButton() {
     syncMathMenuLabel();
+    syncCanvasDragCursor();
     if (!mathPropsBtn) return;
-    const hasActive = Boolean(state.activeMathPattern && MATH_PATTERN_SPECS[state.activeMathPattern]);
+    const hasActive = Boolean(
+      (state.activeMathPattern && MATH_PATTERN_SPECS[state.activeMathPattern]) || state.activeMap
+    );
     mathPropsBtn.hidden = !hasActive;
-    mathPropsBtn.classList.toggle("is-open", hasActive && mathPropsPopover && !mathPropsPopover.hidden);
+    const isOpen =
+      (mathPropsPopover && !mathPropsPopover.hidden) || (mapPopover && !mapPopover.hidden);
+    mathPropsBtn.classList.toggle("is-open", hasActive && isOpen);
   }
 
   function closeMathPropsPopover() {
@@ -8222,6 +8347,12 @@
   if (mathPropsBtn) {
     mathPropsBtn.addEventListener("click", (e) => {
       e.stopPropagation();
+      if (state.activeMap && !state.activeMathPattern) {
+        if (mapPopover && !mapPopover.hidden) closeMapPopover();
+        else openMapPopover(state.activeMap.style);
+        syncMathPropsButton();
+        return;
+      }
       openMathPropsPopover();
     });
   }
@@ -8271,6 +8402,8 @@
     const pickCycle = (n) => lumOrder[((Math.floor(n) % K) + K) % K];
 
     state.activeMathPattern = patternId;
+    state.activeMap = null;
+    state.sourcePalette = null;
     state.isBlankQuilt = true;
     state.paintMask.fill(0);
     state.manualCells.clear();
@@ -8883,7 +9016,7 @@
     }
   }
 
-  // --- Color-Wheel Harmony Math & Shuffle Engine ---
+  // --- Color-Wheel Harmony Math, Swatch Mapper & Shuffle Engine ---
   function hslToRgb(hDeg, sPct, lPct) {
     const h = (((hDeg % 360) + 360) % 360) / 360;
     const s = Math.max(0, Math.min(1, sPct / 100));
@@ -8906,65 +9039,181 @@
     return [Math.round(hue2rgb(h + 1 / 3) * 255), Math.round(hue2rgb(h) * 255), Math.round(hue2rgb(h - 1 / 3) * 255)];
   }
 
+  function rgbToHsl(r, g, b) {
+    const rn = r / 255;
+    const gn = g / 255;
+    const bn = b / 255;
+    const max = Math.max(rn, gn, bn);
+    const min = Math.min(rn, gn, bn);
+    const l = (max + min) / 2;
+    if (max === min) return [0, 0, Math.round(l * 100)];
+    const d = max - min;
+    const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    let h = 0;
+    if (max === rn) h = (gn - bn) / d + (gn < bn ? 6 : 0);
+    else if (max === gn) h = (bn - rn) / d + 2;
+    else h = (rn - gn) / d + 4;
+    return [Math.round(h * 60) % 360, Math.round(s * 100), Math.round(l * 100)];
+  }
+
   const HARMONY_RULES = [
-    { id: "analogous", label: "Analogous", offsets: [-32, -16, 0, 16, 32] },
-    { id: "complementary", label: "Complementary", offsets: [0, 8, 180, 188] },
-    { id: "split-comp", label: "Split-Complementary", offsets: [0, 150, 210] },
-    { id: "triadic", label: "Triadic", offsets: [0, 120, 240] },
-    { id: "tetradic", label: "Tetradic", offsets: [0, 60, 180, 240] },
-    { id: "monochrome", label: "Monochrome Value", offsets: [-6, 0, 6] },
+    {
+      id: "analogous",
+      label: "Analogous",
+      formula: "±16° · ±32°",
+      getHueOffset: (i, K) => (K <= 1 ? 0 : ((i / (K - 1)) - 0.5) * 64),
+    },
+    {
+      id: "complementary",
+      label: "Complementary",
+      formula: "0° · 180°",
+      getHueOffset: (i) => [0, 10, 180, 190][i % 4],
+    },
+    {
+      id: "split-comp",
+      label: "Split-Complementary",
+      formula: "0° · 150° · 210°",
+      getHueOffset: (i) => [0, 150, 210][i % 3],
+    },
+    {
+      id: "triadic",
+      label: "Triadic",
+      formula: "0° · 120° · 240°",
+      getHueOffset: (i) => [0, 120, 240][i % 3],
+    },
+    {
+      id: "tetradic",
+      label: "Tetradic Square",
+      formula: "0° · 90° · 180° · 270°",
+      getHueOffset: (i) => [0, 90, 180, 270][i % 4],
+    },
+    {
+      id: "golden",
+      label: "Golden Angle φ",
+      formula: "i × 137.508°",
+      getHueOffset: (i) => (i * 137.507764) % 360,
+    },
+    {
+      id: "double-comp",
+      label: "Double-Complementary",
+      formula: "0° · 30° · 180° · 210°",
+      getHueOffset: (i) => [0, 30, 180, 210][i % 4],
+    },
+    {
+      id: "monochrome",
+      label: "Monochrome Value",
+      formula: "±6° value ladder",
+      getHueOffset: (i, K) => (K <= 1 ? 0 : ((i / (K - 1)) - 0.5) * 12),
+    },
   ];
 
-  // Builds a K-fabric harmonious palette using HSL color-wheel geometry + quilt value staircase,
-  // snapping solids to distinct Kona Cotton shades and pairing 1-3 color-matched designer prints.
-  function generateHarmoniousPalette(count = state.palette.length || 8, { includePrints = true } = {}) {
-    const K = Math.max(2, Math.min(16, count));
-    const rule = HARMONY_RULES[Math.floor(Math.random() * HARMONY_RULES.length)];
-    const baseHue = Math.floor(Math.random() * 360);
-    const baseSat = 46 + Math.random() * 28; // Rich quilting cotton saturation (46% - 74%)
+  const HARMONY_RULE_MAP = Object.fromEntries(HARMONY_RULES.map((r) => [r.id, r]));
 
-    const allDesignerPrints = [...KAFFE_FASSETT_FABRICS, ...BRANDON_MABLY_FABRICS, ...PHILIP_JACOBS_FABRICS];
+  const HARMONY_LIBRARY_LABELS = {
+    mixed: "Kona + Prints",
+    kona: "Kona Solids",
+    kaffe: "Kaffe Fassett",
+    brandon: "Brandon Mably",
+    pj: "Philip Jacobs",
+    prints: "Designer Prints",
+    pure: "Pure Math RGB",
+  };
+
+  function getPrintPoolForLibrary(library) {
+    if (library === "kaffe") return KAFFE_FASSETT_FABRICS;
+    if (library === "brandon") return BRANDON_MABLY_FABRICS;
+    if (library === "pj") return PHILIP_JACOBS_FABRICS;
+    return [...KAFFE_FASSETT_FABRICS, ...BRANDON_MABLY_FABRICS, ...PHILIP_JACOBS_FABRICS];
+  }
+
+  function pickClosestPrint(tr, tg, tb, pool, usedPrints) {
+    let best = null;
+    let bestDist = Infinity;
+    for (let j = 0; j < pool.length; j++) {
+      const f = pool[j];
+      if (usedPrints.has(f.id)) continue;
+      const d = colorDistanceSq(tr, tg, tb, f.rgb[0], f.rgb[1], f.rgb[2]);
+      if (d < bestDist) {
+        bestDist = d;
+        best = f;
+      }
+    }
+    if (!best && pool.length > 0) {
+      // Fallback if K > pool.length
+      for (let j = 0; j < pool.length; j++) {
+        const f = pool[j];
+        const d = colorDistanceSq(tr, tg, tb, f.rgb[0], f.rgb[1], f.rgb[2]);
+        if (d < bestDist) {
+          bestDist = d;
+          best = f;
+        }
+      }
+    }
+    return best;
+  }
+
+  function pickClosestKona(tr, tg, tb, usedKona) {
+    let best = NAMED_FABRIC_COLORS[0];
+    let bestDist = Infinity;
+    for (let j = 0; j < NAMED_FABRIC_COLORS.length; j++) {
+      const row = NAMED_FABRIC_COLORS[j];
+      if (usedKona.has(row[5])) continue;
+      const d = colorDistanceSq(tr, tg, tb, row[1], row[2], row[3]);
+      if (d < bestDist) {
+        bestDist = d;
+        best = row;
+      }
+    }
+    return best;
+  }
+
+  // Builds a K-fabric mathematically derived palette using color-wheel geometry + perceptual value staircase,
+  // mapped onto the chosen real fabric swatch catalog (Kona Solids, Kaffe Fassett, Brandon Mably, Philip Jacobs, Mixed, or Pure Math).
+  function generateHarmoniousPalette(count = state.palette.length || 8, options = {}) {
+    const K = Math.max(2, Math.min(16, count));
+    const rule =
+      (options.ruleId && HARMONY_RULE_MAP[options.ruleId]) ||
+      HARMONY_RULES[Math.floor(Math.random() * HARMONY_RULES.length)];
+    const baseHue = Number.isFinite(options.baseHue) ? ((options.baseHue % 360) + 360) % 360 : Math.floor(Math.random() * 360);
+    const baseSat = Number.isFinite(options.saturation) ? clampNumber(options.saturation, 18, 92, 62) : 46 + Math.random() * 28;
+    const contrast = Number.isFinite(options.contrast) ? clampNumber(options.contrast, 30, 86, 74) : 74;
+    const library = options.library || (options.includePrints === true ? "mixed" : "kona");
+    const reverseValues = Boolean(options.reverseValues);
+
+    const lowL = Math.max(12, 53 - contrast / 2);
+    const highL = Math.min(93, 53 + contrast / 2);
+
+    const printPool = getPrintPoolForLibrary(library);
     const usedKona = new Set();
     const usedPrints = new Set();
     const printSlots = new Set();
-    if (includePrints && K >= 4) {
+    if (library === "mixed" && K >= 4) {
       const printCount = Math.min(3, Math.max(1, Math.floor(K / 3)));
-      // Place prints in midtone/accent slots so light highlight & dark anchor stay crisp solids
       for (let p = 0; p < printCount; p++) {
         const slot = Math.min(K - 2, Math.max(1, Math.round(((p + 1) / (printCount + 1)) * (K - 1))));
         printSlots.add(slot);
       }
     }
 
-    const palette = [];
+    const entries = [];
     for (let i = 0; i < K; i++) {
-      // Smooth perceptual value staircase from deep anchor (18%) to luminous highlight (90%)
       const t = K === 1 ? 0.5 : i / (K - 1);
-      const lightness = 17 + t * 73;
-      // Subtle hue-temperature shift: darks shift slightly cool, lights slightly warm
-      const tempShift = (t - 0.5) * 14;
-      const hueOffset = rule.offsets[i % rule.offsets.length];
+      const lightness = lowL + t * (highL - lowL);
+      // Subtle perceptual hue-temperature shift: darks lean slightly cool, highlights slightly warm
+      const tempShift = (t - 0.5) * 12;
+      const hueOffset = rule.getHueOffset(i, K);
       const hue = baseHue + hueOffset + tempShift;
-      // Keep deepest & lightest values slightly softer in saturation for authentic cotton feel
-      const sat = t < 0.12 || t > 0.88 ? Math.max(14, baseSat * 0.48) : baseSat;
+      const sat = t < 0.1 || t > 0.9 ? Math.max(16, baseSat * 0.55) : baseSat;
       const [tr, tg, tb] = hslToRgb(hue, sat, lightness);
+      const mathTarget = [tr, tg, tb];
 
-      if (printSlots.has(i)) {
-        // Pick the closest unused Kaffe / Brandon / Philip print to this harmonious target color
-        let bestPrint = null;
-        let bestDist = Infinity;
-        for (let j = 0; j < allDesignerPrints.length; j++) {
-          const f = allDesignerPrints[j];
-          if (usedPrints.has(f.id)) continue;
-          const d = colorDistanceSq(tr, tg, tb, f.rgb[0], f.rgb[1], f.rgb[2]);
-          if (d < bestDist) {
-            bestDist = d;
-            bestPrint = f;
-          }
-        }
+      let swatch = null;
+      const forcePrint = library === "kaffe" || library === "brandon" || library === "pj" || library === "prints";
+      if (forcePrint || (library === "mixed" && printSlots.has(i))) {
+        const bestPrint = pickClosestPrint(tr, tg, tb, printPool, usedPrints);
         if (bestPrint) {
           usedPrints.add(bestPrint.id);
-          palette.push({
+          swatch = {
             id: state.nextColorId++,
             r: bestPrint.rgb[0],
             g: bestPrint.rgb[1],
@@ -8975,33 +9224,215 @@
             patternScale: 1.0,
             patternCutMode: "repeat",
             libraryId: bestPrint.id,
-          });
-          continue;
+          };
         }
       }
 
-      // Snap solid to closest unused Robert Kaufman Kona Cotton solid
-      let bestKona = NAMED_FABRIC_COLORS[0];
-      let bestDist = Infinity;
-      for (let j = 0; j < NAMED_FABRIC_COLORS.length; j++) {
-        const row = NAMED_FABRIC_COLORS[j];
-        if (usedKona.has(row[5])) continue;
-        const d = colorDistanceSq(tr, tg, tb, row[1], row[2], row[3]);
-        if (d < bestDist) {
-          bestDist = d;
-          bestKona = row;
+      if (!swatch) {
+        if (library === "pure") {
+          swatch = { id: state.nextColorId++, r: tr, g: tg, b: tb };
+        } else {
+          const bestKona = pickClosestKona(tr, tg, tb, usedKona);
+          usedKona.add(bestKona[5]);
+          swatch = {
+            id: state.nextColorId++,
+            r: bestKona[1],
+            g: bestKona[2],
+            b: bestKona[3],
+          };
         }
       }
-      usedKona.add(bestKona[5]);
-      palette.push({
-        id: state.nextColorId++,
-        r: bestKona[1],
-        g: bestKona[2],
-        b: bestKona[3],
-      });
+
+      entries.push({ swatch, mathTarget });
     }
 
-    return { palette, ruleLabel: rule.label };
+    // Order mapped swatches by perceptual luminance so slot 0..K-1 aligns dark->light (or reversed)
+    // with the quilt's tonal structure!
+    entries.sort((a, b) => {
+      const la = luminance(a.swatch.r, a.swatch.g, a.swatch.b);
+      const lb = luminance(b.swatch.r, b.swatch.g, b.swatch.b);
+      return reverseValues ? lb - la : la - lb;
+    });
+
+    return {
+      palette: entries.map((e) => e.swatch),
+      mathTargets: entries.map((e) => e.mathTarget),
+      ruleLabel: rule.label,
+      ruleId: rule.id,
+      baseHue: Math.round(baseHue),
+      saturation: Math.round(baseSat),
+      contrast: Math.round(contrast),
+      library,
+    };
+  }
+
+  function ensureSourcePaletteForSwap(targetCount) {
+    if (state.isBlankQuilt || state.activeMathPattern || !state.samplePixels) {
+      return null;
+    }
+    if (state.sourcePalette && state.sourcePalette.length === targetCount) {
+      return state.sourcePalette;
+    }
+    // Capture the original image's luminance-sorted clusters so swapping fabrics keeps every contour & HST
+    const extracted = extractPalette(state.samplePixels, targetCount);
+    state.sourcePalette = extracted.map((c) => ({ r: c.r, g: c.g, b: c.b }));
+    return state.sourcePalette;
+  }
+
+  function renderHarmonyPreviewStrip() {
+    if (!harmonyPreviewStrip) return;
+    harmonyPreviewStrip.innerHTML = "";
+    const targets = state.harmonyConfig.lastMathTargets || [];
+    state.palette.forEach((color, idx) => {
+      const cell = document.createElement("div");
+      cell.className = "harmony-preview-cell";
+      const target = targets[idx] || [color.r, color.g, color.b];
+      const code = getFabricCode(idx);
+      const swatchName = getFabricDisplayName(color);
+      cell.title = `${code}: Math ${rgbToHex(target[0], target[1], target[2]).toUpperCase()} → ${swatchName}`;
+
+      const mathBar = document.createElement("div");
+      mathBar.className = "harmony-preview-math";
+      mathBar.style.backgroundColor = `rgb(${target[0]}, ${target[1]}, ${target[2]})`;
+
+      const sw = document.createElement("div");
+      sw.className = "harmony-preview-swatch";
+      sw.textContent = code;
+      const isLight = luminance(color.r, color.g, color.b) > 155;
+      sw.style.color = isLight ? "#221f1a" : "#ffffff";
+      if (isLight) sw.style.textShadow = "0 1px 2px rgba(255,255,255,0.65)";
+      if (color.patternDataUrl) {
+        sw.style.backgroundImage = `url("${color.patternDataUrl}")`;
+      } else {
+        sw.style.backgroundColor = `rgb(${color.r}, ${color.g}, ${color.b})`;
+      }
+
+      cell.appendChild(mathBar);
+      cell.appendChild(sw);
+      harmonyPreviewStrip.appendChild(cell);
+    });
+  }
+
+  function syncHarmonyPopoverUI() {
+    const cfg = state.harmonyConfig;
+    const rule = HARMONY_RULE_MAP[cfg.rule] || HARMONY_RULES[0];
+    if (harmonyFormulaHint) harmonyFormulaHint.textContent = rule.formula;
+    harmonyRuleBtns.forEach((btn) => {
+      const active = btn.dataset.harmonyRule === cfg.rule;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-checked", active ? "true" : "false");
+    });
+    if (harmonyHueSlider) harmonyHueSlider.value = String(Math.round(cfg.baseHue));
+    if (harmonyHueValue) harmonyHueValue.textContent = `${Math.round(cfg.baseHue)}°`;
+    if (harmonyHueDot) {
+      const [hr, hg, hb] = hslToRgb(cfg.baseHue, Math.max(55, cfg.saturation), 50);
+      harmonyHueDot.style.backgroundColor = `rgb(${hr}, ${hg}, ${hb})`;
+    }
+    if (harmonySatSlider) harmonySatSlider.value = String(Math.round(cfg.saturation));
+    if (harmonySatValue) harmonySatValue.textContent = `${Math.round(cfg.saturation)}%`;
+    if (harmonyContrastSlider) harmonyContrastSlider.value = String(Math.round(cfg.contrast));
+    if (harmonyContrastValue) harmonyContrastValue.textContent = `${Math.round(cfg.contrast)}%`;
+    if (harmonyLibrarySelect) harmonyLibrarySelect.value = cfg.library;
+    if (harmonyPreserveSlots) harmonyPreserveSlots.checked = Boolean(cfg.preserveSlots);
+    if (harmonyReverseValues) harmonyReverseValues.checked = Boolean(cfg.reverseValues);
+    if (harmonyMapNote) harmonyMapNote.textContent = cfg.reverseValues ? "Light → Dark" : "Dark → Light";
+
+    const isPhotoOrMap = !state.isBlankQuilt && !state.activeMathPattern;
+    if (harmonyPreserveWrap) harmonyPreserveWrap.hidden = !isPhotoOrMap;
+    if (harmonyRestoreBtn) harmonyRestoreBtn.hidden = !(isPhotoOrMap && state.sourcePalette);
+
+    renderHarmonyPreviewStrip();
+  }
+
+  function applyHarmonyFromControls({ record = true, coalesceKey = null, count = null } = {}) {
+    if (!state.image) return;
+    const cfg = state.harmonyConfig;
+    const K = count || state.palette.length || 8;
+    const isPhotoOrMap = !state.isBlankQuilt && !state.activeMathPattern;
+
+    if (isPhotoOrMap && cfg.preserveSlots) {
+      ensureSourcePaletteForSwap(K);
+    } else if (isPhotoOrMap && !cfg.preserveSlots) {
+      state.sourcePalette = null;
+    }
+
+    const res = generateHarmoniousPalette(K, {
+      ruleId: cfg.rule,
+      baseHue: cfg.baseHue,
+      saturation: cfg.saturation,
+      contrast: cfg.contrast,
+      library: cfg.library,
+      reverseValues: cfg.reverseValues,
+    });
+
+    cfg.lastMathTargets = res.mathTargets;
+    state.palette = res.palette;
+    rehydratePalettePatterns();
+    renderPaletteSwatches();
+
+    if (state.activeMathPattern) {
+      applyMathPattern(state.activeMathPattern, { record: false });
+    } else {
+      renderQuilt();
+    }
+
+    syncHarmonyPopoverUI();
+    if (record) {
+      const libLabel = HARMONY_LIBRARY_LABELS[cfg.library] || "Swatches";
+      recordHistory(`Harmony: ${res.ruleLabel} (${libLabel})`, coalesceKey);
+    }
+  }
+
+  function closeHarmonyPopover() {
+    if (!harmonyPopover) return;
+    harmonyPopover.hidden = true;
+    if (harmonyPaletteBtn) {
+      harmonyPaletteBtn.classList.remove("is-active");
+      harmonyPaletteBtn.setAttribute("aria-expanded", "false");
+    }
+  }
+
+  function openHarmonyPopover() {
+    if (!harmonyPopover || !harmonyPaletteBtn || !state.image) return;
+    if (!harmonyPopover.hidden) {
+      closeHarmonyPopover();
+      return;
+    }
+    closeHistoryPopover();
+    closeSwatchPopover();
+    closeMathMenuPopover();
+    closeMathPropsPopover();
+    closeMapPopover();
+
+    // Seed base hue gently from the current quilt's midtone swatch if we haven't generated targets yet
+    if ((!state.harmonyConfig.lastMathTargets || state.harmonyConfig.lastMathTargets.length !== state.palette.length) && state.palette.length > 0) {
+      const mid = state.palette[Math.floor(state.palette.length / 2)];
+      const [h, s] = rgbToHsl(mid.r, mid.g, mid.b);
+      if (s > 10) state.harmonyConfig.baseHue = h;
+    }
+
+    harmonyPopover.hidden = false;
+    harmonyPaletteBtn.classList.add("is-active");
+    harmonyPaletteBtn.setAttribute("aria-expanded", "true");
+    syncHarmonyPopoverUI();
+
+    const rect = harmonyPaletteBtn.getBoundingClientRect();
+    const popRect = harmonyPopover.getBoundingClientRect();
+    const margin = 12;
+    let left = rect.right + 10;
+    if (left + popRect.width > window.innerWidth - margin) {
+      left = Math.max(margin, rect.left - popRect.width - 10);
+    }
+    if (left + popRect.width > window.innerWidth - margin) {
+      left = Math.max(margin, window.innerWidth - popRect.width - margin);
+    }
+    let top = rect.top - 120;
+    if (top + popRect.height > window.innerHeight - margin) {
+      top = Math.max(margin, window.innerHeight - popRect.height - margin);
+    }
+    if (top < margin) top = margin;
+    harmonyPopover.style.left = `${Math.round(left)}px`;
+    harmonyPopover.style.top = `${Math.round(top)}px`;
   }
 
   function shuffleQuiltDesign() {
@@ -9009,12 +9440,18 @@
     closeHistoryPopover();
     closeSwatchPopover();
     closeMathMenuPopover();
+    closeHarmonyPopover();
+    state.sourcePalette = null;
 
     // 1. Pick a fresh harmonious palette (preserving current palette size, or 6-10 fabrics)
     const targetCount = Math.max(5, Math.min(10, state.palette.length || 8));
-    const { palette, ruleLabel } = generateHarmoniousPalette(targetCount, { includePrints: true });
-    state.palette = palette;
-    if (paletteSizeSlider) paletteSizeSlider.value = String(palette.length);
+    const res = generateHarmoniousPalette(targetCount, { library: state.harmonyConfig.library || "kona" });
+    state.harmonyConfig.rule = res.ruleId;
+    state.harmonyConfig.baseHue = res.baseHue;
+    state.harmonyConfig.saturation = res.saturation;
+    state.harmonyConfig.lastMathTargets = res.mathTargets;
+    state.palette = res.palette;
+    if (paletteSizeSlider) paletteSizeSlider.value = String(res.palette.length);
     rehydratePalettePatterns();
 
     // 2. Pick a different random pattern from all 30 generators
@@ -9031,7 +9468,6 @@
           params[p.key] = p.options[Math.floor(Math.random() * p.options.length)].value;
         } else if (p.type === "range" && p.key !== "panX" && p.key !== "panY") {
           const steps = Math.max(1, Math.round((p.max - p.min) / p.step));
-          // Keep zoom near 0.9x - 1.5x so the pattern frames nicely
           if (p.key === "zoom") {
             params[p.key] = Math.round((0.85 + Math.random() * 0.65) * 10) / 10;
           } else {
@@ -9045,7 +9481,6 @@
     state.mathTransform = { offsetX: 0, offsetY: 0, scale: 1.0, rotate: 0 };
     state.mathReversePalette = Math.random() < 0.35;
 
-    // Ensure crisp resolution for rich patterns if currently very chunky
     if (state.cols < 20) {
       state.cols = syncSliderBoundsForCols(28);
       computeSquareAverages();
@@ -9056,7 +9491,7 @@
     if (mathPropsPopover && !mathPropsPopover.hidden) {
       renderMathPropsControls();
     }
-    recordHistory(`Shuffled: ${spec.label} (${ruleLabel})`);
+    recordHistory(`Shuffled: ${spec.label} (${res.ruleLabel})`);
   }
 
   if (shuffleQuiltBtn) {
@@ -9064,20 +9499,103 @@
   }
 
   if (harmonyPaletteBtn) {
-    harmonyPaletteBtn.addEventListener("click", () => {
-      if (!state.image) return;
-      const { palette, ruleLabel } = generateHarmoniousPalette(state.palette.length || 8, { includePrints: true });
-      state.palette = palette;
-      rehydratePalettePatterns();
-      renderPaletteSwatches();
-      if (state.activeMathPattern) {
-        applyMathPattern(state.activeMathPattern, { record: false });
-      } else {
-        renderQuilt();
-      }
-      recordHistory(`Harmony palette: ${ruleLabel}`);
+    harmonyPaletteBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openHarmonyPopover();
     });
   }
+
+  if (harmonyPopoverClose) {
+    harmonyPopoverClose.addEventListener("click", closeHarmonyPopover);
+  }
+
+  harmonyRuleBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const nextRule = btn.dataset.harmonyRule;
+      if (!HARMONY_RULE_MAP[nextRule]) return;
+      state.harmonyConfig.rule = nextRule;
+      applyHarmonyFromControls({ record: true, coalesceKey: "harmony-rule" });
+    });
+  });
+
+  if (harmonyHueSlider) {
+    harmonyHueSlider.addEventListener("input", () => {
+      state.harmonyConfig.baseHue = Number(harmonyHueSlider.value);
+      applyHarmonyFromControls({ record: true, coalesceKey: "harmony-hue" });
+    });
+  }
+
+  if (harmonySatSlider) {
+    harmonySatSlider.addEventListener("input", () => {
+      state.harmonyConfig.saturation = Number(harmonySatSlider.value);
+      applyHarmonyFromControls({ record: true, coalesceKey: "harmony-sat" });
+    });
+  }
+
+  if (harmonyContrastSlider) {
+    harmonyContrastSlider.addEventListener("input", () => {
+      state.harmonyConfig.contrast = Number(harmonyContrastSlider.value);
+      applyHarmonyFromControls({ record: true, coalesceKey: "harmony-contrast" });
+    });
+  }
+
+  if (harmonyLibrarySelect) {
+    harmonyLibrarySelect.addEventListener("change", () => {
+      state.harmonyConfig.library = harmonyLibrarySelect.value || "mixed";
+      applyHarmonyFromControls({ record: true });
+    });
+  }
+
+  if (harmonyPreserveSlots) {
+    harmonyPreserveSlots.addEventListener("change", () => {
+      state.harmonyConfig.preserveSlots = harmonyPreserveSlots.checked;
+      applyHarmonyFromControls({ record: true });
+    });
+  }
+
+  if (harmonyReverseValues) {
+    harmonyReverseValues.addEventListener("change", () => {
+      state.harmonyConfig.reverseValues = harmonyReverseValues.checked;
+      applyHarmonyFromControls({ record: true });
+    });
+  }
+
+  if (harmonyRollBtn) {
+    harmonyRollBtn.addEventListener("click", () => {
+      const otherRules = HARMONY_RULES.filter((r) => r.id !== state.harmonyConfig.rule);
+      const picked = otherRules[Math.floor(Math.random() * otherRules.length)] || HARMONY_RULES[0];
+      state.harmonyConfig.rule = picked.id;
+      state.harmonyConfig.baseHue = Math.floor(Math.random() * 360);
+      state.harmonyConfig.saturation = Math.round(46 + Math.random() * 32);
+      applyHarmonyFromControls({ record: true });
+    });
+  }
+
+  if (harmonyRestoreBtn) {
+    harmonyRestoreBtn.addEventListener("click", () => {
+      if (!state.samplePixels) return;
+      const targetColors = state.palette.length || Number(paletteSizeSlider.value) || 8;
+      state.sourcePalette = null;
+      state.harmonyConfig.lastMathTargets = [];
+      state.palette = extractPalette(state.samplePixels, targetColors);
+      renderPaletteSwatches();
+      renderQuilt();
+      syncHarmonyPopoverUI();
+      recordHistory("Restored original photo palette");
+    });
+  }
+
+  document.addEventListener("click", (e) => {
+    if (!harmonyPopover || harmonyPopover.hidden) return;
+    if (harmonyPopover.contains(e.target) || (harmonyPaletteBtn && harmonyPaletteBtn.contains(e.target))) return;
+    closeHarmonyPopover();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && harmonyPopover && !harmonyPopover.hidden) {
+      closeHarmonyPopover();
+    }
+  });
 
   // --- Map & Satellite Quilt Generator (Nominatim Geocoding + CORS Tile Stitcher) ---
   const MAP_KNOWN_COORDS = {
@@ -9106,6 +9624,14 @@
     const fx = ((lon + 180) / 360) * n;
     const fy = ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n;
     return { fx, fy, n };
+  }
+
+  function fracTileToLatLon(fx, fy, zoom) {
+    const n = Math.pow(2, zoom);
+    const lon = (fx / n) * 360 - 180;
+    const latRad = Math.atan(Math.sinh(Math.PI * (1 - (2 * fy) / n)));
+    const lat = (latRad * 180) / Math.PI;
+    return { lat: Math.max(-85, Math.min(85, lat)), lon: ((lon + 180) % 360 + 360) % 360 - 180 };
   }
 
   function setMapStatus(msg, isError = false) {
@@ -9193,12 +9719,9 @@
     });
   }
 
-  async function generateMapQuilt(query, style, zoom, extractColors) {
+  async function loadMapAtCoords(loc, style, zoom, extractColors, { record = true, closeDialog = true } = {}) {
     if (mapLoadBtn) mapLoadBtn.disabled = true;
     try {
-      setMapStatus("Finding location…");
-      const loc = await geocodeLocation(query);
-
       setMapStatus("Loading map tiles…");
       const z = Math.max(6, Math.min(16, Math.round(Number(zoom) || 13)));
       const { fx, fy, n } = latLonToFracTile(loc.lat, loc.lon, z);
@@ -9244,6 +9767,17 @@
           state.fileName = `${loc.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.jpg`;
           state.isBlankQuilt = false;
           state.activeMathPattern = "";
+          state.activeMap = {
+            lat: loc.lat,
+            lon: loc.lon,
+            zoom: z,
+            style,
+            label: loc.label,
+            extractColors: Boolean(extractColors),
+            stitchCanvas: stitch,
+            cropX,
+            cropY,
+          };
           state.crop = { x: 0, y: 0, w: 1, h: 1 };
           state.paintMask.fill(0);
           state.manualCells.clear();
@@ -9252,6 +9786,7 @@
           rebuildSampleBuffer();
           if (extractColors) {
             const targetColors = Number(paletteSizeSlider.value) || 8;
+            state.sourcePalette = null;
             state.palette = extractPalette(state.samplePixels, targetColors);
           }
           if (state.cols < 20) {
@@ -9263,8 +9798,10 @@
           computeSquareAverages();
           renderPaletteSwatches();
           renderQuilt();
-          const styleNames = { satellite: "Satellite", voyager: "Map", topo: "Topo Map", relief: "Terrain" };
-          recordHistory(`Map (${styleNames[style] || "Satellite"}): ${loc.label}`);
+          if (record) {
+            const styleNames = { satellite: "Satellite", voyager: "Map", topo: "Topo Map", relief: "Terrain" };
+            recordHistory(`Map (${styleNames[style] || "Satellite"}): ${loc.label}`);
+          }
           resolve();
         };
         img.onerror = () => reject(new Error("Could not render stitched map image"));
@@ -9272,13 +9809,184 @@
       });
 
       setMapStatus("");
-      closeMapPopover();
+      if (closeDialog) closeMapPopover();
     } catch (err) {
       setMapStatus(err?.message || "Could not load map tiles.", true);
     } finally {
       if (mapLoadBtn) mapLoadBtn.disabled = false;
     }
   }
+
+  async function generateMapQuilt(query, style, zoom, extractColors) {
+    if (mapLoadBtn) mapLoadBtn.disabled = true;
+    try {
+      setMapStatus("Finding location…");
+      const loc = await geocodeLocation(query);
+      await loadMapAtCoords(loc, style, zoom, extractColors, { record: true, closeDialog: true });
+    } catch (err) {
+      setMapStatus(err?.message || "Could not load map tiles.", true);
+      if (mapLoadBtn) mapLoadBtn.disabled = false;
+    }
+  }
+
+  // --- Direct Canvas Drag-to-Frame for Both Satellite/Map Quilts & Mathematical/Fractal Patterns ---
+  let activeCanvasPan = null;
+
+  function renderMapCropPreview(mapInfo, previewCropX, previewCropY) {
+    if (!mapInfo || !mapInfo.stitchCanvas) return;
+    const clampedX = Math.max(0, Math.min(256, Math.round(previewCropX)));
+    const clampedY = Math.max(0, Math.min(256, Math.round(previewCropY)));
+    const maxSample = 400;
+    const offscreen = document.createElement("canvas");
+    offscreen.width = maxSample;
+    offscreen.height = maxSample;
+    const offCtx = offscreen.getContext("2d", { willReadFrequently: true });
+    offCtx.drawImage(mapInfo.stitchCanvas, clampedX, clampedY, 512, 512, 0, 0, maxSample, maxSample);
+    state.sampleWidth = maxSample;
+    state.sampleHeight = maxSample;
+    state.samplePixels = offCtx.getImageData(0, 0, maxSample, maxSample).data;
+    computeSquareAverages();
+    renderQuilt();
+  }
+
+  quiltCanvas.addEventListener("pointerdown", (e) => {
+    if (state.paintMode || !state.image || state.showingOriginal) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+
+    let panMode = null;
+    if (state.activeMap) {
+      panMode = "map";
+    } else if (state.activeMathPattern) {
+      panMode = "math";
+    } else if (state.panMode && state.isBlankQuilt && state.manualCells.size > 0) {
+      panMode = "painted";
+    } else if (state.panMode && !state.isBlankQuilt && (state.crop.w < 0.999 || state.crop.h < 0.999)) {
+      panMode = "crop";
+    }
+    if (!panMode) return;
+
+    const rect = quiltCanvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    e.preventDefault();
+    try {
+      quiltCanvas.setPointerCapture(e.pointerId);
+    } catch {
+      // Ignore synthetic events
+    }
+    quiltCanvas.classList.add("is-dragging");
+    activeCanvasPan = {
+      pointerId: e.pointerId,
+      mode: panMode,
+      startX: e.clientX,
+      startY: e.clientY,
+      rectW: rect.width,
+      rectH: rect.height,
+      origOffX: Number(state.mathTransform?.offsetX) || 0,
+      origOffY: Number(state.mathTransform?.offsetY) || 0,
+      origCropX: state.activeMap ? state.activeMap.cropX : state.crop.x,
+      origCropY: state.activeMap ? state.activeMap.cropY : state.crop.y,
+      origManualCells:
+        panMode === "painted"
+          ? Array.from(state.manualCells.entries()).map(([k, v]) => {
+              const [c, r] = k.split(",").map(Number);
+              return { c, r, v: { ...v } };
+            })
+          : null,
+      lastShiftCol: 0,
+      lastShiftRow: 0,
+      moved: false,
+    };
+  });
+
+  quiltCanvas.addEventListener("pointermove", (e) => {
+    if (!activeCanvasPan || e.pointerId !== activeCanvasPan.pointerId) return;
+    const dx = e.clientX - activeCanvasPan.startX;
+    const dy = e.clientY - activeCanvasPan.startY;
+    if (Math.abs(dx) < 2 && Math.abs(dy) < 2 && !activeCanvasPan.moved) return;
+    activeCanvasPan.moved = true;
+    e.preventDefault();
+
+    if (activeCanvasPan.mode === "math" && state.activeMathPattern) {
+      const nextX = Math.max(-0.5, Math.min(0.5, activeCanvasPan.origOffX + dx / activeCanvasPan.rectW));
+      const nextY = Math.max(-0.5, Math.min(0.5, activeCanvasPan.origOffY + dy / activeCanvasPan.rectH));
+      state.mathTransform.offsetX = Number(nextX.toFixed(3));
+      state.mathTransform.offsetY = Number(nextY.toFixed(3));
+      applyMathPattern(state.activeMathPattern, { record: false });
+      if (mathPropsPopover && !mathPropsPopover.hidden) {
+        renderMathPropsControls();
+      }
+    } else if (activeCanvasPan.mode === "map" && state.activeMap) {
+      const tileDx = (dx / activeCanvasPan.rectW) * 512;
+      const tileDy = (dy / activeCanvasPan.rectH) * 512;
+      renderMapCropPreview(state.activeMap, activeCanvasPan.origCropX - tileDx, activeCanvasPan.origCropY - tileDy);
+    } else if (activeCanvasPan.mode === "painted" && activeCanvasPan.origManualCells) {
+      const dCol = Math.round((dx / activeCanvasPan.rectW) * state.cols);
+      const dRow = Math.round((dy / activeCanvasPan.rectH) * state.rows);
+      if (dCol === activeCanvasPan.lastShiftCol && dRow === activeCanvasPan.lastShiftRow) return;
+      activeCanvasPan.lastShiftCol = dCol;
+      activeCanvasPan.lastShiftRow = dRow;
+      state.manualCells.clear();
+      for (let i = 0; i < activeCanvasPan.origManualCells.length; i++) {
+        const entry = activeCanvasPan.origManualCells[i];
+        const nc = entry.c + dCol;
+        const nr = entry.r + dRow;
+        if (nc >= 0 && nc < state.cols && nr >= 0 && nr < state.rows) {
+          state.manualCells.set(`${nc},${nr}`, { ...entry.v });
+        }
+      }
+      renderQuilt();
+    } else if (activeCanvasPan.mode === "crop") {
+      const maxX = Math.max(0, 1 - state.crop.w);
+      const maxY = Math.max(0, 1 - state.crop.h);
+      const nextX = Math.max(0, Math.min(maxX, activeCanvasPan.origCropX - (dx / activeCanvasPan.rectW) * state.crop.w));
+      const nextY = Math.max(0, Math.min(maxY, activeCanvasPan.origCropY - (dy / activeCanvasPan.rectH) * state.crop.h));
+      state.crop.x = nextX;
+      state.crop.y = nextY;
+      rebuildSampleBuffer();
+      computeSquareAverages();
+      renderQuilt();
+    }
+  });
+
+  const finishCanvasPan = (e) => {
+    if (!activeCanvasPan) return;
+    if (e && typeof e.pointerId === "number" && e.pointerId !== activeCanvasPan.pointerId) return;
+    const pan = activeCanvasPan;
+    activeCanvasPan = null;
+    quiltCanvas.classList.remove("is-dragging");
+    if (!pan.moved) return;
+
+    const dx = (e ? e.clientX : pan.startX) - pan.startX;
+    const dy = (e ? e.clientY : pan.startY) - pan.startY;
+
+    if (pan.mode === "math" && state.activeMathPattern) {
+      const spec = MATH_PATTERN_SPECS[state.activeMathPattern];
+      recordHistory(`Repositioned ${spec ? spec.label : "pattern"}`, "math-pan");
+    } else if (pan.mode === "map" && state.activeMap) {
+      const mapInfo = state.activeMap;
+      const deltaTilesX = ((dx / pan.rectW) * 512) / 256;
+      const deltaTilesY = ((dy / pan.rectH) * 512) / 256;
+      const { fx, fy } = latLonToFracTile(mapInfo.lat, mapInfo.lon, mapInfo.zoom);
+      const nextCoords = fracTileToLatLon(fx - deltaTilesX, fy - deltaTilesY, mapInfo.zoom);
+      loadMapAtCoords(
+        { lat: nextCoords.lat, lon: nextCoords.lon, label: mapInfo.label },
+        mapInfo.style,
+        mapInfo.zoom,
+        false, // Keep current palette while reframing!
+        { record: true, closeDialog: false }
+      );
+    } else if (pan.mode === "painted") {
+      if (pan.lastShiftCol !== 0 || pan.lastShiftRow !== 0) {
+        recordHistory("Repositioned painted design");
+      }
+    } else if (pan.mode === "crop") {
+      updateCropButtonBadge();
+      recordHistory("Repositioned photo crop");
+    }
+  };
+
+  quiltCanvas.addEventListener("pointerup", finishCanvasPan);
+  quiltCanvas.addEventListener("pointercancel", finishCanvasPan);
 
   if (mapPopoverClose) {
     mapPopoverClose.addEventListener("click", closeMapPopover);
@@ -9850,6 +10558,8 @@
       state.paintMask.fill(0);
       state.manualCells.clear();
       state.activeMathPattern = "";
+      state.activeMap = null;
+      state.sourcePalette = null;
       syncMathPropsButton();
       closeMathPropsPopover();
       syncMathPropsButton();

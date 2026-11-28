@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="64x64" href="favicon-v2.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-v2.png" />
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon-v2.png" />
-  <link rel="manifest" href="site.webmanifest?v=68" />
-  <link rel="stylesheet" href="styles.css?v=68" />
+  <link rel="manifest" href="site.webmanifest?v=75" />
+  <link rel="stylesheet" href="styles.css?v=75" />
 </head>
 <body>
   <header class="topbar">
@@ -23,70 +23,68 @@
         <p class="tagline">A quilt design studio built on Samish Island.</p>
       </div>
     </div>
-    <div class="topbar-right">
-      <div class="topbar-actions" id="topbar-actions" hidden>
-        <label class="project-chip" title="Click to rename project">
-          <input
-            type="text"
-            class="project-name-input"
-            id="file-name"
-            value="Untitled Quilt"
-            aria-label="Project title"
-            placeholder="Untitled Quilt"
-            maxlength="60"
-          />
-          <svg class="icon icon-edit" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-        </label>
-        <span class="topbar-divider" aria-hidden="true"></span>
-        <div class="history-group" id="history-group" role="group" aria-label="Undo and redo history">
-          <button type="button" class="history-btn" id="undo-btn" title="Undo (Cmd/Ctrl + Z)" aria-label="Undo" disabled>
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/></svg>
+    <div class="topbar-actions" id="topbar-actions" hidden>
+      <label class="project-chip" title="Click to rename project">
+        <input
+          type="text"
+          class="project-name-input"
+          id="file-name"
+          value="Untitled Quilt"
+          aria-label="Project title"
+          placeholder="Untitled Quilt"
+          maxlength="60"
+        />
+        <svg class="icon icon-edit" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+      </label>
+      <span class="topbar-divider" aria-hidden="true"></span>
+      <div class="history-group" id="history-group" role="group" aria-label="Undo and redo history">
+        <button type="button" class="history-btn" id="undo-btn" title="Undo (Cmd/Ctrl + Z)" aria-label="Undo" disabled>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/></svg>
+        </button>
+        <button type="button" class="history-btn" id="redo-btn" title="Redo (Cmd/Ctrl + Shift + Z)" aria-label="Redo" disabled>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13"/></svg>
+        </button>
+        <div class="history-menu-wrap">
+          <button
+            type="button"
+            class="history-btn history-caret-btn"
+            id="history-menu-btn"
+            aria-haspopup="listbox"
+            aria-expanded="false"
+            aria-label="Edit history"
+            title="Show edit history stack"
+          >
+            <svg class="icon icon-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
           </button>
-          <button type="button" class="history-btn" id="redo-btn" title="Redo (Cmd/Ctrl + Shift + Z)" aria-label="Redo" disabled>
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13"/></svg>
-          </button>
-          <div class="history-menu-wrap">
-            <button
-              type="button"
-              class="history-btn history-caret-btn"
-              id="history-menu-btn"
-              aria-haspopup="listbox"
-              aria-expanded="false"
-              aria-label="Edit history"
-              title="Show edit history stack"
-            >
-              <svg class="icon icon-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-            </button>
-            <div class="history-popover" id="history-popover" role="listbox" aria-label="Edit history stack" hidden>
-              <div class="history-popover-header">
-                <span>Edit History</span>
-                <span class="history-count" id="history-count">1 step</span>
-              </div>
-              <div class="history-list" id="history-list"></div>
+          <div class="history-popover" id="history-popover" role="listbox" aria-label="Edit history stack" hidden>
+            <div class="history-popover-header">
+              <span>Edit History</span>
+              <span class="history-count" id="history-count">1 step</span>
             </div>
+            <div class="history-list" id="history-list"></div>
           </div>
         </div>
-        <span class="topbar-divider" aria-hidden="true"></span>
-        <div class="action-group" role="group" aria-label="Pattern file actions">
-          <button type="button" class="btn btn-ghost" id="new-image-btn" title="Start a new quilt (from an image, blank canvas, or saved file)">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-            New Quilt
-          </button>
-          <button type="button" class="btn btn-ghost" id="open-pattern-btn-top" title="Open a saved .quilt pattern">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-            Open
-          </button>
-          <button type="button" class="btn btn-ghost" id="save-pattern-btn" title="Save this pattern as a .quilt file (Cmd/Ctrl + S)">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
-            Save
-          </button>
-        </div>
-        <span class="topbar-divider" aria-hidden="true"></span>
       </div>
-      <div class="segmented region-toggle" role="radiogroup" aria-label="Units and paper standard">
-        <button type="button" class="segmented-btn is-active" data-region="us" role="radio" aria-checked="true" title="US mode: Inches, Yards &amp; Letter paper">US · in</button>
-        <button type="button" class="segmented-btn" data-region="metric" role="radio" aria-checked="false" title="Metric mode (Rest of World): Centimeters, Meters &amp; A4 paper">Metric · cm</button>
+      <span class="topbar-divider" aria-hidden="true"></span>
+      <div class="action-group" role="group" aria-label="Pattern file actions">
+        <button type="button" class="btn btn-ghost" id="new-image-btn" title="Start a new quilt (from an image, blank canvas, or saved file)">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+          New Quilt
+        </button>
+        <button type="button" class="btn btn-ghost" id="open-pattern-btn-top" title="Open a saved .quilt pattern">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          Open
+        </button>
+        <button type="button" class="btn btn-ghost" id="save-pattern-btn" title="Save this pattern as a .quilt file (Cmd/Ctrl + S)">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+          Save
+        </button>
       </div>
+      <span class="topbar-divider topbar-divider-end" aria-hidden="true"></span>
+    </div>
+    <div class="segmented region-toggle" role="radiogroup" aria-label="Units and paper standard">
+      <button type="button" class="segmented-btn is-active" data-region="us" role="radio" aria-checked="true" title="US mode: Inches, Yards &amp; Letter paper">US · in</button>
+      <button type="button" class="segmented-btn" data-region="metric" role="radio" aria-checked="false" title="Metric mode (Rest of World): Centimeters, Meters &amp; A4 paper">Metric · cm</button>
     </div>
   </header>
 
@@ -252,6 +250,101 @@
           <span>Reverse palette</span>
         </label>
         <button type="button" class="swatch-link-btn math-reset-btn" id="math-props-reset">Reset defaults</button>
+      </div>
+    </div>
+
+    <!-- Palette Harmony & Swatch Mapper Popover -->
+    <div class="swatch-popover harmony-popover" id="harmony-popover" role="dialog" aria-label="Mathematically derived palette swapper" hidden>
+      <div class="swatch-popover-header">
+        <span class="swatch-popover-title">Palette Harmony</span>
+        <button type="button" class="swatch-popover-close" id="harmony-popover-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="harmony-popover-body">
+        <div class="math-prop-control">
+          <div class="math-prop-head">
+            <span>Color-wheel math</span>
+            <span class="harmony-formula-hint" id="harmony-formula-hint">0° · 120° · 240°</span>
+          </div>
+          <div class="harmony-rule-grid" id="harmony-rule-grid" role="radiogroup" aria-label="Color harmony rule">
+            <button type="button" class="harmony-rule-btn" data-harmony-rule="analogous">Analogous</button>
+            <button type="button" class="harmony-rule-btn" data-harmony-rule="complementary">Complementary</button>
+            <button type="button" class="harmony-rule-btn" data-harmony-rule="split-comp">Split-Comp</button>
+            <button type="button" class="harmony-rule-btn is-active" data-harmony-rule="triadic">Triadic</button>
+            <button type="button" class="harmony-rule-btn" data-harmony-rule="tetradic">Tetradic</button>
+            <button type="button" class="harmony-rule-btn" data-harmony-rule="golden">Golden φ</button>
+            <button type="button" class="harmony-rule-btn" data-harmony-rule="double-comp">Double-Comp</button>
+            <button type="button" class="harmony-rule-btn" data-harmony-rule="monochrome">Monochrome</button>
+          </div>
+        </div>
+
+        <div class="math-prop-control">
+          <div class="math-prop-head">
+            <label for="harmony-hue-slider">Base hue</label>
+            <span class="harmony-hue-readout">
+              <span class="harmony-hue-dot" id="harmony-hue-dot"></span>
+              <span class="control-value" id="harmony-hue-value">210°</span>
+            </span>
+          </div>
+          <input type="range" class="harmony-hue-slider" id="harmony-hue-slider" min="0" max="359" step="1" value="210" />
+        </div>
+
+        <div class="math-transform-grid">
+          <div class="math-prop-control">
+            <div class="math-prop-head">
+              <label for="harmony-sat-slider">Saturation</label>
+              <span class="control-value" id="harmony-sat-value">62%</span>
+            </div>
+            <input type="range" id="harmony-sat-slider" min="18" max="92" step="1" value="62" />
+          </div>
+          <div class="math-prop-control">
+            <div class="math-prop-head">
+              <label for="harmony-contrast-slider">Contrast</label>
+              <span class="control-value" id="harmony-contrast-value">74%</span>
+            </div>
+            <input type="range" id="harmony-contrast-slider" min="30" max="86" step="1" value="74" />
+          </div>
+        </div>
+
+        <div class="math-prop-control">
+          <div class="math-prop-head">
+            <label for="harmony-library-select">Map to fabric swatches</label>
+          </div>
+          <select id="harmony-library-select" class="math-prop-select">
+            <option value="kona" selected>Robert Kaufman Kona Solids</option>
+            <option value="pure">Pure Math Colors (Unmapped)</option>
+            <option value="kaffe">Kaffe Fassett Prints</option>
+            <option value="brandon">Brandon Mably Prints</option>
+            <option value="pj">Philip Jacobs Prints</option>
+            <option value="prints">All Designer Prints</option>
+            <option value="mixed">Kona Solids + Designer Prints</option>
+          </select>
+        </div>
+
+        <div class="math-prop-control">
+          <div class="math-prop-head">
+            <span>Math target → mapped swatch</span>
+            <span class="harmony-map-note" id="harmony-map-note">Dark → Light</span>
+          </div>
+          <div class="harmony-preview-strip" id="harmony-preview-strip" aria-live="polite"></div>
+        </div>
+
+        <div class="harmony-checks">
+          <label class="math-props-check" id="harmony-preserve-wrap">
+            <input type="checkbox" id="harmony-preserve-slots" checked />
+            <span>Map onto existing quilt swatches (preserve contrast)</span>
+          </label>
+          <label class="math-props-check">
+            <input type="checkbox" id="harmony-reverse-values" />
+            <span>Reverse dark ↔ light</span>
+          </label>
+        </div>
+      </div>
+      <div class="math-props-footer">
+        <button type="button" class="swatch-link-btn" id="harmony-restore-btn" hidden>Restore original</button>
+        <button type="button" class="btn btn-primary btn-small harmony-roll-btn" id="harmony-roll-btn">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+          Randomize
+        </button>
       </div>
     </div>
 
@@ -528,7 +621,7 @@
 
           <div class="palette-actions">
             <button type="button" class="btn btn-subtle" id="add-color-btn">+ Add Fabric</button>
-            <button type="button" class="btn btn-subtle" id="harmony-palette-btn" title="Generate a harmonious fabric palette using color-wheel math (analogous, complementary, triadic, etc.)">Harmony</button>
+            <button type="button" class="btn btn-subtle" id="harmony-palette-btn" aria-haspopup="dialog" aria-expanded="false" title="Swap palette with mathematically derived color-wheel harmonies mapped onto real fabric swatches">Harmony ▾</button>
             <button type="button" class="btn btn-subtle" id="snap-kona-btn" title="Snap all solid colors in your palette to their exact closest Robert Kaufman Kona Cotton solid">Snap to Kona</button>
             <button type="button" class="btn btn-subtle" id="reset-palette-btn">Re-extract</button>
           </div>
@@ -565,6 +658,16 @@
             >
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3Z"/><path d="M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7"/><path d="M14.5 17.5 4.5 15"/></svg>
               <span id="paint-btn-label">Paint</span>
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost btn-small pan-tool-btn"
+              id="pan-toggle-btn"
+              aria-pressed="false"
+              aria-label="Hand reposition tool"
+              title="Hand reposition tool (H, or hold Space) — drag to pan patterns, satellite maps, cropped photos, or painted blocks"
+            >
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>
             </button>
             <div class="math-toolbar-group" id="math-menu-wrap">
               <button
@@ -747,7 +850,15 @@
     </section>
   </main>
 
+  <footer class="app-footer">
+    <span>Miriam's Quiltcaster</span>
+    <span class="footer-sep" aria-hidden="true">·</span>
+    <span>Built on Samish Island</span>
+    <span class="footer-sep" aria-hidden="true">·</span>
+    <a href="changelog.html" target="_blank" rel="noopener" class="footer-link">Changelog</a>
+  </footer>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-  <script src="app.js?v=68" defer></script>
+  <script src="app.js?v=75" defer></script>
 </body>
 </html>
