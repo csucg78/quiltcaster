@@ -57,7 +57,10 @@
   const mapPopoverClose = document.getElementById("map-popover-close");
   const mapForm = document.getElementById("map-form");
   const mapLocationInput = document.getElementById("map-location-input");
+  const mapUseLocationBtn = document.getElementById("map-use-location-btn");
+  const mapCurrentLocChip = document.getElementById("map-current-loc-chip");
   const mapStyleSelect = document.getElementById("map-style-select");
+  const mapLayerDesc = document.getElementById("map-layer-desc");
   const mapZoomSlider = document.getElementById("map-zoom-slider");
   const mapZoomValue = document.getElementById("map-zoom-value");
   const mapExtractPalette = document.getElementById("map-extract-palette");
@@ -79,6 +82,8 @@
   const hstRatioValue = document.getElementById("hst-ratio-value");
   const paintToggleBtn = document.getElementById("paint-toggle-btn");
   const fillToggleBtn = document.getElementById("fill-toggle-btn");
+  const eyedropperToggleBtn = document.getElementById("eyedropper-toggle-btn");
+  const smoothToggleBtn = document.getElementById("smooth-toggle-btn");
   const panToggleBtn = document.getElementById("pan-toggle-btn");
   const paintBtnLabel = document.getElementById("paint-btn-label");
   const paintToolbar = document.getElementById("paint-toolbar");
@@ -87,7 +92,6 @@
   const paintSizeBtns = document.querySelectorAll("[data-paint-size]");
   const paintStatusLabel = document.getElementById("paint-status-label");
   const paintClearBtn = document.getElementById("paint-clear-btn");
-  const paintDoneBtn = document.getElementById("paint-done-btn");
 
   const regionBtns = document.querySelectorAll("[data-region]");
   const unitModeBadge = document.getElementById("unit-mode-badge");
@@ -371,6 +375,7 @@
     paintFabricIdx: 0, // Active palette index when painting colors/fabrics
     isBlankQuilt: false, // True when started from Paint Blank Quilt (no source photo)
     activeMathPattern: "", // Currently generated fractal/math pattern id (auto-regenerates on resize/layout change)
+    userEditedPattern: false, // True once user paints/fills/smooths over a generated pattern so resizing preserves edits
     mathParams: {}, // Live parameter values for the active math/fractal pattern
     mathTransform: { offsetX: 0, offsetY: 0, scale: 1.0, rotate: 0 }, // Universal pan/zoom/rotate for all generated patterns
     mathReversePalette: false,
@@ -1156,7 +1161,7 @@
       hstToggle.checked = false;
     }
     if (hstControls) hstControls.hidden = !hstAllowed || !state.hstEnabled;
-    // Hide HST paint brushes when in staggered rectangular layouts
+    // Hide HST-only paint brushes when in staggered rectangular layouts (Smooth still works with intermediate squares!)
     document.querySelectorAll('[data-paint-brush="hst-slash"], [data-paint-brush="hst-back"], [data-paint-brush="hst"]').forEach((el) => {
       if (el.dataset.photoOnly === "true" && state.isBlankQuilt) {
         el.hidden = true;
@@ -4376,18 +4381,30 @@
   window.addEventListener("drop", (e) => e.preventDefault());
 
   // Sliders & toggles
-  // Proportionally resamples painted cells when resizing a Blank Canvas grid (Chunky <-> Fine)
-  // so expanding the grid never leaves blank space along the right or bottom edges.
-  function resampleManualCellsForGridResize(prevCols, prevRows, nextCols, nextRows) {
-    if (!state.isBlankQuilt || state.activeMathPattern || state.manualCells.size === 0) return;
-    if (prevCols <= 0 || prevRows <= 0 || nextCols <= 0 || nextRows <= 0) return;
-    if (prevCols === nextCols && prevRows === nextRows) return;
-    const oldCells = new Map(state.manualCells);
+  // Non-destructive base snapshot captured when dragging the Chunky <-> Fine slider so
+  // dragging back and forth never compounds resampling loss on painted/filled designs.
+  let sliderResizeBase = null;
+
+  // Proportionally resamples painted/filled/smoothed cells when resizing the grid (Chunky <-> Fine)
+  // so expanding or shrinking the grid preserves manual edits without blank borders or overwriting.
+  function resampleManualCellsForGridResize(prevCols, prevRows, nextCols, nextRows, baseSnap = null) {
+    const srcCols = baseSnap ? baseSnap.cols : prevCols;
+    const srcRows = baseSnap ? baseSnap.rows : prevRows;
+    const oldCells = baseSnap ? baseSnap.cells : new Map(state.manualCells);
+    if (oldCells.size === 0) return;
+    if (srcCols <= 0 || srcRows <= 0 || nextCols <= 0 || nextRows <= 0) return;
+    if (srcCols === nextCols && srcRows === nextRows) {
+      if (baseSnap) {
+        state.manualCells.clear();
+        oldCells.forEach((v, k) => state.manualCells.set(k, { ...v }));
+      }
+      return;
+    }
     state.manualCells.clear();
     for (let nr = 0; nr < nextRows; nr++) {
-      const or = Math.min(prevRows - 1, Math.floor((nr / nextRows) * prevRows));
+      const or = Math.min(srcRows - 1, Math.floor((nr / nextRows) * srcRows));
       for (let nc = 0; nc < nextCols; nc++) {
-        const oc = Math.min(prevCols - 1, Math.floor((nc / nextCols) * prevCols));
+        const oc = Math.min(srcCols - 1, Math.floor((nc / nextCols) * srcCols));
         const src = oldCells.get(`${oc},${or}`);
         if (src) {
           state.manualCells.set(`${nc},${nr}`, { ...src });
@@ -4396,6 +4413,22 @@
     }
   }
 
+  const captureSliderResizeBase = () => {
+    if (state.manualCells.size > 0 && (!state.activeMathPattern || state.userEditedPattern)) {
+      sliderResizeBase = {
+        cols: state.cols,
+        rows: state.rows,
+        cells: new Map(state.manualCells),
+      };
+    } else {
+      sliderResizeBase = null;
+    }
+  };
+  squaresSlider.addEventListener("pointerdown", captureSliderResizeBase);
+  squaresSlider.addEventListener("change", () => {
+    sliderResizeBase = null;
+  });
+
   squaresSlider.addEventListener("input", () => {
     const prevCols = state.cols;
     const prevRows = state.rows;
@@ -4403,10 +4436,10 @@
     state.targetQuiltSize = null;
     if (quiltPresetSelect) quiltPresetSelect.value = "custom";
     computeSquareAverages();
-    if (state.activeMathPattern) {
+    if (state.activeMathPattern && !state.userEditedPattern) {
       applyMathPattern(state.activeMathPattern, { record: false });
     } else {
-      resampleManualCellsForGridResize(prevCols, prevRows, state.cols, state.rows);
+      resampleManualCellsForGridResize(prevCols, prevRows, state.cols, state.rows, sliderResizeBase);
       renderQuilt();
     }
     if (!cropStage.hidden) {
@@ -4416,11 +4449,50 @@
     recordHistory(`Grid: ${state.cols} × ${state.rows}`, "grid");
   });
 
-  window.addEventListener("resize", () => {
-    if (state.image && quiltCanvas.width > 0 && quiltCanvas.height > 0) {
-      sizePreviewCanvas(quiltCanvas.width, quiltCanvas.height);
-    }
-  });
+  function clampOpenPopoversToViewport() {
+    const margin = 10;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    [swatchPopover, harmonyPopover, mathMenuPopover, mathPropsPopover, mapPopover].forEach((pop) => {
+      if (!pop || pop.hidden) return;
+      const r = pop.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) return;
+      let nextLeft = r.left;
+      let nextTop = r.top;
+      if (nextLeft + r.width > vw - margin) nextLeft = Math.max(margin, vw - r.width - margin);
+      if (nextLeft < margin) nextLeft = margin;
+      if (nextTop + r.height > vh - margin) nextTop = Math.max(margin, vh - r.height - margin);
+      if (nextTop < margin) nextTop = margin;
+      pop.style.left = `${Math.round(nextLeft)}px`;
+      pop.style.top = `${Math.round(nextTop)}px`;
+    });
+  }
+
+  let resizeRafId = 0;
+  const scheduleCanvasAndPopoverReflow = () => {
+    if (resizeRafId) cancelAnimationFrame(resizeRafId);
+    resizeRafId = requestAnimationFrame(() => {
+      resizeRafId = 0;
+      if (state.image && quiltCanvas.width > 0 && quiltCanvas.height > 0) {
+        sizePreviewCanvas(quiltCanvas.width, quiltCanvas.height);
+      }
+      if (cropStage && !cropStage.hidden) {
+        renderCropCanvas();
+      }
+      clampOpenPopoversToViewport();
+    });
+  };
+
+  window.addEventListener("resize", scheduleCanvasAndPopoverReflow);
+
+  if (typeof ResizeObserver === "function" && canvasFrame) {
+    const frameObserver = new ResizeObserver(() => {
+      if (state.image && quiltCanvas.width > 0 && quiltCanvas.height > 0) {
+        sizePreviewCanvas(quiltCanvas.width, quiltCanvas.height);
+      }
+    });
+    frameObserver.observe(canvasFrame);
+  }
 
   if (seamLinesBtn) {
     seamLinesBtn.addEventListener("click", () => {
@@ -4489,7 +4561,7 @@
         const idealCols = Math.round(state.targetQuiltSize.w / val);
         state.cols = syncSliderBoundsForCols(idealCols);
         computeSquareAverages(finishedSizeInput);
-        if (state.activeMathPattern) {
+        if (state.activeMathPattern && !state.userEditedPattern) {
           applyMathPattern(state.activeMathPattern, { record: false });
         } else {
           resampleManualCellsForGridResize(prevCols, prevRows, state.cols, state.rows);
@@ -4566,7 +4638,7 @@
 
     rebuildSampleBuffer();
     computeSquareAverages(skipInputEl);
-    if (state.activeMathPattern) {
+    if (state.activeMathPattern && !state.userEditedPattern) {
       applyMathPattern(state.activeMathPattern, { record: false });
     } else {
       resampleManualCellsForGridResize(prevCols, prevRows, state.cols, state.rows);
@@ -7218,6 +7290,12 @@
     } else if (key === "g" || key === "f") {
       e.preventDefault();
       setPaintMode(true, "fill");
+    } else if (key === "i") {
+      e.preventDefault();
+      setPaintMode(true, "eyedropper");
+    } else if (key === "m") {
+      e.preventDefault();
+      setPaintMode(true, "smooth");
     } else if (key === "t" && !state.isBlankQuilt) {
       e.preventDefault();
       setPaintMode(true, "hst");
@@ -7908,23 +7986,88 @@
       addNewFabricAndEdit(addBtn);
     });
     paintFabricStrip.appendChild(addBtn);
+
+    const activeFab = state.palette[state.paintFabricIdx];
+    if (activeFab) {
+      const activeHex = rgbToHex(activeFab.r, activeFab.g, activeFab.b);
+      const activeCode = getFabricCode(state.paintFabricIdx);
+      const pickerWrap = document.createElement("label");
+      pickerWrap.className = "paint-fabric-chip paint-color-picker";
+      pickerWrap.title = `Pick a custom color for Fabric ${activeCode}`;
+      pickerWrap.setAttribute("aria-label", `Pick a custom color for Fabric ${activeCode}`);
+      const dot = document.createElement("span");
+      dot.className = "paint-color-picker-dot";
+      dot.style.backgroundColor = activeHex;
+      const colorInput = document.createElement("input");
+      colorInput.type = "color";
+      colorInput.id = "paint-color-picker-input";
+      colorInput.value = activeHex;
+      colorInput.setAttribute("aria-label", `Custom color for Fabric ${activeCode}`);
+      colorInput.addEventListener("input", () => {
+        const rgb = hexToRgb(colorInput.value);
+        if (!rgb || Number.isNaN(rgb[0])) return;
+        const [r, g, b] = rgb;
+        const target = state.palette[state.paintFabricIdx];
+        if (!target) return;
+        target.r = r;
+        target.g = g;
+        target.b = b;
+        target.patternDataUrl = null;
+        target.patternImg = null;
+        target.patternName = null;
+        target.patternAvgRgb = null;
+        target.libraryId = null;
+        dot.style.backgroundColor = colorInput.value;
+        const activeChip = paintFabricStrip.querySelector(".paint-fabric-chip.is-active");
+        if (activeChip) {
+          activeChip.style.backgroundColor = colorInput.value;
+          activeChip.style.backgroundImage = "";
+          activeChip.classList.remove("has-pattern");
+          const codeSpan = activeChip.querySelector("span");
+          if (codeSpan) codeSpan.style.color = luminance(r, g, b) > 145 ? "#1c1914" : "#ffffff";
+        }
+        renderPaletteSwatches();
+        renderQuilt();
+        syncSwatchPopover();
+        updatePaintToolbarUI();
+      });
+      colorInput.addEventListener("change", () => {
+        const code = getFabricCode(state.paintFabricIdx);
+        recordHistory(`Changed Fabric ${code} color`);
+      });
+      pickerWrap.appendChild(dot);
+      pickerWrap.appendChild(colorInput);
+      paintFabricStrip.appendChild(pickerWrap);
+    }
   }
+
+  let lastPaintDrawBrush = "color";
 
   function updatePaintToolbarUI() {
     const isGeneratedPattern = Boolean(state.activeMathPattern);
     const hasPainted = !isGeneratedPattern && state.hasPaintedMask;
     const activeCount = isGeneratedPattern ? 0 : state.paintedCellsCount;
     const isFillActive = state.paintMode && state.paintBrush === "fill";
+    const isEyedropperActive = state.paintMode && state.paintBrush === "eyedropper";
+    const isSmoothActive = state.paintMode && state.paintBrush === "smooth";
     if (paintToggleBtn) {
-      paintToggleBtn.classList.toggle("is-painting", state.paintMode && !isFillActive);
+      paintToggleBtn.classList.toggle("is-painting", state.paintMode && !isFillActive && !isEyedropperActive && !isSmoothActive);
       paintToggleBtn.classList.toggle("is-cropped", !state.paintMode && hasPainted);
     }
     if (fillToggleBtn) {
       fillToggleBtn.classList.toggle("is-painting", isFillActive);
       fillToggleBtn.setAttribute("aria-pressed", isFillActive ? "true" : "false");
     }
+    if (eyedropperToggleBtn) {
+      eyedropperToggleBtn.classList.toggle("is-painting", isEyedropperActive);
+      eyedropperToggleBtn.setAttribute("aria-pressed", isEyedropperActive ? "true" : "false");
+    }
+    if (smoothToggleBtn) {
+      smoothToggleBtn.classList.toggle("is-painting", isSmoothActive);
+      smoothToggleBtn.setAttribute("aria-pressed", isSmoothActive ? "true" : "false");
+    }
     if (paintBtnLabel) {
-      if (state.paintMode && !isFillActive) {
+      if (state.paintMode && !isFillActive && !isEyedropperActive && !isSmoothActive) {
         paintBtnLabel.textContent = "Painting";
       } else if (activeCount > 0) {
         paintBtnLabel.textContent = `Paint (${activeCount})`;
@@ -7939,12 +8082,19 @@
     if (paintStatusLabel) {
       const activeFab = state.palette[state.paintFabricIdx];
       const fabLabel = activeFab ? `Fabric ${getFabricCode(state.paintFabricIdx)} (${getFabricDisplayName(activeFab)})` : "";
-      if (state.paintBrush === "color") {
-        paintStatusLabel.textContent = `Painting ${fabLabel} · Hold Shift for straight lines`;
+      if (state.paintBrush === "eyedropper") {
+        paintStatusLabel.textContent = "Click any square or HST triangle to pick its fabric · Alt+Click works anytime";
+      } else if (state.paintBrush === "smooth") {
+        const useHsts = state.hstEnabled && getLayoutConfig().supportsHst;
+        paintStatusLabel.textContent = useHsts
+          ? "Brush over a boundary to smooth with 45° HSTs & intermediate palette squares · [ / ] for size"
+          : "Brush over a boundary to blend with intermediate palette squares · Enable HSTs for 45° diagonals";
+      } else if (state.paintBrush === "color") {
+        paintStatusLabel.textContent = `Painting ${fabLabel} · Shift for lines · Alt+Click to pick`;
       } else if (state.paintBrush === "hst-slash" || state.paintBrush === "hst-back") {
-        paintStatusLabel.textContent = `Painting ${state.paintBrush === "hst-slash" ? "/" : "\\"} HST with ${fabLabel} · Shift for lines`;
+        paintStatusLabel.textContent = `Painting ${state.paintBrush === "hst-slash" ? "/" : "\\"} HST with ${fabLabel} · Alt+Click to pick`;
       } else if (state.paintBrush === "fill") {
-        paintStatusLabel.textContent = `Click region to flood-fill with ${fabLabel} · Shift+Click replaces all matching`;
+        paintStatusLabel.textContent = `Click region to flood-fill with ${fabLabel} · Shift+Click replaces all`;
       } else if (activeCount > 0) {
         paintStatusLabel.textContent = `${activeCount} custom cell${activeCount === 1 ? "" : "s"} · Shift for straight lines`;
       } else {
@@ -7954,14 +8104,18 @@
   }
 
   function setPaintBrush(mode) {
-    const allowed = ["color", "hst-slash", "hst-back", "fill", "hst", "square", "auto"];
+    const allowed = ["color", "hst-slash", "hst-back", "fill", "eyedropper", "smooth", "hst", "square", "auto"];
     const valid = allowed.includes(mode) ? mode : state.isBlankQuilt ? "color" : "hst";
+    if (valid === "color" || valid === "hst-slash" || valid === "hst-back" || valid === "fill" || valid === "smooth") {
+      lastPaintDrawBrush = valid;
+    }
     state.paintBrush = valid;
     paintBrushBtns.forEach((btn) => {
       const active = btn.dataset.paintBrush === valid;
       btn.classList.toggle("is-active", active);
       btn.setAttribute("aria-checked", active ? "true" : "false");
     });
+    quiltCanvas.classList.toggle("is-eyedropper", state.paintMode && valid === "eyedropper");
     updatePaintToolbarUI();
     if (state.paintMode && state.image) {
       redrawPreviewWithOverlayOnly();
@@ -8003,6 +8157,7 @@
       renderPaintFabricStrip();
     }
     quiltCanvas.classList.toggle("is-paintable", state.paintMode);
+    quiltCanvas.classList.toggle("is-eyedropper", state.paintMode && state.paintBrush === "eyedropper");
     syncCanvasDragCursor();
     if (!state.paintMode) {
       paintHoverCell = null;
@@ -8602,6 +8757,7 @@
       label: "Map & Satellite",
       isMapCategory: true,
       items: [
+        { id: "map:current", label: "Current Location" },
         { id: "map:satellite", label: "Satellite Imagery…" },
         { id: "map:voyager", label: "Clean Street Map…" },
         { id: "map:topo", label: "Topographic Map…" },
@@ -8638,11 +8794,88 @@
     },
   ];
 
+  const GENERATOR_DESCRIPTIONS = {
+    "map:current": "Turn live satellite or map imagery of your current location into a quilt — drag the quilt to pan.",
+    "map:satellite": "Real overhead satellite photography for any city, island, or landmark on Earth — drag the quilt to pan.",
+    "map:voyager": "Clean, label-free street and coastline cartography rendered in your fabric palette.",
+    "map:topo": "Topographic elevation lines, waterways, and trail terrain from real map data.",
+    "map:relief": "Shaded mountain ridges, valleys, and coastal contours with soft relief lighting.",
+    gradient: "Smooth color washes and ombré fades across your palette using linear, radial, diamond, or conic blends.",
+    monogram: "Custom letters, initials, or words rendered in crisp quilt-block pixel fonts with optional halo borders.",
+    "lone-star": "Traditional radiating star medallion with concentric diamond color bands.",
+    "tumbling-blocks": "Classic 3D isometric tumbling cubes shaded across light, medium, and dark fabrics.",
+    chevron: "Bold zigzag herringbone bands with adjustable peak count and stripe repeat.",
+    tartan: "Crisp woven plaid intersecting vertical and horizontal warp and weft stripes.",
+    "topo-map": "Procedural island elevation contours inspired by hand-drawn topographic maps.",
+    sunburst: "Radiating compass rays crossed by concentric sunburst rings.",
+    "william-morris": "Arts & Crafts botanical trellis with symmetrical acanthus leaves and scrolling stems.",
+    "art-deco": "1920s Chrysler-style scalloped fans, stepped sunbursts, and geometric chevron arches.",
+    "art-nouveau": "Flowing whiplash curves and organic leaded-glass motifs inspired by Alphonse Mucha.",
+    seigaiha: "Traditional Japanese overlapping ocean-wave scales symbolizing calm and good fortune.",
+    "moroccan-zellige": "Interlocking Islamic geometric star-and-cross mosaic tilework.",
+    "bauhaus-grid": "Modernist geometric composition of quarter-circles, diagonals, and color blocks.",
+    "orchid-macro": "Painterly close-up of layered orchid petals radiating from a luminous speckled throat.",
+    "dahlia-macro": "Dense spiral tiers of pointed dahlia petals blooming outward from the center.",
+    "peony-macro": "Lush ruffled peony petals arranged in soft, overlapping organic whorls.",
+    "sunflower-macro": "Golden phyllotaxis seed spiral surrounded by a halo of radiating sunflower petals.",
+    mandelbrot: "The iconic infinitely detailed Mandelbrot fractal — zoom and pan to explore hidden spirals.",
+    "burning-ship": "A dramatic, jagged fractal silhouette resembling a blazing ship on turbulent waters.",
+    julia: "Swirling symmetrical Julia-set lacework controlled by complex seed coordinates.",
+    newton: "Root-finding basins of attraction creating stained-glass lobes and braided boundaries.",
+    "sierpinski-carpet": "Recursive nested square fractal where each block subdivides into eight smaller frames.",
+    "sierpinski-triangle": "Self-similar triangular gasket built from recursively subdivided equilateral triangles.",
+    perlin: "Smooth 2D Perlin noise producing domain-warped fluid currents, soft clouds, marbled silk, or mountain ridges.",
+    fire: "Rising turbulent flames and glowing ember plumes shaped by vertical convection.",
+    chladni: "Acoustic resonance patterns formed by vibrating sand on a metal plate at harmonic frequencies.",
+    turing: "Biological reaction-diffusion spots, coral labyrinths, and zebra stripes modeled after Alan Turing.",
+    interference: "Overlapping concentric ripples creating shimmering moiré wave interference.",
+    voronoi: "Cellular stained-glass mosaic partitioning the quilt by nearest seed points.",
+    kaleidoscope: "Mirrored radial medallion folding geometric facets around a central axis.",
+    "kaleidoscope-hst": "Kaleidoscope star tailored specifically for crisp 45° Half-Square Triangle piecing.",
+    "bargello-wave": "Undulating vertical Bargello strips that create a woven, flowing sine-wave illusion.",
+    "fibonacci-spiral": "Logarithmic golden-ratio spiral arms echoing nautilus shells and pinecones.",
+    truchet: "Seamless weaving labyrinth of randomly rotated quarter-circle Truchet tiles.",
+    "log-cabin": "Concentric Log Cabin framing rings stepping outward from a central hearth square.",
+    "xor-mosaic": "Retro tapestry weave generated from bitwise XOR coordinates modulo a prime.",
+    "ulam-spiral": "Integer spiral highlighting prime numbers, which align along striking diagonal lines.",
+    "cellular-rule90": "1D Wolfram cellular automaton evolving row by row into lace, chaos, or diamond weaves.",
+    hilbert: "A single continuous space-filling Hilbert curve snaking through every square without crossing.",
+  };
+
+  function getGeneratorDescription(id) {
+    return GENERATOR_DESCRIPTIONS[id] || "";
+  }
+
   function syncMathMenuLabel() {
     if (!mathMenuLabel) return;
     const spec = state.activeMathPattern ? MATH_PATTERN_SPECS[state.activeMathPattern] : null;
-    mathMenuLabel.textContent = spec ? spec.label : "Generate";
-    if (mathMenuBtn) mathMenuBtn.classList.toggle("has-pattern", Boolean(spec));
+    if (spec) {
+      mathMenuLabel.textContent = spec.label;
+      if (mathMenuBtn) {
+        mathMenuBtn.classList.add("has-pattern");
+        const desc = getGeneratorDescription(state.activeMathPattern);
+        mathMenuBtn.title = desc
+          ? `${spec.label} — ${desc} (Click Properties to adjust or read again)`
+          : spec.label;
+      }
+    } else if (state.activeMap) {
+      const styleNames = { satellite: "Satellite", voyager: "Street Map", topo: "Topo Map", relief: "Terrain" };
+      const mapLabel = `Map: ${styleNames[state.activeMap.style] || "Satellite"}`;
+      mathMenuLabel.textContent = mapLabel;
+      if (mathMenuBtn) {
+        mathMenuBtn.classList.add("has-pattern");
+        const desc = getGeneratorDescription(`map:${state.activeMap.style}`);
+        mathMenuBtn.title = desc
+          ? `${mapLabel} (${state.activeMap.label}) — ${desc}`
+          : `${mapLabel} (${state.activeMap.label})`;
+      }
+    } else {
+      mathMenuLabel.textContent = "Generate";
+      if (mathMenuBtn) {
+        mathMenuBtn.classList.remove("has-pattern");
+        mathMenuBtn.title = "Generate botanical, fractal, heritage, or mathematical quilt patterns from your current palette";
+      }
+    }
   }
 
   function closeMathMenuPopover() {
@@ -8669,24 +8902,47 @@
       sub.className = "math-submenu";
       sub.setAttribute("role", "menu");
 
+      const descFooter = document.createElement("div");
+      descFooter.className = "math-submenu-desc";
+      const defaultEntry =
+        cat.items.find((it) => (typeof it === "object" ? it.id : it) === state.activeMathPattern) || cat.items[0];
+      const defaultId = typeof defaultEntry === "object" ? defaultEntry?.id : defaultEntry;
+      descFooter.textContent = getGeneratorDescription(defaultId);
+
       cat.items.forEach((entryItem) => {
         const isMapItem = typeof entryItem === "object" && entryItem.id?.startsWith("map:");
         const id = isMapItem ? entryItem.id : entryItem;
         const label = isMapItem ? entryItem.label : MATH_PATTERN_SPECS[id]?.label;
         if (!label) return;
+        const desc = getGeneratorDescription(id);
         const itemBtn = document.createElement("button");
         itemBtn.type = "button";
         itemBtn.className = "math-sub-btn";
         itemBtn.dataset.mathPattern = id;
         itemBtn.setAttribute("role", "menuitem");
+        if (desc) itemBtn.title = desc;
         if (!isMapItem && state.activeMathPattern === id) itemBtn.classList.add("is-active");
         itemBtn.innerHTML = `<span>${label}</span>${!isMapItem && state.activeMathPattern === id ? '<span aria-hidden="true">✓</span>' : ""}`;
+        const showDesc = () => {
+          if (desc) descFooter.textContent = desc;
+        };
+        itemBtn.addEventListener("mouseenter", showDesc);
+        itemBtn.addEventListener("focus", showDesc);
         itemBtn.addEventListener("click", (e) => {
           e.stopPropagation();
           closeMathMenuPopover();
           if (isMapItem) {
             const styleId = id.slice(4);
-            openMapPopover(styleId);
+            if (styleId === "current") {
+              loadCurrentLocationMap({
+                style: state.activeMap?.style || (mapStyleSelect ? mapStyleSelect.value : "satellite") || "satellite",
+                zoom: state.activeMap?.zoom || (mapZoomSlider ? Number(mapZoomSlider.value) : 13) || 13,
+                extractColors: mapExtractPalette ? mapExtractPalette.checked : true,
+                openOnError: true,
+              });
+            } else {
+              openMapPopover(styleId);
+            }
             return;
           }
           state.mathParams = getDefaultMathParams(id);
@@ -8701,11 +8957,36 @@
         sub.appendChild(itemBtn);
       });
 
+      if (descFooter.textContent) {
+        sub.appendChild(descFooter);
+      }
+
+      const positionSubmenu = () => {
+        sub.classList.remove("is-flipped-left");
+        sub.style.top = "";
+        if (window.innerWidth <= 720) return;
+        const menuRect = mathMenuPopover.getBoundingClientRect();
+        const subRect = sub.getBoundingClientRect();
+        if (
+          menuRect.right + subRect.width + 12 > window.innerWidth &&
+          menuRect.left - subRect.width - 12 >= 8
+        ) {
+          sub.classList.add("is-flipped-left");
+        }
+        const updatedRect = sub.getBoundingClientRect();
+        const overflowBottom = updatedRect.bottom - (window.innerHeight - 10);
+        if (overflowBottom > 0) {
+          const shiftUp = Math.min(overflowBottom, updatedRect.top - 10);
+          sub.style.top = `${Math.round(-5.6 - shiftUp)}px`;
+        }
+      };
+
       const openRow = () => {
         mathMenuPopover.querySelectorAll(".math-cat-row.is-open").forEach((el) => {
           if (el !== row) el.classList.remove("is-open");
         });
         row.classList.add("is-open");
+        positionSubmenu();
       };
       row.addEventListener("mouseenter", openRow);
       catBtn.addEventListener("click", (e) => {
@@ -8798,6 +9079,28 @@
     });
   }
 
+  if (eyedropperToggleBtn) {
+    eyedropperToggleBtn.addEventListener("click", () => {
+      if (!state.image) return;
+      if (state.paintMode && state.paintBrush === "eyedropper") {
+        setPaintMode(false);
+      } else {
+        setPaintMode(true, "eyedropper");
+      }
+    });
+  }
+
+  if (smoothToggleBtn) {
+    smoothToggleBtn.addEventListener("click", () => {
+      if (!state.image) return;
+      if (state.paintMode && state.paintBrush === "smooth") {
+        setPaintMode(false);
+      } else {
+        setPaintMode(true, "smooth");
+      }
+    });
+  }
+
   if (panToggleBtn) {
     panToggleBtn.addEventListener("click", () => {
       if (!state.image) return;
@@ -8841,6 +9144,13 @@
     if (mathReversePalette) mathReversePalette.checked = Boolean(state.mathReversePalette);
 
     mathPropsBody.innerHTML = "";
+    const patternDesc = getGeneratorDescription(state.activeMathPattern);
+    if (patternDesc) {
+      const descEl = document.createElement("p");
+      descEl.className = "math-props-desc";
+      descEl.textContent = patternDesc;
+      mathPropsBody.appendChild(descEl);
+    }
     spec.params.forEach((p) => {
       const wrap = document.createElement("div");
       wrap.className = "math-prop-control";
@@ -9042,6 +9352,8 @@
     const pickCycle = (n) => lumOrder[((Math.floor(n) % K) + K) % K];
 
     state.activeMathPattern = patternId;
+    state.userEditedPattern = false;
+    sliderResizeBase = null;
     state.activeMap = null;
     state.sourcePalette = null;
     state.isBlankQuilt = true;
@@ -11147,63 +11459,102 @@
     harmonyPopover.style.top = `${Math.round(top)}px`;
   }
 
-  function shuffleQuiltDesign() {
-    if (!state.image) return;
+  let isShufflingQuilt = false;
+
+  async function shuffleQuiltDesign() {
+    if (!state.image || isShufflingQuilt) return;
+    isShufflingQuilt = true;
     closeHistoryPopover();
     closeSwatchPopover();
     closeMathMenuPopover();
     closeHarmonyPopover();
     state.sourcePalette = null;
 
-    // 1. Pick a fresh harmonious palette (preserving current palette size, or 6-10 fabrics)
-    const targetCount = Math.max(5, Math.min(10, state.palette.length || 8));
-    const res = generateHarmoniousPalette(targetCount, { library: state.harmonyConfig.library || "kona" });
-    state.harmonyConfig.rule = res.ruleId;
-    state.harmonyConfig.baseHue = res.baseHue;
-    state.harmonyConfig.saturation = res.saturation;
-    state.harmonyConfig.lastMathTargets = res.mathTargets;
-    state.palette = res.palette;
-    if (paletteSizeSlider) paletteSizeSlider.value = String(res.palette.length);
-    rehydratePalettePatterns();
+    // Give Map Mode (at the user's current location) a chance to appear in shuffles
+    const mapChance = state.activeMap ? 0.1 : 0.16;
+    const canTryMap =
+      typeof navigator !== "undefined" &&
+      Boolean(navigator.geolocation) &&
+      !geoPermissionDenied &&
+      Math.random() < mapChance;
 
-    // 2. Pick a different random pattern from all 30 generators
-    const allIds = Object.keys(MATH_PATTERN_SPECS);
-    const pool = allIds.filter((id) => id !== state.activeMathPattern);
-    const nextId = pool[Math.floor(Math.random() * pool.length)] || allIds[0];
+    if (canTryMap) {
+      if (shuffleQuiltBtn) shuffleQuiltBtn.disabled = true;
+      try {
+        const loc = await getCurrentLocation({ timeout: 5500 });
+        const allStyles = ["satellite", "voyager", "topo", "relief"];
+        const stylePool = allStyles.filter((s) => s !== state.activeMap?.style);
+        const style = stylePool[Math.floor(Math.random() * stylePool.length)] || allStyles[0];
+        const zoom = 11 + Math.floor(Math.random() * 5); // 11..15
+        await loadMapAtCoords(loc, style, zoom, true, {
+          record: false,
+          closeDialog: true,
+          throwOnError: true,
+        });
+        const styleNames = { satellite: "Satellite", voyager: "Map", topo: "Topo Map", relief: "Terrain" };
+        recordHistory(`Shuffled: Map (${styleNames[style] || "Satellite"}) · ${loc.label}`);
+        return;
+      } catch {
+        // Geolocation denied/unavailable or tiles failed — seamlessly fall through to a generated pattern
+      } finally {
+        if (shuffleQuiltBtn) shuffleQuiltBtn.disabled = false;
+        isShufflingQuilt = false;
+      }
+    }
 
-    // 3. Gently randomize that pattern's parameters within tasteful ranges
-    const spec = MATH_PATTERN_SPECS[nextId];
-    const params = getDefaultMathParams(nextId);
-    if (spec && Array.isArray(spec.params)) {
-      spec.params.forEach((p) => {
-        if (p.type === "select" && Array.isArray(p.options) && p.options.length > 0) {
-          params[p.key] = p.options[Math.floor(Math.random() * p.options.length)].value;
-        } else if (p.type === "range" && p.key !== "panX" && p.key !== "panY") {
-          const steps = Math.max(1, Math.round((p.max - p.min) / p.step));
-          if (p.key === "zoom") {
-            params[p.key] = Math.round((0.85 + Math.random() * 0.65) * 10) / 10;
-          } else {
-            const pick = Math.floor(Math.random() * (steps + 1));
-            params[p.key] = Number((p.min + pick * p.step).toFixed(3));
+    try {
+      // 1. Pick a fresh harmonious palette (preserving current palette size, or 6-10 fabrics)
+      const targetCount = Math.max(5, Math.min(10, state.palette.length || 8));
+      const res = generateHarmoniousPalette(targetCount, { library: state.harmonyConfig.library || "kona" });
+      state.harmonyConfig.rule = res.ruleId;
+      state.harmonyConfig.baseHue = res.baseHue;
+      state.harmonyConfig.saturation = res.saturation;
+      state.harmonyConfig.lastMathTargets = res.mathTargets;
+      state.palette = res.palette;
+      if (paletteSizeSlider) paletteSizeSlider.value = String(res.palette.length);
+      rehydratePalettePatterns();
+
+      // 2. Pick a different random pattern from all generators
+      const allIds = Object.keys(MATH_PATTERN_SPECS);
+      const pool = allIds.filter((id) => id !== state.activeMathPattern);
+      const nextId = pool[Math.floor(Math.random() * pool.length)] || allIds[0];
+
+      // 3. Gently randomize that pattern's parameters within tasteful ranges
+      const spec = MATH_PATTERN_SPECS[nextId];
+      const params = getDefaultMathParams(nextId);
+      if (spec && Array.isArray(spec.params)) {
+        spec.params.forEach((p) => {
+          if (p.type === "select" && Array.isArray(p.options) && p.options.length > 0) {
+            params[p.key] = p.options[Math.floor(Math.random() * p.options.length)].value;
+          } else if (p.type === "range" && p.key !== "panX" && p.key !== "panY") {
+            const steps = Math.max(1, Math.round((p.max - p.min) / p.step));
+            if (p.key === "zoom") {
+              params[p.key] = Math.round((0.85 + Math.random() * 0.65) * 10) / 10;
+            } else {
+              const pick = Math.floor(Math.random() * (steps + 1));
+              params[p.key] = Number((p.min + pick * p.step).toFixed(3));
+            }
           }
-        }
-      });
-    }
-    state.mathParams = params;
-    state.mathTransform = { offsetX: 0, offsetY: 0, scale: 1.0, rotate: 0 };
-    state.mathReversePalette = Math.random() < 0.35;
+        });
+      }
+      state.mathParams = params;
+      state.mathTransform = { offsetX: 0, offsetY: 0, scale: 1.0, rotate: 0 };
+      state.mathReversePalette = Math.random() < 0.35;
 
-    if (state.cols < 20) {
-      state.cols = syncSliderBoundsForCols(28);
-      computeSquareAverages();
-    }
+      if (state.cols < 20) {
+        state.cols = syncSliderBoundsForCols(28);
+        computeSquareAverages();
+      }
 
-    renderPaletteSwatches();
-    applyMathPattern(nextId, { record: false });
-    if (mathPropsPopover && !mathPropsPopover.hidden) {
-      renderMathPropsControls();
+      renderPaletteSwatches();
+      applyMathPattern(nextId, { record: false });
+      if (mathPropsPopover && !mathPropsPopover.hidden) {
+        renderMathPropsControls();
+      }
+      recordHistory(`Shuffled: ${spec.label} (${res.ruleLabel})`);
+    } finally {
+      isShufflingQuilt = false;
     }
-    recordHistory(`Shuffled: ${spec.label} (${res.ruleLabel})`);
   }
 
   if (shuffleQuiltBtn) {
@@ -11445,6 +11796,80 @@
     mapPopover.hidden = true;
   }
 
+  let cachedUserLocation = null; // { lat, lon, label, ts }
+  let geoPermissionDenied = false;
+  let pendingGeoLocation = null; // { lat, lon, label } when populated via Current Location
+
+  async function reverseGeocodeLabel(lat, lon) {
+    const fallback = `${lat.toFixed(3)}, ${lon.toFixed(3)}`;
+    try {
+      const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), 3000) : null;
+      const url = `https://nominatim.openstreetmap.org/reverse?format=json&zoom=12&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
+      const res = await fetch(url, {
+        headers: { Accept: "application/json" },
+        signal: ctrl ? ctrl.signal : undefined,
+      });
+      if (timer) clearTimeout(timer);
+      if (!res.ok) return fallback;
+      const data = await res.json();
+      const addr = data?.address || {};
+      const place =
+        addr.city ||
+        addr.town ||
+        addr.village ||
+        addr.hamlet ||
+        addr.suburb ||
+        addr.county ||
+        "";
+      const region = addr.state || addr.country || "";
+      if (place && region) return `${place}, ${region}`;
+      if (place) return place;
+      if (data?.display_name) {
+        return String(data.display_name).split(",").slice(0, 2).join(",").trim() || fallback;
+      }
+      return fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  async function getCurrentLocation({ forceRefresh = false, timeout = 8000 } = {}) {
+    if (!forceRefresh && cachedUserLocation && Date.now() - cachedUserLocation.ts < 10 * 60 * 1000) {
+      return {
+        lat: cachedUserLocation.lat,
+        lon: cachedUserLocation.lon,
+        label: cachedUserLocation.label,
+      };
+    }
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      throw new Error("Location services are not available in this browser.");
+    }
+    const pos = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: false,
+        timeout,
+        maximumAge: 5 * 60 * 1000,
+      });
+    }).catch((err) => {
+      if (err && err.code === 1) {
+        geoPermissionDenied = true;
+        throw new Error("Location access was denied. Enter a city or lat, lon above.");
+      }
+      if (err && err.code === 3) {
+        throw new Error("Location lookup timed out. Try again or enter a city.");
+      }
+      throw new Error("Could not determine your current location. Enter a city or lat, lon.");
+    });
+
+    geoPermissionDenied = false;
+    const lat = Number(pos.coords.latitude);
+    const lon = Number(pos.coords.longitude);
+    const label = await reverseGeocodeLabel(lat, lon);
+    cachedUserLocation = { lat, lon, label, ts: Date.now() };
+    return { lat, lon, label };
+  }
+
   function openMapPopover(initialStyle = null) {
     if (!mapPopover) return;
     closeHistoryPopover();
@@ -11453,6 +11878,18 @@
     closeMathMenuPopover();
     if (initialStyle && mapStyleSelect) {
       mapStyleSelect.value = initialStyle;
+    }
+    if (mapLayerDesc && mapStyleSelect) {
+      mapLayerDesc.textContent = getGeneratorDescription(`map:${mapStyleSelect.value}`) || getGeneratorDescription("map:satellite");
+    }
+    if (state.activeMap) {
+      if (mapLocationInput && state.activeMap.label) {
+        mapLocationInput.value = state.activeMap.label;
+      }
+      if (mapZoomSlider && Number.isFinite(state.activeMap.zoom)) {
+        mapZoomSlider.value = String(state.activeMap.zoom);
+        if (mapZoomValue) mapZoomValue.textContent = String(state.activeMap.zoom);
+      }
     }
     setMapStatus("");
     mapPopover.hidden = false;
@@ -11483,6 +11920,15 @@
     const clean = String(query || "").trim();
     if (!clean) throw new Error("Please enter a location.");
 
+    const lower = clean.toLowerCase();
+    if (lower === "current location" || lower === "my location" || lower === "here") {
+      return getCurrentLocation();
+    }
+
+    if (pendingGeoLocation && pendingGeoLocation.label === clean) {
+      return pendingGeoLocation;
+    }
+
     // Direct lat, lon input (e.g., "48.58, -122.54")
     const coordMatch = clean.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
     if (coordMatch) {
@@ -11493,7 +11939,7 @@
       }
     }
 
-    const known = MAP_KNOWN_COORDS[clean.toLowerCase()];
+    const known = MAP_KNOWN_COORDS[lower];
     if (known) return known;
 
     const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(clean)}`;
@@ -11518,8 +11964,9 @@
     });
   }
 
-  async function loadMapAtCoords(loc, style, zoom, extractColors, { record = true, closeDialog = true } = {}) {
+  async function loadMapAtCoords(loc, style, zoom, extractColors, { record = true, closeDialog = true, throwOnError = false } = {}) {
     if (mapLoadBtn) mapLoadBtn.disabled = true;
+    if (mapUseLocationBtn) mapUseLocationBtn.disabled = true;
     try {
       setMapStatus("Loading map tiles…");
       const z = Math.max(6, Math.min(16, Math.round(Number(zoom) || 13)));
@@ -11611,8 +12058,44 @@
       if (closeDialog) closeMapPopover();
     } catch (err) {
       setMapStatus(err?.message || "Could not load map tiles.", true);
+      if (throwOnError) throw err;
     } finally {
       if (mapLoadBtn) mapLoadBtn.disabled = false;
+      if (mapUseLocationBtn) mapUseLocationBtn.disabled = false;
+    }
+  }
+
+  async function loadCurrentLocationMap({
+    style = null,
+    zoom = null,
+    extractColors = null,
+    openOnError = true,
+    forceRefresh = false,
+  } = {}) {
+    const targetStyle = style || (mapStyleSelect ? mapStyleSelect.value : "satellite") || "satellite";
+    const targetZoom = zoom != null ? Number(zoom) : (mapZoomSlider ? Number(mapZoomSlider.value) : 13);
+    const targetExtract = extractColors != null ? Boolean(extractColors) : (mapExtractPalette ? mapExtractPalette.checked : true);
+
+    if (mapLoadBtn) mapLoadBtn.disabled = true;
+    if (mapUseLocationBtn) mapUseLocationBtn.disabled = true;
+    setMapStatus("Finding your location…");
+    try {
+      const loc = await getCurrentLocation({ forceRefresh });
+      pendingGeoLocation = loc;
+      if (mapLocationInput) mapLocationInput.value = loc.label;
+      if (mapStyleSelect) mapStyleSelect.value = targetStyle;
+      if (mapZoomSlider) {
+        mapZoomSlider.value = String(targetZoom);
+        if (mapZoomValue) mapZoomValue.textContent = String(targetZoom);
+      }
+      await loadMapAtCoords(loc, targetStyle, targetZoom, targetExtract, { record: true, closeDialog: true });
+    } catch (err) {
+      if (openOnError && mapPopover && mapPopover.hidden) {
+        openMapPopover(targetStyle);
+      }
+      setMapStatus(err?.message || "Could not determine your current location.", true);
+      if (mapLoadBtn) mapLoadBtn.disabled = false;
+      if (mapUseLocationBtn) mapUseLocationBtn.disabled = false;
     }
   }
 
@@ -11790,13 +12273,34 @@
   if (mapPopoverClose) {
     mapPopoverClose.addEventListener("click", closeMapPopover);
   }
+  if (mapStyleSelect && mapLayerDesc) {
+    mapStyleSelect.addEventListener("change", () => {
+      mapLayerDesc.textContent = getGeneratorDescription(`map:${mapStyleSelect.value}`) || getGeneratorDescription("map:satellite");
+    });
+  }
   if (mapZoomSlider && mapZoomValue) {
     mapZoomSlider.addEventListener("input", () => {
       mapZoomValue.textContent = mapZoomSlider.value;
     });
   }
+  if (mapLocationInput) {
+    mapLocationInput.addEventListener("input", () => {
+      pendingGeoLocation = null;
+    });
+  }
+  if (mapUseLocationBtn) {
+    mapUseLocationBtn.addEventListener("click", () => {
+      loadCurrentLocationMap({ forceRefresh: true, openOnError: false });
+    });
+  }
+  if (mapCurrentLocChip) {
+    mapCurrentLocChip.addEventListener("click", () => {
+      loadCurrentLocationMap({ forceRefresh: false, openOnError: false });
+    });
+  }
   mapQuickChips.forEach((chip) => {
     chip.addEventListener("click", () => {
+      pendingGeoLocation = null;
       if (mapLocationInput) mapLocationInput.value = chip.dataset.mapLoc || "";
       if (mapZoomSlider && chip.dataset.mapZoom) {
         mapZoomSlider.value = chip.dataset.mapZoom;
@@ -11830,7 +12334,7 @@
       syncGridLayoutUI();
       if (state.image) {
         computeSquareAverages();
-        if (state.activeMathPattern) {
+        if (state.activeMathPattern && !state.userEditedPattern) {
           applyMathPattern(state.activeMathPattern, { record: false });
         } else {
           renderQuilt();
@@ -11856,8 +12360,83 @@
     drawPaintCursorOverlay(squarePx);
   }
 
+  function sampleFabricAtCell(cell) {
+    if (!cell || !state.palette.length) return -1;
+    const cfg = getLayoutConfig();
+    if (cfg.stagger !== "none" && state.layoutCells.length > 0) {
+      const idx =
+        cell.cellIdx != null
+          ? cell.cellIdx
+          : state.layoutCells.findIndex((item) => item.c === cell.col && item.r === cell.row);
+      if (idx >= 0 && idx < state.gridAssignments.length) {
+        const pIdx = state.gridAssignments[idx];
+        return pIdx >= 0 && pIdx < state.palette.length ? pIdx : -1;
+      }
+      return -1;
+    }
+    const cellIdx = cell.row * state.cols + cell.col;
+    if (cellIdx < 0 || cellIdx >= state.gridAssignments.length) return -1;
+    const diag = state.cellTypes[cellIdx] || 0;
+    const idxA = state.gridAssignments[cellIdx];
+    const idxB = state.gridAssignmentsB[cellIdx];
+    if (diag === 1 && idxB >= 0) {
+      const lx = Number.isFinite(cell.localX) ? cell.localX : 0.25;
+      const ly = Number.isFinite(cell.localY) ? cell.localY : 0.25;
+      const pick = lx + ly < 1 ? idxA : idxB;
+      return pick >= 0 && pick < state.palette.length ? pick : -1;
+    }
+    if (diag === 2 && idxB >= 0) {
+      const lx = Number.isFinite(cell.localX) ? cell.localX : 0.25;
+      const ly = Number.isFinite(cell.localY) ? cell.localY : 0.25;
+      const pick = ly > lx ? idxA : idxB;
+      return pick >= 0 && pick < state.palette.length ? pick : -1;
+    }
+    return idxA >= 0 && idxA < state.palette.length ? idxA : -1;
+  }
+
+  function drawEyedropperBadge(anchorX, anchorY, pIdx) {
+    if (pIdx < 0 || pIdx >= state.palette.length) return;
+    const fab = state.palette[pIdx];
+    const code = getFabricCode(pIdx);
+    const hex = rgbToHex(fab.r, fab.g, fab.b);
+    const pillW = 46;
+    const pillH = 22;
+    const cw = quiltCanvas.width;
+    const px = Math.max(4, Math.min(cw - pillW - 4, Math.round(anchorX - pillW / 2)));
+    const py = anchorY - pillH - 6 >= 4 ? Math.round(anchorY - pillH - 6) : Math.round(anchorY + 8);
+
+    quiltCtx.save();
+    quiltCtx.fillStyle = "rgba(28, 25, 20, 0.88)";
+    quiltCtx.beginPath();
+    if (typeof quiltCtx.roundRect === "function") {
+      quiltCtx.roundRect(px, py, pillW, pillH, 11);
+    } else {
+      quiltCtx.rect(px, py, pillW, pillH);
+    }
+    quiltCtx.fill();
+    quiltCtx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+    quiltCtx.lineWidth = 1.25;
+    quiltCtx.stroke();
+
+    quiltCtx.fillStyle = hex;
+    quiltCtx.beginPath();
+    quiltCtx.arc(px + 12, py + pillH / 2, 6, 0, Math.PI * 2);
+    quiltCtx.fill();
+    quiltCtx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+    quiltCtx.lineWidth = 1.2;
+    quiltCtx.stroke();
+
+    quiltCtx.fillStyle = "#ffffff";
+    quiltCtx.font = "700 11px ui-monospace, SFMono-Regular, Menlo, monospace";
+    quiltCtx.textAlign = "left";
+    quiltCtx.textBaseline = "middle";
+    quiltCtx.fillText(code, px + 23, py + pillH / 2 + 0.5);
+    quiltCtx.restore();
+  }
+
   function drawPaintCursorOverlay(squarePx) {
     if (!state.paintMode || !paintHoverCell || squarePx <= 0) return;
+    const isEyedropper = state.paintBrush === "eyedropper";
     const cfg = getLayoutConfig();
     if (cfg.stagger !== "none" && state.layoutCells.length > 0) {
       const cellW = state.layoutCellW || squarePx;
@@ -11872,20 +12451,25 @@
       const bw = Math.max(2, Math.round(hovered.x1 * cellW) - bx);
       const bh = Math.max(2, Math.round(hovered.y1 * cellH) - by);
       quiltCtx.save();
-      quiltCtx.fillStyle = "rgba(184, 77, 44, 0.18)";
-      quiltCtx.fillRect(bx, by, bw, bh);
+      if (!isEyedropper) {
+        quiltCtx.fillStyle = "rgba(184, 77, 44, 0.18)";
+        quiltCtx.fillRect(bx, by, bw, bh);
+      }
       quiltCtx.strokeStyle = "rgba(255, 255, 255, 0.92)";
       quiltCtx.lineWidth = 3;
       quiltCtx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
-      quiltCtx.strokeStyle = "#b84d2c";
+      quiltCtx.strokeStyle = isEyedropper ? "#221f1a" : "#b84d2c";
       quiltCtx.lineWidth = 1.6;
       quiltCtx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
       quiltCtx.restore();
+      if (isEyedropper) {
+        drawEyedropperBadge(bx + bw / 2, by, sampleFabricAtCell(paintHoverCell));
+      }
       return;
     }
     const cols = state.cols;
     const rows = state.rows;
-    const half = Math.floor(state.paintSize / 2);
+    const half = isEyedropper || state.paintBrush === "fill" ? 0 : Math.floor(state.paintSize / 2);
     const c0 = Math.max(0, paintHoverCell.col - half);
     const c1 = Math.min(cols - 1, paintHoverCell.col + half);
     const r0 = Math.max(0, paintHoverCell.row - half);
@@ -11897,6 +12481,17 @@
     const bh = (r1 - r0 + 1) * squarePx;
 
     quiltCtx.save();
+    if (isEyedropper) {
+      quiltCtx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+      quiltCtx.lineWidth = 3;
+      quiltCtx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+      quiltCtx.strokeStyle = "#221f1a";
+      quiltCtx.lineWidth = 1.6;
+      quiltCtx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+      quiltCtx.restore();
+      drawEyedropperBadge(bx + bw / 2, by, sampleFabricAtCell(paintHoverCell));
+      return;
+    }
     if (state.paintBrush === "hst") {
       // Light footprint wash + highlight ONLY the cells inside the brush where triangles actually smooth an edge!
       quiltCtx.fillStyle = "rgba(184, 77, 44, 0.08)";
@@ -11926,18 +12521,27 @@
           }
         }
       }
+    } else if (state.paintBrush === "smooth") {
+      quiltCtx.fillStyle = "rgba(47, 125, 111, 0.16)";
+      quiltCtx.fillRect(bx, by, bw, bh);
     } else {
       quiltCtx.fillStyle =
         state.paintBrush === "square" ? "rgba(58, 107, 124, 0.18)" : "rgba(34, 31, 26, 0.14)";
       quiltCtx.fillRect(bx, by, bw, bh);
     }
 
-    // Crisp dual-stroke brush outline (white halo + terracotta/slate inner border)
+    // Crisp dual-stroke brush outline (white halo + terracotta/teal/slate inner border)
     quiltCtx.strokeStyle = "rgba(255, 255, 255, 0.92)";
     quiltCtx.lineWidth = 3;
     quiltCtx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
     quiltCtx.strokeStyle =
-      state.paintBrush === "hst" ? "#b84d2c" : state.paintBrush === "square" ? "#3a6b7c" : "#46413a";
+      state.paintBrush === "hst"
+        ? "#b84d2c"
+        : state.paintBrush === "smooth"
+          ? "#2f7d6f"
+          : state.paintBrush === "square"
+            ? "#3a6b7c"
+            : "#46413a";
     quiltCtx.lineWidth = 1.6;
     quiltCtx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
 
@@ -12115,13 +12719,280 @@
     return changed;
   }
 
+  function applySmoothBrushDab(centerCol, centerRow) {
+    const cfg = getLayoutConfig();
+    const cols = state.cols;
+    const rows = state.rows;
+    const K = state.palette.length;
+    if (K < 2) return false;
+
+    const findNearestPaletteIndex = (r, g, b) => {
+      let bestIdx = 0;
+      let bestDist = Infinity;
+      for (let p = 0; p < K; p++) {
+        const pal = state.palette[p];
+        const d = colorDistanceSq(r, g, b, pal.r, pal.g, pal.b);
+        if (d < bestDist) {
+          bestDist = d;
+          bestIdx = p;
+        }
+      }
+      return bestIdx;
+    };
+
+    // Staggered layouts (Brick / Subway): smooth using intermediate palette squares
+    if (cfg.stagger !== "none" && state.layoutCells.length > 0) {
+      const cells = state.layoutCells;
+      const startIdx = cells.findIndex((item) => item.c === centerCol && item.r === centerRow);
+      if (startIdx < 0) return false;
+      const target = cells[startIdx];
+      const selfIdx = state.gridAssignments[startIdx];
+      if (selfIdx < 0 || selfIdx >= K) return false;
+      const selfPal = state.palette[selfIdx];
+      let sumR = 0;
+      let sumG = 0;
+      let sumB = 0;
+      let diffCount = 0;
+      for (let i = 0; i < cells.length; i++) {
+        if (i === startIdx) continue;
+        const other = cells[i];
+        const touchX = other.x0 <= target.x1 + 0.05 && other.x1 >= target.x0 - 0.05;
+        const touchY = other.y0 <= target.y1 + 0.05 && other.y1 >= target.y0 - 0.05;
+        if (!touchX || !touchY) continue;
+        const oIdx = state.gridAssignments[i];
+        if (oIdx >= 0 && oIdx < K && oIdx !== selfIdx) {
+          const op = state.palette[oIdx];
+          sumR += op.r;
+          sumG += op.g;
+          sumB += op.b;
+          diffCount++;
+        }
+      }
+      if (diffCount === 0) return false;
+      const blendR = selfPal.r * 0.55 + (sumR / diffCount) * 0.45;
+      const blendG = selfPal.g * 0.55 + (sumG / diffCount) * 0.45;
+      const blendB = selfPal.b * 0.55 + (sumB / diffCount) * 0.45;
+      const nextIdx = findNearestPaletteIndex(blendR, blendG, blendB);
+      if (nextIdx !== selfIdx) {
+        state.manualCells.set(`${centerCol},${centerRow}`, { t: 0, a: nextIdx, b: -1 });
+        return true;
+      }
+      return false;
+    }
+
+    const total = cols * rows;
+    if (total === 0 || state.gridAssignments.length < total) return false;
+
+    const useHsts = Boolean(state.hstEnabled && cfg.supportsHst);
+    const half = Math.floor(state.paintSize / 2);
+    const rMin = Math.max(0, centerRow - half);
+    const rMax = Math.min(rows - 1, centerRow + half);
+    const cMin = Math.max(0, centerCol - half);
+    const cMax = Math.min(cols - 1, centerCol + half);
+
+    // Snapshot current grid so each pass evaluates cleanly without directional sweep bias
+    const snapType = new Uint8Array(total);
+    const snapA = new Int16Array(total);
+    const snapB = new Int16Array(total);
+    for (let i = 0; i < total; i++) {
+      snapType[i] = state.cellTypes[i] || 0;
+      snapA[i] = state.gridAssignments[i] ?? 0;
+      snapB[i] = state.gridAssignmentsB[i] ?? -1;
+    }
+
+    const getEdgeColor = (typeArr, aArr, bArr, cc, rr, side) => {
+      if (cc < 0 || cc >= cols || rr < 0 || rr >= rows) return -1;
+      const i = rr * cols + cc;
+      const t = typeArr[i];
+      if (t === 0) return aArr[i];
+      const a = aArr[i];
+      const b = bArr[i] >= 0 ? bArr[i] : a;
+      if (t === 1) return side === "top" || side === "left" ? a : b;
+      return side === "bottom" || side === "left" ? a : b;
+    };
+
+    const workType = new Uint8Array(snapType);
+    const workA = new Int16Array(snapA);
+    const workB = new Int16Array(snapB);
+
+    let changed = false;
+
+    // Pass 1: Clean 1-cell stray nubs, pinholes, and orphaned HSTs surrounded on 3–4 sides by one color
+    for (let r = rMin; r <= rMax; r++) {
+      for (let c = cMin; c <= cMax; c++) {
+        const idx = r * cols + c;
+        const nCol = getEdgeColor(snapType, snapA, snapB, c, r - 1, "bottom");
+        const sCol = getEdgeColor(snapType, snapA, snapB, c, r + 1, "top");
+        const wCol = getEdgeColor(snapType, snapA, snapB, c - 1, r, "right");
+        const eCol = getEdgeColor(snapType, snapA, snapB, c + 1, r, "left");
+        const neighbors = [nCol, sCol, wCol, eCol].filter((v) => v >= 0);
+        if (neighbors.length < 3) continue;
+
+        let majColor = -1;
+        let majCount = 0;
+        for (let k = 0; k < neighbors.length; k++) {
+          const cand = neighbors[k];
+          let cnt = 0;
+          for (let j = 0; j < neighbors.length; j++) {
+            if (neighbors[j] === cand) cnt++;
+          }
+          if (cnt > majCount) {
+            majCount = cnt;
+            majColor = cand;
+          }
+        }
+
+        if (majColor >= 0 && majCount >= 3) {
+          const alreadyCleanSquare = snapType[idx] === 0 && snapA[idx] === majColor;
+          if (!alreadyCleanSquare) {
+            workType[idx] = 0;
+            workA[idx] = majColor;
+            workB[idx] = -1;
+            state.manualCells.set(`${c},${r}`, { t: 0, a: majColor, b: -1 });
+            changed = true;
+          }
+        }
+      }
+    }
+
+    // Pass 2 (when HST mode is enabled): Bevel 2-color staircase steps & blocky corners into crisp 45° HSTs
+    const hstPlacedHere = new Set();
+    if (useHsts) {
+      const detectLCorner = (cc, rr) => {
+        if (cc < 0 || cc >= cols || rr < 0 || rr >= rows) return null;
+        const i = rr * cols + cc;
+        if (workType[i] !== 0) return null;
+        const self = workA[i];
+        const n = getEdgeColor(workType, workA, workB, cc, rr - 1, "bottom");
+        const s = getEdgeColor(workType, workA, workB, cc, rr + 1, "top");
+        const w = getEdgeColor(workType, workA, workB, cc - 1, rr, "right");
+        const e = getEdgeColor(workType, workA, workB, cc + 1, rr, "left");
+        if (n >= 0 && n === w && n !== self && s === self && e === self) {
+          return { t: 1, a: n, b: self, self, other: n, adj1: [cc, rr - 1], adj2: [cc - 1, rr] };
+        }
+        if (s >= 0 && s === e && s !== self && n === self && w === self) {
+          return { t: 1, a: self, b: s, self, other: s, adj1: [cc, rr + 1], adj2: [cc + 1, rr] };
+        }
+        if (s >= 0 && s === w && s !== self && n === self && e === self) {
+          return { t: 2, a: s, b: self, self, other: s, adj1: [cc, rr + 1], adj2: [cc - 1, rr] };
+        }
+        if (n >= 0 && n === e && n !== self && s === self && w === self) {
+          return { t: 2, a: self, b: n, self, other: n, adj1: [cc, rr - 1], adj2: [cc + 1, rr] };
+        }
+        return null;
+      };
+
+      for (let r = rMin; r <= rMax; r++) {
+        for (let c = cMin; c <= cMax; c++) {
+          const hit = detectLCorner(c, r);
+          if (!hit) continue;
+          const opp1 = detectLCorner(hit.adj1[0], hit.adj1[1]);
+          const opp2 = detectLCorner(hit.adj2[0], hit.adj2[1]);
+          const hasMutualStair =
+            (opp1 && opp1.self === hit.other && opp1.other === hit.self) ||
+            (opp2 && opp2.self === hit.other && opp2.other === hit.self);
+          if (hasMutualStair && hit.self > hit.other) continue;
+
+          const key = `${c},${r}`;
+          const prev = state.manualCells.get(key);
+          if (!prev || prev.t !== hit.t || prev.a !== hit.a || prev.b !== hit.b) {
+            state.manualCells.set(key, { t: hit.t, a: hit.a, b: hit.b });
+            changed = true;
+          }
+          hstPlacedHere.add(key);
+        }
+      }
+    }
+
+    // Pass 3: Intermediate palette-color feathering along straight or multi-color boundaries!
+    // Uses colors from the active palette that sit between the two (or more) colors being smoothed.
+    for (let r = rMin; r <= rMax; r++) {
+      for (let c = cMin; c <= cMax; c++) {
+        const key = `${c},${r}`;
+        if (hstPlacedHere.has(key)) continue;
+        const idx = r * cols + c;
+        // Preserve already-placed HSTs on the boundary when HST mode is on
+        if (workType[idx] !== 0) continue;
+        const selfIdx = workA[idx];
+        if (selfIdx < 0 || selfIdx >= K) continue;
+        const selfPal = state.palette[selfIdx];
+
+        let diffR = 0;
+        let diffG = 0;
+        let diffB = 0;
+        let diffWeight = 0;
+        let otherCount = 0;
+        let firstOther = -1;
+
+        const ortho = [
+          [c, r - 1, "bottom", 1.0],
+          [c, r + 1, "top", 1.0],
+          [c - 1, r, "right", 1.0],
+          [c + 1, r, "left", 1.0],
+        ];
+        for (let k = 0; k < ortho.length; k++) {
+          const [nc, nr, side, w] = ortho[k];
+          const oIdx = getEdgeColor(workType, workA, workB, nc, nr, side);
+          if (oIdx >= 0 && oIdx < K && oIdx !== selfIdx) {
+            const op = state.palette[oIdx];
+            diffR += op.r * w;
+            diffG += op.g * w;
+            diffB += op.b * w;
+            diffWeight += w;
+            otherCount++;
+            if (firstOther < 0) firstOther = oIdx;
+          }
+        }
+        // Only smooth cells that sit directly on a color boundary
+        if (diffWeight <= 0) continue;
+
+        const avgOtherR = diffR / diffWeight;
+        const avgOtherG = diffG / diffWeight;
+        const avgOtherB = diffB / diffWeight;
+
+        // Blend 58% self + 42% opposing boundary color so each side of a sharp seam steps cleanly
+        // toward an intermediate palette fabric between the two colors (without flipping all the way over!)
+        const blendR = selfPal.r * 0.58 + avgOtherR * 0.42;
+        const blendG = selfPal.g * 0.58 + avgOtherG * 0.42;
+        const blendB = selfPal.b * 0.58 + avgOtherB * 0.42;
+
+        const candIdx = findNearestPaletteIndex(blendR, blendG, blendB);
+        // Only apply if candIdx is genuinely a *different* intermediate palette color (not self, and not just
+        // overwriting the entire boundary with the opposing color when no in-between color exists)
+        if (candIdx !== selfIdx && (otherCount > 1 || candIdx !== firstOther)) {
+          const prev = state.manualCells.get(key);
+          if (!prev || prev.t !== 0 || prev.a !== candIdx) {
+            state.manualCells.set(key, { t: 0, a: candIdx, b: -1 });
+            changed = true;
+          }
+        }
+      }
+    }
+
+    return changed;
+  }
+
   function applyBrushDab(centerCol, centerRow, localX = 0.25, localY = 0.25) {
     const cols = state.cols;
     const rows = state.rows;
     const brush = state.paintBrush;
 
     if (brush === "fill") {
-      return applyFloodFill(centerCol, centerRow);
+      const filled = applyFloodFill(centerCol, centerRow);
+      if (filled) {
+        if (state.activeMathPattern) state.userEditedPattern = true;
+        sliderResizeBase = null;
+      }
+      return filled;
+    }
+
+    if (brush === "smooth") {
+      const smoothed = applySmoothBrushDab(centerCol, centerRow);
+      if (smoothed) {
+        if (state.activeMathPattern) state.userEditedPattern = true;
+        sliderResizeBase = null;
+      }
+      return smoothed;
     }
 
     if (brush === "color" || brush === "hst-slash" || brush === "hst-back") {
@@ -12164,6 +13035,10 @@
             changed = true;
           }
         }
+      }
+      if (changed) {
+        if (state.activeMathPattern) state.userEditedPattern = true;
+        sliderResizeBase = null;
       }
       return changed;
     }
@@ -12212,6 +13087,23 @@
     const cell = clientToQuiltCell(e.clientX, e.clientY);
     if (!cell) return;
     e.preventDefault();
+
+    // Eyedropper tool (or Alt+Click while using any paint tool) samples the fabric under cursor
+    if (state.paintBrush === "eyedropper" || e.altKey) {
+      const pickedIdx = sampleFabricAtCell(cell);
+      if (pickedIdx >= 0 && pickedIdx < state.palette.length) {
+        state.paintFabricIdx = pickedIdx;
+        renderPaintFabricStrip();
+        if (state.paintBrush === "eyedropper") {
+          setPaintBrush(lastPaintDrawBrush || "color");
+        } else {
+          updatePaintToolbarUI();
+          redrawPreviewWithOverlayOnly();
+        }
+      }
+      return;
+    }
+
     try {
       quiltCanvas.setPointerCapture(e.pointerId);
     } catch {
@@ -12262,7 +13154,13 @@
     const cell = clientToQuiltCell(e.clientX, e.clientY);
     if (!activePaintStroke) {
       if (
-        (cell && (!paintHoverCell || cell.col !== paintHoverCell.col || cell.row !== paintHoverCell.row)) ||
+        (cell &&
+          (!paintHoverCell ||
+            cell.col !== paintHoverCell.col ||
+            cell.row !== paintHoverCell.row ||
+            (state.paintBrush === "eyedropper" &&
+              (Math.abs((cell.localX || 0) - (paintHoverCell.localX || 0)) > 0.04 ||
+                Math.abs((cell.localY || 0) - (paintHoverCell.localY || 0)) > 0.04)))) ||
         (!cell && paintHoverCell)
       ) {
         paintHoverCell = cell;
@@ -12359,7 +13257,9 @@
             ? `Painted \\ HST (Fabric ${fabCode})`
             : state.paintBrush === "fill"
               ? `Flood filled Fabric ${fabCode}`
-              : state.paintBrush === "hst"
+              : state.paintBrush === "smooth"
+                ? "Smoothed color boundary"
+                : state.paintBrush === "hst"
                 ? "Triangle Paint stroke"
                 : state.paintBrush === "square"
                   ? "Painted □ Squares"
@@ -12381,9 +13281,6 @@
     paintToggleBtn.addEventListener("click", () => {
       setPaintMode(!state.paintMode);
     });
-  }
-  if (paintDoneBtn) {
-    paintDoneBtn.addEventListener("click", () => setPaintMode(false));
   }
   if (paintClearBtn) {
     paintClearBtn.addEventListener("click", () => {
@@ -12602,6 +13499,133 @@
       // Ignore IndexedDB errors
     }
   }
+
+  // --- Crisp Desktop Hover & Focus Tooltips for All Toolbar & Paint Tools ---
+  (function initDesktopTooltips() {
+    const tipEl = document.getElementById("ui-tooltip");
+    if (!tipEl) return;
+    const canHover = typeof window.matchMedia === "function" && window.matchMedia("(hover: hover)").matches;
+    const TOOL_SELECTOR =
+      ".preview-toolbar button[title], .paint-toolbar button[title], .paint-toolbar label[title], .topbar-actions button[title]";
+    let activeTarget = null;
+    let savedTitle = "";
+    let showTimer = null;
+    let hideTimer = null;
+
+    const clearNativeTitle = (el) => {
+      if (!el || !el.hasAttribute("title")) return "";
+      const txt = el.getAttribute("title") || "";
+      el.dataset.uiTip = txt;
+      el.removeAttribute("title");
+      return txt;
+    };
+
+    const restoreNativeTitle = () => {
+      if (activeTarget && savedTitle) {
+        activeTarget.setAttribute("title", savedTitle);
+      }
+      savedTitle = "";
+    };
+
+    const renderTooltipText = (text) => {
+      tipEl.textContent = "";
+      const sepIdx = text.indexOf(" — ");
+      if (sepIdx > 0) {
+        const titleSpan = document.createElement("span");
+        titleSpan.className = "ui-tooltip-title";
+        titleSpan.textContent = text.slice(0, sepIdx);
+        const descSpan = document.createElement("span");
+        descSpan.className = "ui-tooltip-desc";
+        descSpan.textContent = text.slice(sepIdx + 3);
+        tipEl.appendChild(titleSpan);
+        tipEl.appendChild(descSpan);
+      } else {
+        const titleSpan = document.createElement("span");
+        titleSpan.className = "ui-tooltip-title";
+        titleSpan.textContent = text;
+        tipEl.appendChild(titleSpan);
+      }
+    };
+
+    const positionTooltip = (el) => {
+      const rect = el.getBoundingClientRect();
+      tipEl.hidden = false;
+      tipEl.classList.remove("is-visible");
+      const tipRect = tipEl.getBoundingClientRect();
+      const margin = 10;
+      let left = rect.left + rect.width / 2 - tipRect.width / 2;
+      left = Math.max(margin, Math.min(window.innerWidth - tipRect.width - margin, left));
+      let top = rect.bottom + 8;
+      if (top + tipRect.height > window.innerHeight - margin) {
+        top = Math.max(margin, rect.top - tipRect.height - 8);
+      }
+      tipEl.style.left = `${Math.round(left)}px`;
+      tipEl.style.top = `${Math.round(top)}px`;
+      requestAnimationFrame(() => {
+        if (activeTarget === el) tipEl.classList.add("is-visible");
+      });
+    };
+
+    const hideTooltip = () => {
+      clearTimeout(showTimer);
+      clearTimeout(hideTimer);
+      restoreNativeTitle();
+      activeTarget = null;
+      tipEl.classList.remove("is-visible");
+      tipEl.hidden = true;
+    };
+
+    const scheduleShow = (el, immediate = false) => {
+      clearTimeout(showTimer);
+      clearTimeout(hideTimer);
+      if (activeTarget && activeTarget !== el) {
+        restoreNativeTitle();
+      }
+      const txt = el.getAttribute("title") || el.dataset.uiTip || "";
+      if (!txt) {
+        hideTooltip();
+        return;
+      }
+      activeTarget = el;
+      savedTitle = clearNativeTitle(el) || txt;
+      const delay = immediate || !tipEl.hidden ? 20 : 120;
+      showTimer = setTimeout(() => {
+        if (activeTarget !== el || !document.contains(el)) return;
+        renderTooltipText(savedTitle);
+        positionTooltip(el);
+      }, delay);
+    };
+
+    if (canHover) {
+      document.addEventListener("pointerover", (e) => {
+        if (e.pointerType && e.pointerType !== "mouse" && e.pointerType !== "pen") return;
+        const target = e.target?.closest?.(TOOL_SELECTOR) || e.target?.closest?.("[data-ui-tip]");
+        if (!target || target.disabled) return;
+        if (target === activeTarget) return;
+        scheduleShow(target);
+      });
+
+      document.addEventListener("pointerout", (e) => {
+        if (!activeTarget) return;
+        const rel = e.relatedTarget;
+        if (rel && activeTarget.contains(rel)) return;
+        hideTooltip();
+      });
+    }
+
+    document.addEventListener("focusin", (e) => {
+      const target = e.target?.closest?.(TOOL_SELECTOR) || e.target?.closest?.("[data-ui-tip]");
+      if (!target || target.disabled) return;
+      if (e.target.matches?.(":focus-visible")) {
+        scheduleShow(target, true);
+      }
+    });
+
+    document.addEventListener("focusout", hideTooltip);
+    document.addEventListener("pointerdown", hideTooltip);
+    window.addEventListener("scroll", hideTooltip, true);
+    window.addEventListener("blur", hideTooltip);
+  })();
 
   restoreActiveDraftOnLoad();
 })();
