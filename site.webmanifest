@@ -1,7 +1,7 @@
 {
   "name": "Miriam's Quiltcaster",
   "short_name": "Quiltcaster",
-  "description": "Turn your image into a quilt.",
+  "description": "A quilt design studio.",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#f6f2eb",

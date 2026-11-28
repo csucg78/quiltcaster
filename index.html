@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="64x64" href="favicon-v2.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-v2.png" />
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon-v2.png" />
-  <link rel="manifest" href="site.webmanifest?v=46" />
-  <link rel="stylesheet" href="styles.css?v=46" />
+  <link rel="manifest" href="site.webmanifest?v=50" />
+  <link rel="stylesheet" href="styles.css?v=50" />
 </head>
 <body>
   <header class="topbar">
@@ -20,7 +20,7 @@
       <img class="brand-icon" src="apple-touch-icon-v2.png" width="38" height="38" alt="" />
       <div>
         <h1>Miriam's Quiltcaster</h1>
-        <p class="tagline">Turn your image into a quilt.</p>
+        <p class="tagline">A quilt design studio.</p>
       </div>
     </div>
     <div class="topbar-right">
@@ -117,6 +117,10 @@
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
               Choose an Image
             </button>
+            <button type="button" class="btn btn-secondary btn-landing" id="blank-quilt-btn">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3Z"/><path d="M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7"/></svg>
+              Paint Blank Quilt
+            </button>
             <button type="button" class="btn btn-secondary btn-landing" id="open-pattern-btn">
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
               Open .quilt Pattern
@@ -208,6 +212,20 @@
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
           <span id="swatch-upload-print-label">Upload Fabric Image</span>
         </button>
+
+        <div class="swatch-library-wrap">
+          <div class="swatch-library-head">
+            <span>Philip Jacobs Library</span>
+            <input
+              type="search"
+              class="swatch-library-search"
+              id="swatch-library-search"
+              placeholder="Filter prints…"
+              aria-label="Filter Philip Jacobs fabric prints"
+            />
+          </div>
+          <div class="swatch-library-grid" id="swatch-library-grid" role="listbox" aria-label="Philip Jacobs fabric prints"></div>
+        </div>
       </div>
     </div>
 
@@ -406,7 +424,7 @@
           <div class="palette-grid" id="palette-grid" aria-live="polite"></div>
 
           <div class="palette-actions">
-            <button type="button" class="btn btn-subtle" id="add-color-btn">+ Add Color</button>
+            <button type="button" class="btn btn-subtle" id="add-color-btn">+ Add Fabric</button>
             <button type="button" class="btn btn-subtle" id="reset-palette-btn">Re-extract</button>
           </div>
         </div>
@@ -457,28 +475,37 @@
           </div>
         </div>
         <div class="paint-toolbar" id="paint-toolbar" hidden>
-          <div class="paint-toolbar-controls">
-            <div class="paint-toolbar-group">
-              <span class="paint-group-label">Brush</span>
-              <div class="segmented" role="radiogroup" aria-label="Shape brush mode">
-                <button type="button" class="segmented-btn is-active" data-paint-brush="hst" role="radio" aria-checked="true" title="Paint Half-Square Triangles along stepped edges in brushed area (1×1 click flips / ↔ \)">△ Triangle Paint</button>
-                <button type="button" class="segmented-btn" data-paint-brush="square" role="radio" aria-checked="false" title="Force solid squares in brushed area">□ Squares</button>
-                <button type="button" class="segmented-btn" data-paint-brush="auto" role="radio" aria-checked="false" title="Restore brushed area to global settings">↺ Auto</button>
-              </div>
-            </div>
-            <div class="paint-toolbar-group">
-              <span class="paint-group-label">Size</span>
-              <div class="segmented" role="radiogroup" aria-label="Brush size">
-                <button type="button" class="segmented-btn" data-paint-size="1" role="radio" aria-checked="false">1×1</button>
-                <button type="button" class="segmented-btn is-active" data-paint-size="3" role="radio" aria-checked="true">3×3</button>
-                <button type="button" class="segmented-btn" data-paint-size="5" role="radio" aria-checked="false">5×5</button>
-              </div>
-            </div>
+          <div class="paint-toolbar-row paint-fabric-row">
+            <span class="paint-group-label">Fabric</span>
+            <div class="paint-fabric-strip" id="paint-fabric-strip" role="radiogroup" aria-label="Active paint fabric"></div>
           </div>
-          <div class="paint-toolbar-right">
-            <span class="paint-hint" id="paint-status-label">Brush over edges to smooth with △</span>
-            <button type="button" class="btn btn-subtle btn-small" id="paint-clear-btn" hidden>Clear</button>
-            <button type="button" class="btn btn-primary btn-small" id="paint-done-btn">Done</button>
+          <div class="paint-toolbar-row">
+            <div class="paint-toolbar-controls">
+              <div class="paint-toolbar-group">
+                <span class="paint-group-label">Tool</span>
+                <div class="segmented" role="radiogroup" aria-label="Paint tool mode">
+                  <button type="button" class="segmented-btn" data-paint-brush="color" role="radio" aria-checked="false" title="Paint solid squares with the selected fabric or color">■ Fabric</button>
+                  <button type="button" class="segmented-btn" data-paint-brush="hst-slash" role="radio" aria-checked="false" title="Paint / half-square triangles (click top-left or bottom-right half)">◿ / HST</button>
+                  <button type="button" class="segmented-btn" data-paint-brush="hst-back" role="radio" aria-checked="false" title="Paint \ half-square triangles (click bottom-left or top-right half)">◺ \ HST</button>
+                  <button type="button" class="segmented-btn" data-paint-brush="fill" role="radio" aria-checked="false" title="Flood-fill a connected region with the selected fabric">Fill</button>
+                  <button type="button" class="segmented-btn is-active" data-paint-brush="hst" data-photo-only="true" role="radio" aria-checked="true" title="Smooth stepped photo edges with Half-Square Triangles">△ Auto Edge</button>
+                  <button type="button" class="segmented-btn" data-paint-brush="auto" data-photo-only="true" role="radio" aria-checked="false" title="Restore brushed cells back to photo match">↺ Reset</button>
+                </div>
+              </div>
+              <div class="paint-toolbar-group">
+                <span class="paint-group-label">Size</span>
+                <div class="segmented" role="radiogroup" aria-label="Brush size">
+                  <button type="button" class="segmented-btn" data-paint-size="1" role="radio" aria-checked="false">1×1</button>
+                  <button type="button" class="segmented-btn is-active" data-paint-size="3" role="radio" aria-checked="true">3×3</button>
+                  <button type="button" class="segmented-btn" data-paint-size="5" role="radio" aria-checked="false">5×5</button>
+                </div>
+              </div>
+            </div>
+            <div class="paint-toolbar-right">
+              <span class="paint-hint" id="paint-status-label">Click or drag on the quilt to paint</span>
+              <button type="button" class="btn btn-subtle btn-small" id="paint-clear-btn" hidden>Clear</button>
+              <button type="button" class="btn btn-primary btn-small" id="paint-done-btn">Done</button>
+            </div>
           </div>
         </div>
         <div class="canvas-frame" id="canvas-frame">
@@ -572,6 +599,6 @@
   </main>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-  <script src="app.js?v=46" defer></script>
+  <script src="app.js?v=50" defer></script>
 </body>
 </html>

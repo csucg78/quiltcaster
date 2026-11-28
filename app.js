@@ -54,6 +54,7 @@
   const paintToggleBtn = document.getElementById("paint-toggle-btn");
   const paintBtnLabel = document.getElementById("paint-btn-label");
   const paintToolbar = document.getElementById("paint-toolbar");
+  const paintFabricStrip = document.getElementById("paint-fabric-strip");
   const paintBrushBtns = document.querySelectorAll("[data-paint-brush]");
   const paintSizeBtns = document.querySelectorAll("[data-paint-size]");
   const paintStatusLabel = document.getElementById("paint-status-label");
@@ -92,6 +93,7 @@
   const pageSizeSelect = document.getElementById("page-size-select");
   const savePatternBtn = document.getElementById("save-pattern-btn");
   const browseImageBtn = document.getElementById("browse-image-btn");
+  const blankQuiltBtn = document.getElementById("blank-quilt-btn");
   const openPatternBtn = document.getElementById("open-pattern-btn");
   const openPatternBtnTop = document.getElementById("open-pattern-btn-top");
   const patternInput = document.getElementById("pattern-input");
@@ -113,6 +115,8 @@
   const swatchCutModeBtns = document.querySelectorAll("[data-cut-mode]");
   const swatchUploadPrintBtn = document.getElementById("swatch-upload-print-btn");
   const swatchUploadPrintLabel = document.getElementById("swatch-upload-print-label");
+  const swatchLibrarySearch = document.getElementById("swatch-library-search");
+  const swatchLibraryGrid = document.getElementById("swatch-library-grid");
 
   const PRESET_LABELS = {
     mini: { in: 'Mini · 12×12 to 20×20"', cm: "Mini · 30×30 to 50×50 cm" },
@@ -296,8 +300,11 @@
     smoothableDiag: new Uint8Array(0), // Per-cell: 0 = flat/non-edge, 1 = '/' smooths edge, 2 = '\' smooths edge
     paintMask: new Uint8Array(PAINT_MASK_RES * PAINT_MASK_RES),
     paintMode: false,
-    paintBrush: "hst", // "hst" | "square" | "auto"
+    paintBrush: "hst", // "color" | "hst-slash" | "hst-back" | "fill" | "hst" | "square" | "auto"
     paintSize: 3, // 1 | 3 | 5
+    paintFabricIdx: 0, // Active palette index when painting colors/fabrics
+    isBlankQuilt: false, // True when started from Paint Blank Quilt (no source photo)
+    manualCells: new Map(), // "col,row" -> { t: 0|1|2, a: palIdx, b: palIdx }
     paintedCellsCount: 0,
     hasPaintedMask: false,
     cellTypes: new Uint8Array(0), // 0 = solid square, 1 = '/' HST (TL+BR), 2 = '\' HST (BL+TR)
@@ -437,6 +444,199 @@
     ["Pine Green", 28, 58, 42, "Kona Spruce", "K001-1346", "Bella Pine (9900-45)"],
   ];
 
+  // Curated Philip Jacobs / Kaffe Fassett Collective (FreeSpirit) patterned fabric catalog
+  // Modeled on My Favorite Quilt Store's Philip Jacobs collection (myfavoritequiltstore.com)
+  const PHILIP_JACOBS_FABRICS = [
+    { id: "pj-chrys-blue", name: "Japanese Chrysanthemum Blue", rgb: [54, 72, 148], colors: ["#1d2b68", "#3a54a8", "#6d78d4", "#d94f90", "#2f8ca6"], style: "chrysanthemum" },
+    { id: "pj-chrys-purple", name: "Japanese Chrysanthemum Purple", rgb: [112, 62, 156], colors: ["#3c1d66", "#783ca8", "#b46be0", "#2fa89c", "#5b7ee0"], style: "chrysanthemum" },
+    { id: "pj-chrys-magenta", name: "Japanese Chrysanthemum Magenta", rgb: [184, 48, 114], colors: ["#6e1542", "#c42e78", "#e86aa8", "#f0a058", "#502878"], style: "chrysanthemum" },
+    { id: "pj-house-leeks-red", name: "House Leeks Red", rgb: [178, 84, 68], colors: ["#7a2628", "#c84b36", "#df8a44", "#7e9648", "#8d3c68"], style: "rosette" },
+    { id: "pj-flora-green", name: "Flora Green", rgb: [116, 152, 92], colors: ["#3e6b46", "#78ad58", "#b2d478", "#8a72c4", "#e0c862"], style: "dahlia" },
+    { id: "pj-shaggy-aqua", name: "Shaggy Aqua", rgb: [64, 166, 174], colors: ["#1e6878", "#38a8b2", "#88d6d4", "#e8c454", "#2e4884"], style: "shaggy" },
+    { id: "pj-van-gogh-black", name: "Van Gogh Black", rgb: [44, 48, 62], colors: ["#1b1e28", "#344468", "#d6a438", "#c85c42", "#4e8e7c"], style: "swirl" },
+    { id: "pj-brocade-peony-hot", name: "Brocade Peony Hot", rgb: [196, 62, 82], colors: ["#781a2c", "#d43652", "#f28444", "#f0c852", "#4c8456"], style: "peony" },
+    { id: "pj-brocade-peony-nat", name: "Brocade Peony Natural", rgb: [212, 198, 176], colors: ["#e8dec8", "#c9b596", "#a87458", "#7e9478", "#d49c88"], style: "peony" },
+    { id: "pj-guinea-white", name: "White Guinea Flower", rgb: [228, 220, 212], colors: ["#f2ece4", "#d8c8bc", "#e898a8", "#648e66", "#3a4048"], style: "dahlia" },
+    { id: "pj-dancing-dahlias", name: "Dancing Dahlias Crimson", rgb: [172, 46, 56], colors: ["#5e1620", "#b82c38", "#e86452", "#f2b84c", "#3a6e4c"], style: "dahlia" },
+    { id: "pj-cactus-gold", name: "Cactus Flower Gold", rgb: [212, 162, 54], colors: ["#946218", "#d89c28", "#f4cc58", "#c8543c", "#4e8458"], style: "chrysanthemum" },
+    { id: "pj-hokusai-cobalt", name: "Hokusai's Mums Cobalt", rgb: [38, 86, 152], colors: ["#183668", "#2a5ea8", "#6ea4dc", "#e8d6a8", "#2c7c88"], style: "chrysanthemum" },
+    { id: "pj-coleus-contrast", name: "Coleus Contrast", rgb: [98, 56, 78], colors: ["#321c2c", "#7e2c52", "#c44c68", "#88b454", "#e4c852"], style: "rosette" },
+    { id: "pj-brassica-forest", name: "Brassica Forest", rgb: [52, 96, 68], colors: ["#1f4230", "#3a6e4c", "#6ea474", "#9c82b8", "#c8d688"], style: "rosette" },
+    { id: "pj-millefiore-berry", name: "Millefiore Berry", rgb: [148, 54, 108], colors: ["#561c42", "#9e3472", "#d8649c", "#548ec4", "#f0b458"], style: "dahlia" },
+    { id: "pj-gradi-teal", name: "Gradi Floral Teal", rgb: [42, 124, 128], colors: ["#1a565c", "#2d848a", "#68b8b4", "#e08468", "#f2d282"], style: "peony" },
+    { id: "pj-petunias-rose", name: "Petunias Rose", rgb: [204, 108, 134], colors: ["#8e3654", "#cf6282", "#eda0b4", "#74a46c", "#f4d898"], style: "peony" },
+    { id: "pj-pinwheels-indigo", name: "Pinwheels Indigo", rgb: [46, 56, 102], colors: ["#1d2448", "#36447c", "#6c7eb8", "#d88454", "#54a8a4"], style: "swirl" },
+    { id: "pj-onion-rings-rust", name: "Onion Rings Rust", rgb: [176, 94, 54], colors: ["#7a341c", "#b8582c", "#e09248", "#c8b878", "#4c5c64"], style: "swirl" },
+    { id: "pj-snow-leopard-grey", name: "Snow Leopard Grey", rgb: [144, 142, 138], colors: ["#5c5a56", "#908e88", "#c6c2ba", "#383634", "#d8cfc2"], style: "shaggy" },
+    { id: "pj-exotic-coral", name: "Exotic Bloom Coral", rgb: [224, 114, 92], colors: ["#a83e2e", "#e26e56", "#f6a688", "#589e8c", "#f2d068"], style: "peony" },
+    { id: "pj-gardenia-sage", name: "Gardenia Sage", rgb: [148, 174, 146], colors: ["#5a785c", "#8ea88c", "#c6d8be", "#f2ece0", "#c88e84"], style: "dahlia" },
+    { id: "pj-lotus-plum", name: "Lotus Pond Plum", rgb: [98, 52, 92], colors: ["#3e1c3a", "#6e3468", "#a85c9c", "#4c8878", "#e8a472"], style: "chrysanthemum" },
+  ];
+
+  const pjSwatchCache = new Map();
+
+  function getPhilipJacobsDataUrl(fabric) {
+    if (!fabric) return null;
+    if (pjSwatchCache.has(fabric.id)) return pjSwatchCache.get(fabric.id);
+    const size = 192;
+    const c = document.createElement("canvas");
+    c.width = size;
+    c.height = size;
+    const ctx = c.getContext("2d");
+    const pal = fabric.colors;
+
+    // Seeded deterministic PRNG per fabric
+    let seed = 0;
+    for (let i = 0; i < fabric.id.length; i++) seed = (seed * 31 + fabric.id.charCodeAt(i)) | 0;
+    const rand = () => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) | 0;
+      return ((seed >>> 0) % 10000) / 10000;
+    };
+
+    // Rich painted background
+    ctx.fillStyle = pal[0];
+    ctx.fillRect(0, 0, size, size);
+
+    // Subtle painterly background wash
+    for (let i = 0; i < 18; i++) {
+      const gx = rand() * size;
+      const gy = rand() * size;
+      const gr = 24 + rand() * 44;
+      ctx.fillStyle = pal[1 + (i % (pal.length - 1))];
+      ctx.globalAlpha = 0.28;
+      ctx.beginPath();
+      ctx.arc(gx, gy, gr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    const drawFloralHead = (cx, cy, radius, style) => {
+      // Draw wrapped across edges so the tile repeats organically
+      for (let ox = -size; ox <= size; ox += size) {
+        for (let oy = -size; oy <= size; oy += size) {
+          const x = cx + ox;
+          const y = cy + oy;
+          if (x + radius < -4 || x - radius > size + 4 || y + radius < -4 || y - radius > size + 4) continue;
+          ctx.save();
+          ctx.translate(x, y);
+          if (style === "chrysanthemum") {
+            const petals = 20;
+            for (let ring = 0; ring < 3; ring++) {
+              const rLen = radius * (1 - ring * 0.26);
+              const col = pal[(ring + 1) % pal.length];
+              ctx.fillStyle = col;
+              for (let p = 0; p < petals; p++) {
+                const ang = (p / petals) * Math.PI * 2 + ring * 0.22;
+                ctx.save();
+                ctx.rotate(ang);
+                ctx.beginPath();
+                ctx.ellipse(rLen * 0.56, 0, rLen * 0.52, rLen * 0.14, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+              }
+            }
+            ctx.fillStyle = pal[pal.length - 1];
+            ctx.beginPath();
+            ctx.arc(0, 0, radius * 0.2, 0, Math.PI * 2);
+            ctx.fill();
+          } else if (style === "dahlia" || style === "rosette") {
+            const rings = style === "rosette" ? 4 : 3;
+            for (let ring = 0; ring < rings; ring++) {
+              const count = 12 - ring * 2;
+              const rDist = radius * (0.72 - ring * 0.2);
+              const pRad = radius * (0.32 - ring * 0.05);
+              ctx.fillStyle = pal[(ring + 1) % pal.length];
+              for (let p = 0; p < count; p++) {
+                const ang = (p / count) * Math.PI * 2 + ring * 0.35;
+                ctx.beginPath();
+                ctx.arc(Math.cos(ang) * rDist, Math.sin(ang) * rDist, pRad, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = pal[0];
+                ctx.lineWidth = 1.2;
+                ctx.stroke();
+              }
+            }
+            ctx.fillStyle = pal[pal.length - 1];
+            ctx.beginPath();
+            ctx.arc(0, 0, radius * 0.22, 0, Math.PI * 2);
+            ctx.fill();
+          } else if (style === "peony") {
+            for (let ring = 0; ring < 3; ring++) {
+              const count = 7 + ring * 2;
+              const rDist = radius * (0.58 - ring * 0.16);
+              ctx.fillStyle = pal[(ring + 1) % pal.length];
+              for (let p = 0; p < count; p++) {
+                const ang = (p / count) * Math.PI * 2 + ring * 0.4;
+                ctx.beginPath();
+                ctx.ellipse(
+                  Math.cos(ang) * rDist,
+                  Math.sin(ang) * rDist,
+                  radius * (0.42 - ring * 0.08),
+                  radius * (0.28 - ring * 0.05),
+                  ang,
+                  0,
+                  Math.PI * 2
+                );
+                ctx.fill();
+              }
+            }
+            ctx.fillStyle = pal[3 % pal.length];
+            ctx.beginPath();
+            ctx.arc(0, 0, radius * 0.18, 0, Math.PI * 2);
+            ctx.fill();
+          } else if (style === "swirl") {
+            for (let ring = 4; ring >= 1; ring--) {
+              ctx.strokeStyle = pal[ring % pal.length];
+              ctx.lineWidth = 5;
+              ctx.beginPath();
+              ctx.arc(0, 0, (radius * ring) / 4, 0, Math.PI * 1.85);
+              ctx.stroke();
+            }
+          } else {
+            // Shaggy painterly strokes
+            for (let k = 0; k < 16; k++) {
+              const ang = (k / 16) * Math.PI * 2;
+              ctx.strokeStyle = pal[1 + (k % (pal.length - 1))];
+              ctx.lineWidth = 4.5;
+              ctx.lineCap = "round";
+              ctx.beginPath();
+              ctx.moveTo(0, 0);
+              ctx.lineTo(Math.cos(ang) * radius, Math.sin(ang) * radius);
+              ctx.stroke();
+            }
+          }
+          ctx.restore();
+        }
+      }
+    };
+
+    const motifCount = fabric.style === "shaggy" ? 11 : 7;
+    for (let m = 0; m < motifCount; m++) {
+      const cx = rand() * size;
+      const cy = rand() * size;
+      const rad = 28 + rand() * 26;
+      drawFloralHead(cx, cy, rad, fabric.style);
+    }
+
+    const dataUrl = c.toDataURL("image/jpeg", 0.88);
+    pjSwatchCache.set(fabric.id, dataUrl);
+    return dataUrl;
+  }
+
+  function getClosestPhilipJacobsMatch(r, g, b) {
+    let best = PHILIP_JACOBS_FABRICS[0];
+    let bestDist = Infinity;
+    for (let i = 0; i < PHILIP_JACOBS_FABRICS.length; i++) {
+      const f = PHILIP_JACOBS_FABRICS[i];
+      const d = colorDistanceSq(r, g, b, f.rgb[0], f.rgb[1], f.rgb[2]);
+      if (d < bestDist) {
+        bestDist = d;
+        best = f;
+      }
+    }
+    return best;
+  }
+
   function getFabricCatalogMatch(r, g, b) {
     let bestEntry = NAMED_FABRIC_COLORS[0];
     let bestDist = Infinity;
@@ -450,11 +650,14 @@
     }
     const shadeClean = bestEntry[4].replace(/^Kona\s+/i, "");
     const query = encodeURIComponent(`Kona Cotton ${shadeClean}`);
+    const pj = getClosestPhilipJacobsMatch(r, g, b);
     return {
       name: bestEntry[0],
       konaName: bestEntry[4],
       konaSku: bestEntry[5],
       bellaName: bestEntry[6],
+      pjName: `Philip Jacobs ${pj.name}`,
+      pjUrl: `https://myfavoritequiltstore.com/search?q=${encodeURIComponent(`Philip Jacobs ${pj.name}`)}`,
       fqsUrl: `https://www.fatquartershop.com/catalogsearch/result/?q=${query}`,
       msqcUrl: `https://www.missouriquiltco.com/search?q=${query}`,
       hancocksUrl: `https://www.hancockspaducah.com/search.php?search_query=${query}`,
@@ -1065,34 +1268,36 @@
     const smoothableDiag = new Uint8Array(totalCells);
 
     let rawMaskActiveCount = 0;
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const i = r * cols + c;
-        const pref = sampleCellPaintPref(c, r, cols, rows);
-        cellPrefs[i] = pref;
-        if (pref !== 0) rawMaskActiveCount++;
+    if (!state.isBlankQuilt) {
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const i = r * cols + c;
+          const pref = sampleCellPaintPref(c, r, cols, rows);
+          cellPrefs[i] = pref;
+          if (pref !== 0) rawMaskActiveCount++;
 
-        const avg = state.squareAverages[i];
-        let bestIdx = 0;
-        let bestDist = Infinity;
-        for (let p = 0; p < K; p++) {
-          const pal = palette[p];
-          const d = colorDistanceSq(avg[0], avg[1], avg[2], pal.r, pal.g, pal.b);
-          if (d < bestDist) {
-            bestDist = d;
-            bestIdx = p;
+          const avg = state.squareAverages[i];
+          let bestIdx = 0;
+          let bestDist = Infinity;
+          for (let p = 0; p < K; p++) {
+            const pal = palette[p];
+            const d = colorDistanceSq(avg[0], avg[1], avg[2], pal.r, pal.g, pal.b);
+            if (d < bestDist) {
+              bestDist = d;
+              bestIdx = p;
+            }
           }
+          sqBest[i] = bestIdx;
+          assignmentsA[i] = bestIdx;
+          sqErrors[i] = bestDist;
         }
-        sqBest[i] = bestIdx;
-        assignmentsA[i] = bestIdx;
-        sqErrors[i] = bestDist;
       }
     }
-    state.hasPaintedMask = rawMaskActiveCount > 0;
+    state.hasPaintedMask = rawMaskActiveCount > 0 || state.manualCells.size > 0;
 
     let hstCount = 0;
     let effectivePaintedCount = 0;
-    if ((state.hstEnabled || state.paintMode) && K >= 2) {
+    if (!state.isBlankQuilt && (state.hstEnabled || state.paintMode) && K >= 2) {
       const bestDiag = new Uint8Array(totalCells);
       const bestPairA = new Int32Array(totalCells);
       const bestPairB = new Int32Array(totalCells);
@@ -1269,6 +1474,39 @@
         if (cellPrefs[i] === 1) effectivePaintedCount++;
       }
     }
+    // Apply manual fabric/color painted cells on top (works on both Blank Quilts and Photo Quilts)
+    if (state.manualCells.size > 0) {
+      state.manualCells.forEach((cellData, key) => {
+        const comma = key.indexOf(",");
+        const mc = Number(key.slice(0, comma));
+        const mr = Number(key.slice(comma + 1));
+        if (mc < 0 || mc >= cols || mr < 0 || mr >= rows) return;
+        const idx = mr * cols + mc;
+        const pA = Math.max(0, Math.min(K - 1, cellData.a));
+        const wasHst = cellTypes[idx] !== 0;
+        if (cellData.t === 1 || cellData.t === 2) {
+          const pB = Math.max(0, Math.min(K - 1, cellData.b >= 0 ? cellData.b : pA));
+          if (pA === pB) {
+            cellTypes[idx] = 0;
+            assignmentsA[idx] = pA;
+            assignmentsB[idx] = -1;
+            if (wasHst) hstCount--;
+          } else {
+            cellTypes[idx] = cellData.t;
+            assignmentsA[idx] = pA;
+            assignmentsB[idx] = pB;
+            if (!wasHst) hstCount++;
+          }
+        } else {
+          cellTypes[idx] = 0;
+          assignmentsA[idx] = pA;
+          assignmentsB[idx] = -1;
+          if (wasHst) hstCount--;
+        }
+        effectivePaintedCount++;
+      });
+    }
+
     state.smoothableDiag = smoothableDiag;
     state.paintedCellsCount = effectivePaintedCount;
 
@@ -1771,6 +2009,72 @@
     paletteGrid.querySelectorAll(".swatch-item").forEach((el) => {
       el.classList.toggle("is-editing", Number(el.dataset.id) === color.id);
     });
+    renderSwatchLibrary(color);
+  }
+
+  function applyPhilipJacobsFabricToSwatch(fabric, color, code) {
+    if (!fabric || !color) return;
+    const dataUrl = getPhilipJacobsDataUrl(fabric);
+    if (!dataUrl) return;
+    color.patternDataUrl = dataUrl;
+    color.patternName = fabric.name;
+    color.patternAvgRgb = [...fabric.rgb];
+    color.patternScale = color.patternScale || 1.0;
+    color.patternCutMode = color.patternCutMode || "repeat";
+    color.libraryId = fabric.id;
+    attachPatternImage(color, dataUrl, () => {
+      renderPaletteSwatches();
+      renderQuilt();
+      syncSwatchPopover();
+      recordHistory(`Applied ${fabric.name} to Fabric ${code}`);
+    });
+  }
+
+  function renderSwatchLibrary(activeColor) {
+    if (!swatchLibraryGrid || !activeColor) return;
+    const q = (swatchLibrarySearch ? swatchLibrarySearch.value : "").trim().toLowerCase();
+    const sorted = PHILIP_JACOBS_FABRICS.filter((f) => !q || f.name.toLowerCase().includes(q)).sort((a, b) => {
+      const da = colorDistanceSq(activeColor.r, activeColor.g, activeColor.b, a.rgb[0], a.rgb[1], a.rgb[2]);
+      const db = colorDistanceSq(activeColor.r, activeColor.g, activeColor.b, b.rgb[0], b.rgb[1], b.rgb[2]);
+      return da - db;
+    });
+
+    swatchLibraryGrid.innerHTML = "";
+    sorted.forEach((fabric) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "swatch-library-item";
+      if (activeColor.patternName === fabric.name) btn.classList.add("is-selected");
+      btn.title = `Philip Jacobs: ${fabric.name} — click to apply`;
+      btn.setAttribute("role", "option");
+
+      const img = document.createElement("img");
+      img.className = "swatch-library-thumb";
+      img.src = getPhilipJacobsDataUrl(fabric);
+      img.alt = fabric.name;
+
+      const lbl = document.createElement("span");
+      lbl.className = "swatch-library-label";
+      lbl.textContent = fabric.name;
+
+      btn.addEventListener("click", () => {
+        const entry = getActiveSwatchEntry();
+        if (entry) {
+          applyPhilipJacobsFabricToSwatch(fabric, entry.color, getFabricCode(entry.idx));
+        }
+      });
+
+      btn.appendChild(img);
+      btn.appendChild(lbl);
+      swatchLibraryGrid.appendChild(btn);
+    });
+  }
+
+  if (swatchLibrarySearch) {
+    swatchLibrarySearch.addEventListener("input", () => {
+      const entry = getActiveSwatchEntry();
+      if (entry) renderSwatchLibrary(entry.color);
+    });
   }
 
   function openSwatchPopover(color, anchorEl) {
@@ -1986,7 +2290,18 @@
       removeBtn.addEventListener("click", () => {
         if (state.palette.length <= 1) return;
         if (activeSwatchId === color.id) closeSwatchPopover();
+        const removedIdx = state.palette.findIndex((c) => c.id === color.id);
         state.palette = state.palette.filter((c) => c.id !== color.id);
+        if (removedIdx >= 0 && state.manualCells.size > 0) {
+          const remap = (i) => (i === removedIdx ? 0 : i > removedIdx ? i - 1 : i);
+          state.manualCells.forEach((v) => {
+            v.a = Math.min(state.palette.length - 1, remap(v.a));
+            if (v.b >= 0) v.b = Math.min(state.palette.length - 1, remap(v.b));
+          });
+        }
+        if (state.paintFabricIdx >= state.palette.length) {
+          state.paintFabricIdx = Math.max(0, state.palette.length - 1);
+        }
         if (state.palette.length >= Number(paletteSizeSlider.min)) {
           paletteSizeSlider.value = String(state.palette.length);
         }
@@ -2003,6 +2318,7 @@
       item.appendChild(removeBtn);
       paletteGrid.appendChild(item);
     });
+    renderPaintFabricStrip();
   }
 
   // --- Image Ingestion ---
@@ -2111,6 +2427,8 @@
       syncProjectTitle(initialTitle);
       state.crop = { x: 0, y: 0, w: 1, h: 1 };
       state.paintMask.fill(0);
+      state.manualCells.clear();
+      state.isBlankQuilt = Boolean(restore && restore.settings && restore.settings.isBlankQuilt);
       setPaintMode(false);
       state.targetQuiltSize = null;
       if (quiltPresetSelect) quiltPresetSelect.value = "custom";
@@ -2137,6 +2455,7 @@
       dropStage.hidden = true;
       workspace.hidden = false;
       topbarActions.hidden = false;
+      syncBlankQuiltUI();
 
       computeSquareAverages();
       renderPaletteSwatches();
@@ -2154,6 +2473,104 @@
     };
 
     img.src = src;
+  }
+
+  function syncBlankQuiltUI() {
+    const blank = Boolean(state.isBlankQuilt);
+    if (cropBtn) cropBtn.hidden = blank;
+    if (compareBtn) compareBtn.hidden = blank;
+    if (resetPaletteBtn) resetPaletteBtn.hidden = blank;
+    document.querySelectorAll('[data-photo-only="true"]').forEach((el) => {
+      el.hidden = blank;
+    });
+  }
+
+  function startBlankQuilt() {
+    clearError();
+    if (state.objectUrl) {
+      URL.revokeObjectURL(state.objectUrl);
+      state.objectUrl = null;
+    }
+    const c = document.createElement("canvas");
+    c.width = 400;
+    c.height = 400;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#f4efe6";
+    ctx.fillRect(0, 0, 400, 400);
+    const blankUrl = c.toDataURL("image/png");
+
+    const img = new Image();
+    img.onload = () => {
+      state.image = img;
+      state.fileName = "custom-quilt.png";
+      state.isBlankQuilt = true;
+      state.crop = { x: 0, y: 0, w: 1, h: 1 };
+      state.paintMask.fill(0);
+      state.manualCells.clear();
+      state.targetQuiltSize = null;
+      if (quiltPresetSelect) quiltPresetSelect.value = "custom";
+      syncProjectTitle("Custom Quilt");
+
+      state.cols = syncSliderBoundsForCols(16);
+      state.hstEnabled = false;
+      if (hstToggle) hstToggle.checked = false;
+      if (hstControls) hstControls.hidden = true;
+
+      // Curated starter palette: warm linen background + solids + 2 Philip Jacobs floral prints
+      const pjBlue = PHILIP_JACOBS_FABRICS[0];
+      const pjRed = PHILIP_JACOBS_FABRICS[3];
+      const starterPalette = [
+        { id: state.nextColorId++, r: 244, g: 239, b: 230 }, // A: Warm Linen background
+        { id: state.nextColorId++, r: 184, g: 77, b: 44 }, // B: Terracotta
+        { id: state.nextColorId++, r: 58, g: 107, b: 124 }, // C: Denim Teal
+        { id: state.nextColorId++, r: 214, g: 162, b: 64 }, // D: Ochre Gold
+        { id: state.nextColorId++, r: 82, g: 112, b: 84 }, // E: Sage Forest
+        { id: state.nextColorId++, r: 46, g: 52, b: 78 }, // F: Midnight Navy
+        {
+          id: state.nextColorId++,
+          r: pjBlue.rgb[0],
+          g: pjBlue.rgb[1],
+          b: pjBlue.rgb[2],
+          patternDataUrl: getPhilipJacobsDataUrl(pjBlue),
+          patternName: pjBlue.name,
+          patternAvgRgb: [...pjBlue.rgb],
+          patternScale: 1.0,
+          patternCutMode: "repeat",
+          libraryId: pjBlue.id,
+        },
+        {
+          id: state.nextColorId++,
+          r: pjRed.rgb[0],
+          g: pjRed.rgb[1],
+          b: pjRed.rgb[2],
+          patternDataUrl: getPhilipJacobsDataUrl(pjRed),
+          patternName: pjRed.name,
+          patternAvgRgb: [...pjRed.rgb],
+          patternScale: 1.0,
+          patternCutMode: "repeat",
+          libraryId: pjRed.id,
+        },
+      ];
+      state.palette = starterPalette;
+      paletteSizeSlider.value = String(starterPalette.length);
+      state.paintFabricIdx = 1; // Select Terracotta (B) so first click paints visibly over Linen (A)
+      rehydratePalettePatterns();
+
+      closeCropStage();
+      rebuildSampleBuffer();
+
+      dropStage.hidden = true;
+      workspace.hidden = false;
+      topbarActions.hidden = false;
+      syncBlankQuiltUI();
+
+      computeSquareAverages();
+      renderPaletteSwatches();
+      setPaintSize(1);
+      setPaintMode(true, "color");
+      resetHistory("Started blank quilt");
+    };
+    img.src = blankUrl;
   }
 
   // --- Save / Load Patterns ---
@@ -2220,6 +2637,35 @@
     }
   }
 
+  function serializeManualCells() {
+    if (!state.manualCells || state.manualCells.size === 0) return null;
+    const out = [];
+    state.manualCells.forEach((v, key) => {
+      const comma = key.indexOf(",");
+      const c = Number(key.slice(0, comma));
+      const r = Number(key.slice(comma + 1));
+      out.push([c, r, v.t || 0, v.a || 0, v.b != null ? v.b : -1]);
+    });
+    return out;
+  }
+
+  function deserializeManualCells(arr) {
+    state.manualCells.clear();
+    if (!Array.isArray(arr)) return;
+    for (let i = 0; i < arr.length; i++) {
+      const item = arr[i];
+      if (!Array.isArray(item) || item.length < 4) continue;
+      const c = Math.floor(Number(item[0]));
+      const r = Math.floor(Number(item[1]));
+      const t = Math.max(0, Math.min(2, Math.floor(Number(item[2]) || 0)));
+      const a = Math.max(0, Math.floor(Number(item[3]) || 0));
+      const b = item.length >= 5 ? Math.floor(Number(item[4])) : -1;
+      if (c >= 0 && r >= 0) {
+        state.manualCells.set(`${c},${r}`, { t, a, b });
+      }
+    }
+  }
+
   function setHstPlacementMode(mode) {
     const valid = mode === "ratio" ? "ratio" : "edges";
     state.hstMode = valid;
@@ -2257,6 +2703,8 @@
     if (hstEdgeSlider) hstEdgeSlider.value = String(state.hstEdgeSensitivity);
     if (hstRatioSlider) hstRatioSlider.value = String(state.hstRatio);
     decodePaintMaskRle(s.paintMaskRle);
+    state.isBlankQuilt = Boolean(s.isBlankQuilt);
+    deserializeManualCells(s.manualCells);
 
     if (s.pageSize === "a4" || s.pageSize === "letter") {
       setPageSize(s.pageSize);
@@ -2376,6 +2824,7 @@
 
   function captureSnapshot() {
     const palettePatterns = serializePalettePatterns();
+    const manualCells = serializeManualCells();
     return {
       title: getCurrentProjectTitle(),
       cols: state.cols,
@@ -2385,6 +2834,8 @@
       hstEdgeSensitivity: state.hstEdgeSensitivity,
       hstRatio: state.hstRatio,
       paintMaskRle: encodePaintMaskRle(),
+      isBlankQuilt: state.isBlankQuilt,
+      ...(manualCells ? { manualCells } : {}),
       unit: state.unit,
       regionMode: state.unit === "cm" ? "metric" : "us",
       finishedSquareSize: state.finishedSquareSize,
@@ -2438,6 +2889,8 @@
       hstEdgeSensitivity: Math.round(clampNumber(raw.hstEdgeSensitivity, 5, 100, 55)),
       hstRatio: Math.round(clampNumber(raw.hstRatio, 0, 100, 35)),
       paintMaskRle: Array.isArray(raw.paintMaskRle) ? raw.paintMaskRle : null,
+      isBlankQuilt: Boolean(raw.isBlankQuilt),
+      manualCells: Array.isArray(raw.manualCells) ? raw.manualCells : null,
       unit,
       finishedSquareSize: clampNumber(raw.finishedSquareSize, 0.1, 100, unit === "in" ? 2.5 : 6.5),
       seamAllowance: clampNumber(raw.seamAllowance, 0, 10, unit === "in" ? 0.25 : 0.6),
@@ -2481,6 +2934,9 @@
       if (hstEdgeSlider) hstEdgeSlider.value = String(state.hstEdgeSensitivity);
       if (hstRatioSlider) hstRatioSlider.value = String(state.hstRatio);
       decodePaintMaskRle(snap.paintMaskRle);
+      state.isBlankQuilt = Boolean(snap.isBlankQuilt);
+      deserializeManualCells(snap.manualCells);
+      syncBlankQuiltUI();
 
       state.unit = snap.unit;
       state.finishedSquareSize = snap.finishedSquareSize;
@@ -2721,6 +3177,8 @@
         hstEdgeSensitivity: state.hstEdgeSensitivity,
         hstRatio: state.hstRatio,
         paintMaskRle: encodePaintMaskRle(),
+        isBlankQuilt: state.isBlankQuilt,
+        ...(serializeManualCells() ? { manualCells: serializeManualCells() } : {}),
         regionMode: state.unit === "cm" ? "metric" : "us",
         unit: state.unit,
         finishedSquareSize: state.finishedSquareSize,
@@ -3090,20 +3548,33 @@
     recordHistory("Re-extracted palette");
   });
 
-  addColorBtn.addEventListener("click", () => {
+  function addNewFabricAndEdit(anchorEl = null) {
     if (state.palette.length >= 24) return;
-    state.palette.push({
+    const newColor = {
       id: state.nextColorId++,
       r: 245,
       g: 242,
       b: 235,
-    });
+    };
+    state.palette.push(newColor);
+    state.paintFabricIdx = state.palette.length - 1;
     if (state.palette.length <= Number(paletteSizeSlider.max)) {
       paletteSizeSlider.value = String(state.palette.length);
     }
     renderPaletteSwatches();
     renderQuilt();
     recordHistory(`Added Fabric ${getFabricCode(state.palette.length - 1)}`);
+
+    const newSwatchEl = paletteGrid.querySelector(`.swatch-item[data-id="${newColor.id}"]`);
+    const targetAnchor = anchorEl && document.body.contains(anchorEl) ? anchorEl : newSwatchEl;
+    if (targetAnchor) {
+      openSwatchPopover(newColor, targetAnchor);
+    }
+  }
+
+  addColorBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    addNewFabricAndEdit();
   });
 
   // --- Boutique Printable PDF Pattern Booklet Export ---
@@ -5412,6 +5883,12 @@
       fileInput.click();
     });
   }
+  if (blankQuiltBtn) {
+    blankQuiltBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      startBlankQuilt();
+    });
+  }
   const openPatternPicker = (e) => {
     if (e) e.stopPropagation();
     patternInput.click();
@@ -6010,7 +6487,90 @@
   // --- Interactive Shape Painting (Brush Triangles / Squares onto Quilt Areas) ---
 
   let paintHoverCell = null; // { col, row } while hovering in paint mode
-  let activePaintStroke = null; // { pointerId, startCol, startRow, lastCol, lastRow, initialPref, initialDiag, movedCell }
+  let activePaintStroke = null; // { pointerId, startCol, startRow, lastCol, lastRow, initialPref, initialDiag, movedCell, lockAxis }
+  let lastPaintedCell = null; // { col, row } anchor for Shift+Click straight lines
+  let shiftHeld = false;
+
+  function snapCellToStraightAxis(startCol, startRow, col, row, lockAxis) {
+    const dx = col - startCol;
+    const dy = row - startRow;
+    const adx = Math.abs(dx);
+    const ady = Math.abs(dy);
+    let axis = lockAxis;
+    if (!axis) {
+      if (adx === 0 && ady === 0) return { col, row, axis: null };
+      if (adx >= ady * 2) axis = "h";
+      else if (ady >= adx * 2) axis = "v";
+      else axis = dx * dy >= 0 ? "d1" : "d2";
+    }
+    let outCol = col;
+    let outRow = row;
+    if (axis === "h") {
+      outRow = startRow;
+    } else if (axis === "v") {
+      outCol = startCol;
+    } else if (axis === "d1") {
+      const d = Math.round((dx + dy) / 2);
+      outCol = startCol + d;
+      outRow = startRow + d;
+    } else if (axis === "d2") {
+      const d = Math.round((dx - dy) / 2);
+      outCol = startCol + d;
+      outRow = startRow - d;
+    }
+    outCol = Math.max(0, Math.min(state.cols - 1, outCol));
+    outRow = Math.max(0, Math.min(state.rows - 1, outRow));
+    return { col: outCol, row: outRow, axis };
+  }
+
+  function renderPaintFabricStrip() {
+    if (!paintFabricStrip) return;
+    paintFabricStrip.innerHTML = "";
+    if (state.paintFabricIdx >= state.palette.length) {
+      state.paintFabricIdx = Math.max(0, state.palette.length - 1);
+    }
+    state.palette.forEach((color, idx) => {
+      const code = getFabricCode(idx);
+      const hex = rgbToHex(color.r, color.g, color.b);
+      const displayName = getFabricDisplayName(color);
+      const hasPrint = Boolean(color.patternDataUrl);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "paint-fabric-chip";
+      if (hasPrint) btn.classList.add("has-pattern");
+      if (idx === state.paintFabricIdx) btn.classList.add("is-active");
+      btn.style.backgroundColor = hex;
+      if (hasPrint) btn.style.backgroundImage = `url("${color.patternDataUrl}")`;
+      btn.setAttribute("role", "radio");
+      btn.setAttribute("aria-checked", idx === state.paintFabricIdx ? "true" : "false");
+      btn.title = `Paint with Fabric ${code}: ${displayName}`;
+      const span = document.createElement("span");
+      span.textContent = code;
+      span.style.color = luminance(color.r, color.g, color.b) > 145 ? "#1c1914" : "#ffffff";
+      btn.appendChild(span);
+      btn.addEventListener("click", () => {
+        state.paintFabricIdx = idx;
+        if (state.paintBrush === "hst" || state.paintBrush === "auto" || state.paintBrush === "square") {
+          setPaintBrush("color");
+        }
+        renderPaintFabricStrip();
+        updatePaintToolbarUI();
+        redrawPreviewWithOverlayOnly();
+      });
+      paintFabricStrip.appendChild(btn);
+    });
+
+    const addBtn = document.createElement("button");
+    addBtn.type = "button";
+    addBtn.className = "paint-fabric-chip paint-fabric-add";
+    addBtn.textContent = "+";
+    addBtn.title = "Add a new fabric or color to palette";
+    addBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      addNewFabricAndEdit(addBtn);
+    });
+    paintFabricStrip.appendChild(addBtn);
+  }
 
   function updatePaintToolbarUI() {
     const hasPainted = state.hasPaintedMask;
@@ -6033,22 +6593,32 @@
       paintClearBtn.textContent = activeCount > 0 ? `Clear (${activeCount})` : "Clear";
     }
     if (paintStatusLabel) {
-      if (activeCount > 0) {
-        paintStatusLabel.textContent = `${activeCount} edge/custom cell${activeCount === 1 ? "" : "s"} · flat areas stay squares`;
+      const activeFab = state.palette[state.paintFabricIdx];
+      const fabLabel = activeFab ? `Fabric ${getFabricCode(state.paintFabricIdx)} (${getFabricDisplayName(activeFab)})` : "";
+      if (state.paintBrush === "color") {
+        paintStatusLabel.textContent = `Painting ${fabLabel} · Hold Shift for straight lines`;
+      } else if (state.paintBrush === "hst-slash" || state.paintBrush === "hst-back") {
+        paintStatusLabel.textContent = `Painting ${state.paintBrush === "hst-slash" ? "/" : "\\"} HST with ${fabLabel} · Shift for lines`;
+      } else if (state.paintBrush === "fill") {
+        paintStatusLabel.textContent = `Click any region to fill with ${fabLabel}`;
+      } else if (activeCount > 0) {
+        paintStatusLabel.textContent = `${activeCount} custom cell${activeCount === 1 ? "" : "s"} · Shift for straight lines`;
       } else {
-        paintStatusLabel.textContent = "Brush over stepped edges to smooth with △";
+        paintStatusLabel.textContent = "Brush over stepped edges · Hold Shift for straight lines";
       }
     }
   }
 
   function setPaintBrush(mode) {
-    const valid = mode === "square" || mode === "auto" ? mode : "hst";
+    const allowed = ["color", "hst-slash", "hst-back", "fill", "hst", "square", "auto"];
+    const valid = allowed.includes(mode) ? mode : state.isBlankQuilt ? "color" : "hst";
     state.paintBrush = valid;
     paintBrushBtns.forEach((btn) => {
       const active = btn.dataset.paintBrush === valid;
       btn.classList.toggle("is-active", active);
       btn.setAttribute("aria-checked", active ? "true" : "false");
     });
+    updatePaintToolbarUI();
     if (state.paintMode && state.image) {
       redrawPreviewWithOverlayOnly();
     }
@@ -6072,14 +6642,20 @@
     state.paintMode = Boolean(enabled);
     if (initialBrush) {
       setPaintBrush(initialBrush);
+    } else if (state.paintMode && state.isBlankQuilt && (state.paintBrush === "hst" || state.paintBrush === "auto")) {
+      setPaintBrush("color");
     }
     if (paintToolbar) {
       paintToolbar.hidden = !state.paintMode;
+    }
+    if (state.paintMode) {
+      renderPaintFabricStrip();
     }
     quiltCanvas.classList.toggle("is-paintable", state.paintMode);
     if (!state.paintMode) {
       paintHoverCell = null;
       activePaintStroke = null;
+      lastPaintedCell = null;
     }
     if (state.image && state.palette.length > 0) {
       // Re-run assignGridCells when entering paint mode so smoothableDiag is ready for live hover preview
@@ -6160,6 +6736,29 @@
       state.paintBrush === "hst" ? "#b84d2c" : state.paintBrush === "square" ? "#3a6b7c" : "#46413a";
     quiltCtx.lineWidth = 1.6;
     quiltCtx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+
+    // Shift+Click straight-line preview from lastPaintedCell to hovered cell
+    if (shiftHeld && lastPaintedCell && !activePaintStroke && state.paintBrush !== "fill") {
+      const x0 = (lastPaintedCell.col + 0.5) * squarePx;
+      const y0 = (lastPaintedCell.row + 0.5) * squarePx;
+      const x1 = (paintHoverCell.col + 0.5) * squarePx;
+      const y1 = (paintHoverCell.row + 0.5) * squarePx;
+      quiltCtx.save();
+      quiltCtx.setLineDash([6, 4]);
+      quiltCtx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+      quiltCtx.lineWidth = 3.2;
+      quiltCtx.beginPath();
+      quiltCtx.moveTo(x0, y0);
+      quiltCtx.lineTo(x1, y1);
+      quiltCtx.stroke();
+      quiltCtx.strokeStyle = "#b84d2c";
+      quiltCtx.lineWidth = 1.6;
+      quiltCtx.beginPath();
+      quiltCtx.moveTo(x0, y0);
+      quiltCtx.lineTo(x1, y1);
+      quiltCtx.stroke();
+      quiltCtx.restore();
+    }
     quiltCtx.restore();
   }
 
@@ -6169,14 +6768,15 @@
     const fx = (clientX - rect.left) / rect.width;
     const fy = (clientY - rect.top) / rect.height;
     if (fx < 0 || fx > 1 || fy < 0 || fy > 1) return null;
-    const col = Math.max(0, Math.min(state.cols - 1, Math.floor(fx * state.cols)));
-    const row = Math.max(0, Math.min(state.rows - 1, Math.floor(fy * state.rows)));
-    return { col, row };
+    const gx = fx * state.cols;
+    const gy = fy * state.rows;
+    const col = Math.max(0, Math.min(state.cols - 1, Math.floor(gx)));
+    const row = Math.max(0, Math.min(state.rows - 1, Math.floor(gy)));
+    return { col, row, localX: gx - col, localY: gy - row };
   }
 
   function ensureHstEnabledForTrianglePaint() {
     if (!state.hstEnabled) {
-      // Enable HSTs in 0% Ratio mode so unpainted areas remain solid squares while painted cells get triangles!
       state.hstEnabled = true;
       setHstPlacementMode("ratio");
       state.hstRatio = 0;
@@ -6187,15 +6787,100 @@
     }
   }
 
-  function applyBrushDab(centerCol, centerRow) {
+  function applyFloodFill(startCol, startRow) {
     const cols = state.cols;
     const rows = state.rows;
+    const targetIdx = Math.max(0, Math.min(state.palette.length - 1, state.paintFabricIdx));
+    const startCellIdx = startRow * cols + startCol;
+    const startType = state.cellTypes[startCellIdx] || 0;
+    const startA = state.gridAssignments[startCellIdx] ?? 0;
+    const startB = state.gridAssignmentsB[startCellIdx] ?? -1;
+    if (startType === 0 && startA === targetIdx) return false;
+
+    const visited = new Uint8Array(cols * rows);
+    const queue = [[startCol, startRow]];
+    visited[startCellIdx] = 1;
+    let changed = false;
+
+    while (queue.length > 0) {
+      const [c, r] = queue.shift();
+      const idx = r * cols + c;
+      if ((state.cellTypes[idx] || 0) !== startType || state.gridAssignments[idx] !== startA || state.gridAssignmentsB[idx] !== startB) {
+        continue;
+      }
+      state.manualCells.set(`${c},${r}`, { t: 0, a: targetIdx, b: -1 });
+      changed = true;
+      const neighbors = [
+        [c + 1, r],
+        [c - 1, r],
+        [c, r + 1],
+        [c, r - 1],
+      ];
+      for (let k = 0; k < neighbors.length; k++) {
+        const [nc, nr] = neighbors[k];
+        if (nc < 0 || nc >= cols || nr < 0 || nr >= rows) continue;
+        const nIdx = nr * cols + nc;
+        if (!visited[nIdx]) {
+          visited[nIdx] = 1;
+          queue.push([nc, nr]);
+        }
+      }
+    }
+    return changed;
+  }
+
+  function applyBrushDab(centerCol, centerRow, localX = 0.25, localY = 0.25) {
+    const cols = state.cols;
+    const rows = state.rows;
+    const brush = state.paintBrush;
+
+    if (brush === "fill") {
+      return applyFloodFill(centerCol, centerRow);
+    }
+
+    if (brush === "color" || brush === "hst-slash" || brush === "hst-back") {
+      const pIdx = Math.max(0, Math.min(state.palette.length - 1, state.paintFabricIdx));
+      const half = brush === "color" ? Math.floor(state.paintSize / 2) : 0;
+      let changed = false;
+      for (let r = centerRow - half; r <= centerRow + half; r++) {
+        for (let c = centerCol - half; c <= centerCol + half; c++) {
+          if (c < 0 || c >= cols || r < 0 || r >= rows) continue;
+          const key = `${c},${r}`;
+          const cellIdx = r * cols + c;
+          if (brush === "color") {
+            const prev = state.manualCells.get(key);
+            if (!prev || prev.t !== 0 || prev.a !== pIdx) {
+              state.manualCells.set(key, { t: 0, a: pIdx, b: -1 });
+              changed = true;
+            }
+          } else {
+            const diagType = brush === "hst-slash" ? 1 : 2;
+            // Determine which half of the square was clicked:
+            // '/' (type 1): TL is localX + localY < 1 (Half A), BR is >= 1 (Half B)
+            // '\' (type 2): BL is localY > localX (Half A), TR is <= localX (Half B)
+            const isHalfA = diagType === 1 ? localX + localY < 1 : localY > localX;
+            const curType = state.cellTypes[cellIdx] || 0;
+            const curA = state.gridAssignments[cellIdx] ?? 0;
+            const curB = curType !== 0 && state.gridAssignmentsB[cellIdx] >= 0 ? state.gridAssignmentsB[cellIdx] : curA;
+            const nextA = isHalfA ? pIdx : curA;
+            const nextB = isHalfA ? curB : pIdx;
+            state.manualCells.set(key, { t: diagType, a: nextA, b: nextB });
+            changed = true;
+          }
+        }
+      }
+      return changed;
+    }
+
     const half = Math.floor(state.paintSize / 2);
-    const prefVal = state.paintBrush === "hst" ? 2 : state.paintBrush === "square" ? 1 : 0;
+    const prefVal = brush === "hst" ? 2 : brush === "square" ? 1 : 0;
     let changed = false;
     for (let r = centerRow - half; r <= centerRow + half; r++) {
       for (let c = centerCol - half; c <= centerCol + half; c++) {
         if (c < 0 || c >= cols || r < 0 || r >= rows) continue;
+        if (brush === "auto") {
+          if (state.manualCells.delete(`${c},${r}`)) changed = true;
+        }
         // When painting with △ Smooth Edges, only mark cells where an HST actually smooths an edge
         if (prefVal === 2 && state.smoothableDiag.length === cols * rows && state.smoothableDiag[r * cols + c] === 0) {
           continue;
@@ -6211,16 +6896,16 @@
     return changed;
   }
 
-  function applyBrushSegment(c0, r0, c1, r1) {
+  function applyBrushSegment(c0, r0, c1, r1, localX = 0.25, localY = 0.25) {
     let changed = false;
     const steps = Math.max(Math.abs(c1 - c0), Math.abs(r1 - r0));
     if (steps === 0) {
-      return applyBrushDab(c0, r0);
+      return applyBrushDab(c0, r0, localX, localY);
     }
     for (let s = 0; s <= steps; s++) {
       const col = Math.round(c0 + ((c1 - c0) * s) / steps);
       const row = Math.round(r0 + ((r1 - r0) * s) / steps);
-      if (applyBrushDab(col, row)) changed = true;
+      if (applyBrushDab(col, row, localX, localY)) changed = true;
     }
     return changed;
   }
@@ -6236,6 +6921,7 @@
     } catch {
       // Ignore if synthetic event without active pointer
     }
+    shiftHeld = Boolean(e.shiftKey);
     paintHoverCell = cell;
     const cellIdx = cell.row * state.cols + cell.col;
     const initialPref = sampleCellPaintPref(cell.col, cell.row, state.cols, state.rows);
@@ -6249,8 +6935,25 @@
       initialPref,
       initialDiag,
       movedCell: false,
+      lockAxis: null,
     };
-    if (applyBrushDab(cell.col, cell.row)) {
+    // Shift+Click draws a straight line from the previous painted cell to this cell
+    let changed = false;
+    if (e.shiftKey && lastPaintedCell && state.paintBrush !== "fill") {
+      changed = applyBrushSegment(
+        lastPaintedCell.col,
+        lastPaintedCell.row,
+        cell.col,
+        cell.row,
+        cell.localX,
+        cell.localY
+      );
+      activePaintStroke.movedCell = true;
+    } else {
+      changed = applyBrushDab(cell.col, cell.row, cell.localX, cell.localY);
+    }
+    lastPaintedCell = { col: cell.col, row: cell.row };
+    if (changed) {
       renderQuilt();
     } else {
       redrawPreviewWithOverlayOnly();
@@ -6259,6 +6962,7 @@
 
   quiltCanvas.addEventListener("pointermove", (e) => {
     if (!state.paintMode || !state.image) return;
+    shiftHeld = Boolean(e.shiftKey);
     const cell = clientToQuiltCell(e.clientX, e.clientY);
     if (!activePaintStroke) {
       if (
@@ -6271,23 +6975,59 @@
       return;
     }
     if (e.pointerId !== activePaintStroke.pointerId || !cell) return;
+    if (state.paintBrush === "fill") return;
     e.preventDefault();
-    paintHoverCell = cell;
-    if (cell.col !== activePaintStroke.lastCol || cell.row !== activePaintStroke.lastRow) {
+
+    // Hold Shift while dragging to lock to a straight horizontal, vertical, or 45° diagonal line
+    let targetCol = cell.col;
+    let targetRow = cell.row;
+    if (e.shiftKey) {
+      const snapped = snapCellToStraightAxis(
+        activePaintStroke.startCol,
+        activePaintStroke.startRow,
+        cell.col,
+        cell.row,
+        activePaintStroke.lockAxis
+      );
+      targetCol = snapped.col;
+      targetRow = snapped.row;
+      if (snapped.axis) activePaintStroke.lockAxis = snapped.axis;
+    } else {
+      activePaintStroke.lockAxis = null;
+    }
+
+    paintHoverCell = { ...cell, col: targetCol, row: targetRow };
+    if (targetCol !== activePaintStroke.lastCol || targetRow !== activePaintStroke.lastRow) {
       activePaintStroke.movedCell = true;
       const changed = applyBrushSegment(
         activePaintStroke.lastCol,
         activePaintStroke.lastRow,
-        cell.col,
-        cell.row
+        targetCol,
+        targetRow,
+        cell.localX,
+        cell.localY
       );
-      activePaintStroke.lastCol = cell.col;
-      activePaintStroke.lastRow = cell.row;
+      activePaintStroke.lastCol = targetCol;
+      activePaintStroke.lastRow = targetRow;
+      lastPaintedCell = { col: targetCol, row: targetRow };
       if (changed) {
         renderQuilt();
       } else {
         redrawPreviewWithOverlayOnly();
       }
+    }
+  });
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Shift" && !shiftHeld) {
+      shiftHeld = true;
+      if (state.paintMode && paintHoverCell) redrawPreviewWithOverlayOnly();
+    }
+  });
+  window.addEventListener("keyup", (e) => {
+    if (e.key === "Shift" && shiftHeld) {
+      shiftHeld = false;
+      if (state.paintMode && paintHoverCell) redrawPreviewWithOverlayOnly();
     }
   });
 
@@ -6312,12 +7052,22 @@
       return;
     }
 
+    const activeFab = state.palette[state.paintFabricIdx];
+    const fabCode = activeFab ? getFabricCode(state.paintFabricIdx) : "";
     const paintLabel =
-      state.paintBrush === "hst"
-        ? "Triangle Paint stroke"
-        : state.paintBrush === "square"
-          ? "Painted □ Squares"
-          : "Erased paint (Auto)";
+      state.paintBrush === "color"
+        ? `Painted Fabric ${fabCode}`
+        : state.paintBrush === "hst-slash"
+          ? `Painted / HST (Fabric ${fabCode})`
+          : state.paintBrush === "hst-back"
+            ? `Painted \\ HST (Fabric ${fabCode})`
+            : state.paintBrush === "fill"
+              ? `Flood filled Fabric ${fabCode}`
+              : state.paintBrush === "hst"
+                ? "Triangle Paint stroke"
+                : state.paintBrush === "square"
+                  ? "Painted □ Squares"
+                  : "Reset painted cells";
     recordHistory(paintLabel);
   };
 
@@ -6342,6 +7092,7 @@
   if (paintClearBtn) {
     paintClearBtn.addEventListener("click", () => {
       state.paintMask.fill(0);
+      state.manualCells.clear();
       renderQuilt();
       recordHistory("Cleared painted areas");
     });
